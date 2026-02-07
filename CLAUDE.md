@@ -31,9 +31,36 @@ for the full architecture.
 
 ```bash
 bun install              # install dependencies
-bun run dev              # vite dev server + rust watcher
-wasm-pack build crates/engine --target web  # compile rust to wasm
+bun run build:wasm       # compile rust to wasm
+bun run dev              # vite dev server
 cargo test -p engine     # run rust tests including render regression
+```
+
+## Dev Loop
+
+The full local development cycle before committing:
+
+```bash
+# 1. Format
+cargo fmt -p engine
+bun run fmt
+
+# 2. Lint
+cargo clippy -p engine --target wasm32-unknown-unknown -- -D warnings
+bun run lint
+
+# 3. Test
+cargo test -p engine
+
+# 4. Build and run
+bun run build:wasm
+bun run dev
+```
+
+Or as a single check command (format + lint, no auto-fix):
+
+```bash
+bun run check
 ```
 
 ## Code Conventions
