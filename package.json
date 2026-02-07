@@ -1,0 +1,20 @@
+{
+  "name": "llm-rogue",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:wasm": "wasm-pack build crates/engine --target web"
+  },
+  "dependencies": {
+    "solid-js": "^1.9"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vite": "^6",
+    "vite-plugin-solid": "^2",
+    "vite-plugin-wasm": "^3",
+    "vite-plugin-top-level-await": "^1"
+  }
+}
