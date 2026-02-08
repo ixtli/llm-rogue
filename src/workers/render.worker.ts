@@ -9,7 +9,10 @@ self.onmessage = async (e: MessageEvent<MainToRenderMessage>) => {
 
     (self as unknown as Worker).postMessage({ type: "ready" });
 
-    // Render a single frame to verify
-    render_frame(0.0);
+    function loop() {
+      render_frame(performance.now() / 1000.0);
+      setTimeout(loop, 16);
+    }
+    loop();
   }
 };
