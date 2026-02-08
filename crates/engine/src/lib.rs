@@ -6,6 +6,7 @@ fn main() {
 }
 
 #[wasm_bindgen]
+#[must_use]
 pub fn hello() -> String {
     "engine loaded".to_string()
 }

@@ -5,16 +5,22 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:wasm": "wasm-pack build crates/engine --target web"
+    "build:wasm": "wasm-pack build crates/engine --target web",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --fix src/",
+    "fmt": "biome format --write src/",
+    "fmt:check": "biome format src/",
+    "check": "bun run lint && cargo fmt --check -p engine && cargo clippy -p engine --target wasm32-unknown-unknown -- -D warnings"
   },
   "dependencies": {
     "solid-js": "^1.9"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
     "typescript": "^5",
     "vite": "^6",
     "vite-plugin-solid": "^2",
-    "vite-plugin-wasm": "^3",
-    "vite-plugin-top-level-await": "^1"
+    "vite-plugin-top-level-await": "^1",
+    "vite-plugin-wasm": "^3"
   }
 }
