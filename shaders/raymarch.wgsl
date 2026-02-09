@@ -63,6 +63,22 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
         return SKY_COLOR;
     }
 
+    // Determine which face the ray enters through from the AABB intersection.
+    // t_enter = max(t_min.x, t_min.y, t_min.z) — whichever axis constrained
+    // the entry point determines the entry face.
+    let inv_dir = 1.0 / dir;
+    let t0 = (vec3<f32>(0.0) - origin) * inv_dir;
+    let t1 = (vec3<f32>(CHUNK_SIZE) - origin) * inv_dir;
+    let t_min = min(t0, t1);
+    var face: u32;
+    if (t_min.x >= t_min.y && t_min.x >= t_min.z) {
+        face = 0u;
+    } else if (t_min.y >= t_min.z) {
+        face = 1u;
+    } else {
+        face = 2u;
+    }
+
     // Advance to entry point (or start at origin if inside)
     let t_start = max(aabb.x, 0.0) + 0.001;
     var pos = origin + dir * t_start;
@@ -76,18 +92,14 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
     // Distance along ray to cross one voxel boundary on each axis
     let delta_dist = abs(1.0 / dir);
 
-    // Distance to the next voxel boundary on each axis
+    // Distance to the next voxel boundary on each axis.
+    // Formula: (boundary - pos) / dir — always positive because boundary
+    // is in the ray's travel direction and dir has the matching sign.
     var side_dist = (vec3<f32>(
         select(f32(map_pos.x) + 1.0, f32(map_pos.x), dir.x < 0.0),
         select(f32(map_pos.y) + 1.0, f32(map_pos.y), dir.y < 0.0),
         select(f32(map_pos.z) + 1.0, f32(map_pos.z), dir.z < 0.0),
-    ) - pos) * vec3<f32>(
-        select(1.0 / dir.x, -1.0 / dir.x, dir.x < 0.0),
-        select(1.0 / dir.y, -1.0 / dir.y, dir.y < 0.0),
-        select(1.0 / dir.z, -1.0 / dir.z, dir.z < 0.0),
-    );
-
-    var face: u32 = 0u; // 0=x, 1=y, 2=z — which face was crossed
+    ) - pos) / dir;
 
     for (var i = 0u; i < MAX_STEPS; i++) {
         // Bounds check
