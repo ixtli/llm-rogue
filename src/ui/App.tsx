@@ -1,4 +1,5 @@
 import { type Component, createSignal, onCleanup, onMount } from "solid-js";
+import { setupInputHandlers } from "../input";
 import type { MainToRenderMessage, RenderToMainMessage } from "../messages";
 
 const App: Component = () => {
@@ -15,7 +16,7 @@ const App: Component = () => {
 
     worker.onmessage = (e: MessageEvent<RenderToMainMessage>) => {
       if (e.data.type === "ready") {
-        setStatus("engine ready — WASD move, QE yaw, RF pitch");
+        setStatus("click to look | WASD move | scroll zoom");
       }
     };
 
@@ -29,22 +30,34 @@ const App: Component = () => {
       [offscreen],
     );
 
+    // Keyboard input
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       worker.postMessage({ type: "key_down", key } satisfies MainToRenderMessage);
     };
-
     const onKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       worker.postMessage({ type: "key_up", key } satisfies MainToRenderMessage);
     };
-
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+
+    // Pointer / wheel / touch input
+    const cleanupInput = setupInputHandlers(canvasRef, {
+      postMessage: (msg) => worker.postMessage(msg),
+      onPointerLockChange: (locked) => {
+        if (locked) {
+          setStatus("mouse look | WASD move | scroll zoom | ESC exit");
+        } else {
+          setStatus("click to look | WASD move | scroll zoom");
+        }
+      },
+    });
 
     onCleanup(() => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      cleanupInput();
     });
   });
 
@@ -58,6 +71,7 @@ const App: Component = () => {
           left: "10px",
           color: "white",
           "font-family": "monospace",
+          "pointer-events": "none",
         }}
       >
         {status()}

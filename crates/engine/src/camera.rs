@@ -84,6 +84,34 @@ impl Camera {
         self.clamp_pitch();
     }
 
+    /// Apply a pointer look delta. `dyaw`/`dpitch` are in radians, pre-scaled
+    /// by the TypeScript input layer.
+    pub fn apply_look_delta(&mut self, dyaw: f32, dpitch: f32) {
+        self.yaw += dyaw;
+        self.pitch += dpitch;
+        self.clamp_pitch();
+    }
+
+    /// Move the camera along the look direction by `amount` world units.
+    pub fn apply_dolly(&mut self, amount: f32) {
+        let (forward, _, _) = self.orientation_vectors();
+        for (p, &f) in self.position.iter_mut().zip(&forward) {
+            *p += f * amount;
+        }
+    }
+
+    /// Strafe the camera along its right (`dx`) and up (`dy`) vectors,
+    /// in world units.
+    pub fn apply_pan(&mut self, dx: f32, dy: f32) {
+        let (_, right, up) = self.orientation_vectors();
+        for (p, &r) in self.position.iter_mut().zip(&right) {
+            *p += r * dx;
+        }
+        for (p, &u) in self.position.iter_mut().zip(&up) {
+            *p += u * dy;
+        }
+    }
+
     /// Build the GPU-uploadable uniform struct.
     pub fn to_uniform(&self, width: u32, height: u32) -> CameraUniform {
         let (forward, right, up) = self.orientation_vectors();
@@ -234,6 +262,54 @@ mod tests {
         assert_eq!(std::mem::offset_of!(CameraUniform, fov), 60);
         assert_eq!(std::mem::offset_of!(CameraUniform, width), 64);
         assert_eq!(std::mem::offset_of!(CameraUniform, height), 68);
+    }
+
+    #[test]
+    fn apply_look_delta_adjusts_yaw_and_pitch() {
+        let mut cam = Camera {
+            yaw: 0.0,
+            pitch: 0.0,
+            ..Camera::default()
+        };
+        cam.apply_look_delta(0.1, 0.2);
+        assert!((cam.yaw - 0.1).abs() < 1e-5);
+        assert!((cam.pitch - 0.2).abs() < 1e-5);
+    }
+
+    #[test]
+    fn apply_look_delta_clamps_pitch() {
+        let mut cam = Camera {
+            pitch: 1.5,
+            ..Camera::default()
+        };
+        cam.apply_look_delta(0.0, 0.2);
+        assert!(cam.pitch <= PITCH_LIMIT + 1e-5);
+    }
+
+    #[test]
+    fn apply_dolly_moves_along_forward() {
+        let mut cam = Camera {
+            yaw: 0.0,
+            pitch: 0.0,
+            ..Camera::default()
+        };
+        let z_before = cam.position[2];
+        cam.apply_dolly(1.0);
+        // At yaw=0, pitch=0, forward is [0, 0, -1]
+        assert!((cam.position[2] - (z_before - 1.0)).abs() < 1e-5);
+    }
+
+    #[test]
+    fn apply_pan_moves_along_right_and_up() {
+        let mut cam = Camera {
+            yaw: 0.0,
+            pitch: 0.0,
+            ..Camera::default()
+        };
+        let x_before = cam.position[0];
+        cam.apply_pan(1.0, 0.0);
+        // At yaw=0, right is [1, 0, 0]
+        assert!((cam.position[0] - (x_before + 1.0)).abs() < 1e-5);
     }
 
     #[test]

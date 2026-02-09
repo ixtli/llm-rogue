@@ -116,6 +116,21 @@ impl Renderer {
     pub fn key_up(&mut self, key: &str) {
         self.input.key_up(key);
     }
+
+    /// Handle a pointer move (look) event. dx/dy are pre-scaled radians.
+    pub fn pointer_move(&mut self, dx: f32, dy: f32) {
+        self.camera.apply_look_delta(dx, dy);
+    }
+
+    /// Handle a scroll (dolly) event. dy is pre-scaled world units.
+    pub fn scroll(&mut self, dy: f32) {
+        self.camera.apply_dolly(dy);
+    }
+
+    /// Handle a pan (strafe) event. dx/dy are pre-scaled world units.
+    pub fn pan(&mut self, dx: f32, dy: f32) {
+        self.camera.apply_pan(dx, dy);
+    }
 }
 
 fn create_storage_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {

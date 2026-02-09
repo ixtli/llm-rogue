@@ -1,6 +1,9 @@
 import init, {
   handle_key_down,
   handle_key_up,
+  handle_pan,
+  handle_pointer_move,
+  handle_scroll,
   init_renderer,
   render_frame,
 } from "../../crates/engine/pkg/engine";
@@ -25,5 +28,11 @@ self.onmessage = async (e: MessageEvent<MainToRenderMessage>) => {
     handle_key_down(msg.key);
   } else if (msg.type === "key_up") {
     handle_key_up(msg.key);
+  } else if (msg.type === "pointer_move") {
+    handle_pointer_move(msg.dx, msg.dy);
+  } else if (msg.type === "scroll") {
+    handle_scroll(msg.dy);
+  } else if (msg.type === "pan") {
+    handle_pan(msg.dx, msg.dy);
   }
 };

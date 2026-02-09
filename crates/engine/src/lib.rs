@@ -63,3 +63,36 @@ pub fn handle_key_up(key: &str) {
         }
     });
 }
+
+/// Handle a pointer move (look) event. dx/dy are pre-scaled radians.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn handle_pointer_move(dx: f32, dy: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.pointer_move(dx, dy);
+        }
+    });
+}
+
+/// Handle a scroll (dolly) event. dy is pre-scaled world units.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn handle_scroll(dy: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.scroll(dy);
+        }
+    });
+}
+
+/// Handle a pan (strafe) event. dx/dy are pre-scaled world units.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn handle_pan(dx: f32, dy: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.pan(dx, dy);
+        }
+    });
+}
