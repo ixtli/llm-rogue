@@ -31,11 +31,7 @@ impl Camera {
 
         let forward = [-sy * cp, sp, -cy * cp];
         let right = [cy, 0.0, -sy];
-        let up = [
-            sy * sp,
-            cp,
-            cy * sp,
-        ];
+        let up = [sy * sp, cp, cy * sp];
 
         (forward, right, up)
     }
@@ -53,16 +49,24 @@ impl Camera {
         let rot_amount = ROTATE_SPEED * dt;
 
         if input.forward {
-            for (p, &f) in self.position.iter_mut().zip(&forward) { *p += f * move_amount; }
+            for (p, &f) in self.position.iter_mut().zip(&forward) {
+                *p += f * move_amount;
+            }
         }
         if input.backward {
-            for (p, &f) in self.position.iter_mut().zip(&forward) { *p -= f * move_amount; }
+            for (p, &f) in self.position.iter_mut().zip(&forward) {
+                *p -= f * move_amount;
+            }
         }
         if input.left {
-            for (p, &r) in self.position.iter_mut().zip(&right) { *p -= r * move_amount; }
+            for (p, &r) in self.position.iter_mut().zip(&right) {
+                *p -= r * move_amount;
+            }
         }
         if input.right {
-            for (p, &r) in self.position.iter_mut().zip(&right) { *p += r * move_amount; }
+            for (p, &r) in self.position.iter_mut().zip(&right) {
+                *p += r * move_amount;
+            }
         }
         if input.yaw_left {
             self.yaw -= rot_amount;
@@ -91,32 +95,38 @@ impl Camera {
             right,
             _pad2: 0.0,
             up,
-            _pad3: 0.0,
             fov: self.fov,
             width,
             height,
+            _pad3: 0,
             _pad4: 0,
         }
     }
 }
 
-/// GPU camera uniform. Matches the WGSL `Camera` struct with std140 layout.
+/// GPU camera uniform. Matches the WGSL `Camera` struct layout.
+///
+/// WGSL vec3<f32> has alignment 16 but size 12. The member after a vec3
+/// starts at offset (`vec3_offset` + 12) rounded up to that member's own
+/// alignment. Since `fov` is f32 (align 4), it packs immediately after
+/// `up` at offset 60 — no padding between them.
+///
 /// Total size: 80 bytes.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct CameraUniform {
-    pub position: [f32; 3],
-    _pad0: f32,
-    pub forward: [f32; 3],
-    _pad1: f32,
-    pub right: [f32; 3],
-    _pad2: f32,
-    pub up: [f32; 3],
-    _pad3: f32,
-    pub fov: f32,
-    pub width: u32,
-    pub height: u32,
-    _pad4: u32,
+    pub position: [f32; 3], // offset  0
+    _pad0: f32,             // offset 12
+    pub forward: [f32; 3],  // offset 16
+    _pad1: f32,             // offset 28
+    pub right: [f32; 3],    // offset 32
+    _pad2: f32,             // offset 44
+    pub up: [f32; 3],       // offset 48
+    pub fov: f32,           // offset 60
+    pub width: u32,         // offset 64
+    pub height: u32,        // offset 68
+    _pad3: u32,             // offset 72
+    _pad4: u32,             // offset 76
 }
 
 /// Tracks which keys are currently pressed.
@@ -172,7 +182,11 @@ mod tests {
 
     #[test]
     fn forward_at_zero_yaw_pitch() {
-        let cam = Camera { yaw: 0.0, pitch: 0.0, ..Camera::default() };
+        let cam = Camera {
+            yaw: 0.0,
+            pitch: 0.0,
+            ..Camera::default()
+        };
         let (fwd, _, _) = cam.orientation_vectors();
         assert!((fwd[2] - (-1.0)).abs() < 1e-5);
         assert!(fwd[0].abs() < 1e-5);
@@ -181,7 +195,11 @@ mod tests {
 
     #[test]
     fn yaw_rotates_horizontally() {
-        let cam = Camera { yaw: FRAC_PI_2, pitch: 0.0, ..Camera::default() };
+        let cam = Camera {
+            yaw: FRAC_PI_2,
+            pitch: 0.0,
+            ..Camera::default()
+        };
         let (fwd, _, _) = cam.orientation_vectors();
         assert!((fwd[0] - (-1.0)).abs() < 1e-5);
         assert!(fwd[2].abs() < 1e-5);
@@ -202,6 +220,20 @@ mod tests {
     #[test]
     fn gpu_uniform_size_matches_wgsl() {
         assert_eq!(std::mem::size_of::<CameraUniform>(), 80);
+    }
+
+    #[test]
+    fn gpu_uniform_field_offsets_match_wgsl() {
+        // Verify critical field offsets match the WGSL Camera struct layout.
+        // WGSL vec3<f32> has alignment 16, size 12. The scalar `fov: f32`
+        // (align 4) packs right after `up` at offset 60 with no padding.
+        assert_eq!(std::mem::offset_of!(CameraUniform, position), 0);
+        assert_eq!(std::mem::offset_of!(CameraUniform, forward), 16);
+        assert_eq!(std::mem::offset_of!(CameraUniform, right), 32);
+        assert_eq!(std::mem::offset_of!(CameraUniform, up), 48);
+        assert_eq!(std::mem::offset_of!(CameraUniform, fov), 60);
+        assert_eq!(std::mem::offset_of!(CameraUniform, width), 64);
+        assert_eq!(std::mem::offset_of!(CameraUniform, height), 68);
     }
 
     #[test]

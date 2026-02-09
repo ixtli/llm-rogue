@@ -11,10 +11,7 @@ const DIRT_DEPTH: usize = 3;
 
 #[inline]
 pub const fn pack_voxel(material_id: u8, param0: u8, param1: u8, flags: u8) -> u32 {
-    (material_id as u32)
-        | ((param0 as u32) << 8)
-        | ((param1 as u32) << 16)
-        | ((flags as u32) << 24)
+    (material_id as u32) | ((param0 as u32) << 8) | ((param1 as u32) << 16) | ((flags as u32) << 24)
 }
 
 #[inline]
@@ -99,9 +96,17 @@ mod tests {
     #[test]
     fn terrain_has_surface() {
         let chunk = Chunk::new_terrain(42);
-        let solid_count = chunk.voxels.iter().filter(|&&v| material_id(v) != 0).count();
+        let solid_count = chunk
+            .voxels
+            .iter()
+            .filter(|&&v| material_id(v) != 0)
+            .count();
         assert!(solid_count > 0, "terrain should have solid voxels");
-        let air_count = chunk.voxels.iter().filter(|&&v| material_id(v) == 0).count();
+        let air_count = chunk
+            .voxels
+            .iter()
+            .filter(|&&v| material_id(v) == 0)
+            .count();
         assert!(air_count > 0, "terrain should have air above surface");
     }
 
