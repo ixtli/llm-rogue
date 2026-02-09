@@ -8,6 +8,8 @@ use web_sys::OffscreenCanvas;
 #[cfg(target_arch = "wasm32")]
 mod render;
 #[allow(dead_code)]
+mod camera;
+#[allow(dead_code)]
 mod voxel;
 
 #[cfg(target_arch = "wasm32")]
