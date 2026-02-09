@@ -1,9 +1,16 @@
-import init, { init_renderer, render_frame } from "../../crates/engine/pkg/engine";
+import init, {
+  handle_key_down,
+  handle_key_up,
+  init_renderer,
+  render_frame,
+} from "../../crates/engine/pkg/engine";
 import type { MainToRenderMessage } from "../messages";
 
 self.onmessage = async (e: MessageEvent<MainToRenderMessage>) => {
-  if (e.data.type === "init") {
-    const { canvas, width, height } = e.data;
+  const msg = e.data;
+
+  if (msg.type === "init") {
+    const { canvas, width, height } = msg;
     await init();
     await init_renderer(canvas, width, height);
 
@@ -14,5 +21,9 @@ self.onmessage = async (e: MessageEvent<MainToRenderMessage>) => {
       setTimeout(loop, 16);
     }
     loop();
+  } else if (msg.type === "key_down") {
+    handle_key_down(msg.key);
+  } else if (msg.type === "key_up") {
+    handle_key_up(msg.key);
   }
 };

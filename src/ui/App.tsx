@@ -1,5 +1,5 @@
-import { type Component, createSignal, onMount } from "solid-js";
-import type { RenderToMainMessage } from "../messages";
+import { type Component, createSignal, onCleanup, onMount } from "solid-js";
+import type { MainToRenderMessage, RenderToMainMessage } from "../messages";
 
 const App: Component = () => {
   let canvasRef: HTMLCanvasElement | undefined;
@@ -15,7 +15,7 @@ const App: Component = () => {
 
     worker.onmessage = (e: MessageEvent<RenderToMainMessage>) => {
       if (e.data.type === "ready") {
-        setStatus("engine ready");
+        setStatus("engine ready — WASD move, QE yaw, RF pitch");
       }
     };
 
@@ -25,9 +25,27 @@ const App: Component = () => {
         canvas: offscreen,
         width: window.innerWidth,
         height: window.innerHeight,
-      },
+      } satisfies MainToRenderMessage,
       [offscreen],
     );
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      worker.postMessage({ type: "key_down", key } satisfies MainToRenderMessage);
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      worker.postMessage({ type: "key_up", key } satisfies MainToRenderMessage);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+
+    onCleanup(() => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    });
   });
 
   return (
