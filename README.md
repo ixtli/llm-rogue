@@ -37,28 +37,29 @@ RF to pitch.
 
 ## Contributing
 
-### Dev Loop
+### Development Process
 
-Before committing, run the full format/lint/test cycle:
+All feature work follows red-green-refactor TDD:
+
+1. **Red** — Write a failing test for the new behavior.
+2. **Green** — Write the minimum code to make the test pass.
+3. **Refactor** — Clean up without changing behavior.
+4. **Lint** — Run linters to catch issues before committing.
 
 ```bash
-# 1. Format everything
-cargo fmt -p engine
-bun run fmt
-
-# 2. Lint everything
-cargo clippy -p engine --target wasm32-unknown-unknown -- -D warnings
+# Run tests (repeat during red/green/refactor)
+cargo test -p engine
 bun run lint
 
-# 3. Run tests
+# Full pre-commit check: format, lint, test, build
+cargo fmt -p engine && bun run fmt
+cargo clippy -p engine --target wasm32-unknown-unknown -- -D warnings
+bun run lint
 cargo test -p engine
-
-# 4. Build and verify in browser
-bun run build:wasm
-bun run dev
+bun run build:wasm && bun run dev
 ```
 
-Or run all checks (no auto-fix) in one shot:
+Or run format + lint checks (no auto-fix) in one shot:
 
 ```bash
 bun run check

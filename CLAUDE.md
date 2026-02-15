@@ -19,7 +19,7 @@ Next: Phase 3 (multi-chunk streaming, game logic worker).
 - **Game logic:** TypeScript (Web Worker — not yet implemented)
 - **Build:** Vite + vite-plugin-wasm + wasm-pack
 - **Package manager:** Bun (standard package.json, npm/pnpm as fallback)
-- **Testing (Rust):** `cargo test -p engine` (15 tests: camera, voxel, layout)
+- **Testing (Rust):** `cargo test -p engine`
 
 ## Architecture Rules
 
@@ -38,12 +38,33 @@ Next: Phase 3 (multi-chunk streaming, game logic worker).
 bun install              # install dependencies
 bun run build:wasm       # compile rust to wasm
 bun run dev              # vite dev server
-cargo test -p engine     # run rust tests (15 tests: camera, voxel, layout)
+cargo test -p engine     # run rust tests
 ```
 
-## Dev Loop
+## Development Process
 
-The full local development cycle before committing:
+All feature work and bug fixes **must** follow red-green-refactor TDD:
+
+1. **Red** — Write a failing test that captures the expected behavior.
+2. **Green** — Write the minimum code to make the test pass.
+3. **Refactor** — Clean up without changing behavior.
+4. **Lint** — Run linters after each cycle to catch issues early.
+
+Do not skip the failing-test step. Do not write implementation code without a
+test covering the new behavior.
+
+### Commands during development
+
+```bash
+# Test (run frequently during red/green/refactor)
+cargo test -p engine
+
+# Lint (run after each refactor cycle and before committing)
+cargo clippy -p engine --target wasm32-unknown-unknown -- -D warnings
+bun run lint
+```
+
+### Pre-commit checklist
 
 ```bash
 # 1. Format
@@ -57,7 +78,7 @@ bun run lint
 # 3. Test
 cargo test -p engine
 
-# 4. Build and run
+# 4. Build and verify in browser
 bun run build:wasm
 bun run dev
 ```
