@@ -14,8 +14,14 @@ self.onmessage = async (e: MessageEvent<MainToRenderMessage>) => {
 
   if (msg.type === "init") {
     const { canvas, width, height } = msg;
-    await init();
-    await init_renderer(canvas, width, height);
+    try {
+      await init();
+      await init_renderer(canvas, width, height);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      (self as unknown as Worker).postMessage({ type: "error", message });
+      return;
+    }
 
     (self as unknown as Worker).postMessage({ type: "ready" });
 

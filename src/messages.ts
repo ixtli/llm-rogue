@@ -6,4 +6,4 @@ export type MainToRenderMessage =
   | { type: "scroll"; dy: number }
   | { type: "pan"; dx: number; dy: number };
 
-export type RenderToMainMessage = { type: "ready" };
+export type RenderToMainMessage = { type: "ready" } | { type: "error"; message: string };

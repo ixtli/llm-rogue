@@ -1,12 +1,31 @@
-import { type Component, createSignal, onCleanup, onMount } from "solid-js";
+import { type Component, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { setupInputHandlers } from "../input";
 import type { MainToRenderMessage, RenderToMainMessage } from "../messages";
+
+function checkWebGPU(): string | null {
+  if (!navigator.gpu) {
+    return "WebGPU is not supported in this browser.";
+  }
+  if (typeof OffscreenCanvas === "undefined") {
+    return "OffscreenCanvas is not supported in this browser.";
+  }
+  return null;
+}
+
+const COMPAT_BROWSERS = "Chrome 113+, Edge 113+, Opera 99+, or Samsung Internet 27+";
 
 const App: Component = () => {
   let canvasRef: HTMLCanvasElement | undefined;
   const [status, setStatus] = createSignal("loading engine...");
+  const [error, setError] = createSignal<string | null>(null);
 
   onMount(() => {
+    const gpuError = checkWebGPU();
+    if (gpuError) {
+      setError(gpuError);
+      return;
+    }
+
     if (!canvasRef) return;
 
     const offscreen = canvasRef.transferControlToOffscreen();
@@ -17,6 +36,8 @@ const App: Component = () => {
     worker.onmessage = (e: MessageEvent<RenderToMainMessage>) => {
       if (e.data.type === "ready") {
         setStatus("click to look | WASD move | scroll zoom");
+      } else if (e.data.type === "error") {
+        setError(`Engine failed to initialize: ${e.data.message}`);
       }
     };
 
@@ -62,7 +83,34 @@ const App: Component = () => {
   });
 
   return (
-    <>
+    <Show
+      when={!error()}
+      fallback={
+        <div
+          style={{
+            display: "flex",
+            "flex-direction": "column",
+            "align-items": "center",
+            "justify-content": "center",
+            height: "100vh",
+            color: "#e0e0e0",
+            "font-family": "monospace",
+            padding: "2rem",
+            "text-align": "center",
+          }}
+        >
+          <h1 style={{ "font-size": "1.5rem", "margin-bottom": "1rem", color: "#fff" }}>
+            LLM Rogue
+          </h1>
+          <p style={{ "margin-bottom": "1rem", color: "#f87171" }}>{error()}</p>
+          <p style={{ "max-width": "480px", "line-height": "1.6" }}>
+            This app requires a browser with WebGPU support: {COMPAT_BROWSERS}. On macOS, Safari
+            support is experimental and must be enabled in settings. Firefox Nightly has partial
+            support behind a flag.
+          </p>
+        </div>
+      }
+    >
       <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight} />
       <div
         style={{
@@ -76,7 +124,7 @@ const App: Component = () => {
       >
         {status()}
       </div>
-    </>
+    </Show>
   );
 };
 
