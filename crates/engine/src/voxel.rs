@@ -10,26 +10,31 @@ pub const MAT_STONE: u8 = 3;
 const DIRT_DEPTH: usize = 3;
 
 #[inline]
+#[must_use]
 pub const fn pack_voxel(material_id: u8, param0: u8, param1: u8, flags: u8) -> u32 {
     (material_id as u32) | ((param0 as u32) << 8) | ((param1 as u32) << 16) | ((flags as u32) << 24)
 }
 
 #[inline]
+#[must_use]
 pub const fn material_id(voxel: u32) -> u8 {
     (voxel & 0xFF) as u8
 }
 
 #[inline]
+#[must_use]
 pub const fn param0(voxel: u32) -> u8 {
     ((voxel >> 8) & 0xFF) as u8
 }
 
 #[inline]
+#[must_use]
 pub const fn param1(voxel: u32) -> u8 {
     ((voxel >> 16) & 0xFF) as u8
 }
 
 #[inline]
+#[must_use]
 pub const fn flags(voxel: u32) -> u8 {
     ((voxel >> 24) & 0xFF) as u8
 }
@@ -39,6 +44,7 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    #[must_use]
     #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
     pub fn new_terrain(seed: u32) -> Self {
         let perlin = Perlin::new(seed);

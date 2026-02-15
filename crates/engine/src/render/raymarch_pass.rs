@@ -3,6 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::camera::CameraUniform;
 
 /// A compute pass that ray-marches a voxel chunk and writes color to a storage texture.
+#[allow(dead_code)] // used by render regression tests (not yet wired up)
 pub struct RaymarchPass {
     pipeline: wgpu::ComputePipeline,
     bind_group: wgpu::BindGroup,
@@ -11,6 +12,7 @@ pub struct RaymarchPass {
     height: u32,
 }
 
+#[allow(dead_code)] // used by render regression tests (not yet wired up)
 impl RaymarchPass {
     #[must_use]
     #[allow(clippy::too_many_lines)]

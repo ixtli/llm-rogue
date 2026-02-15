@@ -1,17 +1,25 @@
+#[cfg(feature = "wasm")]
 mod blit_pass;
-mod gpu;
-mod raymarch_pass;
+pub(crate) mod gpu;
+pub(crate) mod raymarch_pass;
 
+#[cfg(feature = "wasm")]
 use blit_pass::BlitPass;
+#[cfg(feature = "wasm")]
 use gpu::GpuContext;
+#[cfg(feature = "wasm")]
 use raymarch_pass::RaymarchPass;
+#[cfg(feature = "wasm")]
 use web_sys::OffscreenCanvas;
 
+#[cfg(feature = "wasm")]
 use crate::camera::{Camera, InputState};
+#[cfg(feature = "wasm")]
 use crate::voxel::Chunk;
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
-fn build_palette() -> Vec<[f32; 4]> {
+#[allow(dead_code)] // used by render regression tests (not yet wired up)
+pub(crate) fn build_palette() -> Vec<[f32; 4]> {
     let mut palette = vec![[0.0, 0.0, 0.0, 1.0]; 256];
     palette[1] = [0.3, 0.7, 0.2, 1.0]; // grass
     palette[2] = [0.5, 0.3, 0.1, 1.0]; // dirt
@@ -19,8 +27,12 @@ fn build_palette() -> Vec<[f32; 4]> {
     palette
 }
 
+#[cfg(feature = "wasm")]
 pub struct Renderer {
     gpu: GpuContext,
+    surface: wgpu::Surface<'static>,
+    #[allow(dead_code)]
+    surface_config: wgpu::SurfaceConfiguration,
     raymarch_pass: RaymarchPass,
     blit_pass: BlitPass,
     _storage_texture: wgpu::Texture,
@@ -31,9 +43,15 @@ pub struct Renderer {
     last_time: f32,
 }
 
+#[cfg(feature = "wasm")]
 impl Renderer {
+    /// Creates a new `Renderer` from the given [`OffscreenCanvas`] and dimensions.
+    ///
+    /// # Panics
+    ///
+    /// Panics if GPU initialization or resource creation fails.
     pub async fn new(canvas: OffscreenCanvas, width: u32, height: u32) -> Self {
-        let gpu = GpuContext::new(canvas, width, height).await;
+        let (gpu, surface, surface_config) = GpuContext::new(canvas, width, height).await;
 
         let storage_texture = create_storage_texture(&gpu.device, width, height);
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -54,10 +72,12 @@ impl Renderer {
             height,
         );
 
-        let blit_pass = BlitPass::new(&gpu.device, &storage_view, gpu.surface_config.format);
+        let blit_pass = BlitPass::new(&gpu.device, &storage_view, surface_config.format);
 
         Self {
             gpu,
+            surface,
+            surface_config,
             raymarch_pass,
             blit_pass,
             _storage_texture: storage_texture,
@@ -70,6 +90,10 @@ impl Renderer {
     }
 
     /// Renders a single frame. Updates camera from current input state.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the surface texture cannot be acquired.
     pub fn render(&mut self, time: f32) {
         let dt = if self.last_time > 0.0 {
             (time - self.last_time).min(0.1) // cap dt to avoid huge jumps
@@ -85,7 +109,6 @@ impl Renderer {
             .update_camera(&self.gpu.queue, &camera_uniform);
 
         let frame = self
-            .gpu
             .surface
             .get_current_texture()
             .expect("Failed to get surface texture");
@@ -133,7 +156,17 @@ impl Renderer {
     }
 }
 
-fn create_storage_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
+/// Creates the storage texture used as the ray march output target.
+///
+/// `COPY_SRC` is included to support headless render regression tests that
+/// read back the framebuffer for comparison against reference images.
+/// See `crates/engine/tests/render_regression.rs`.
+#[allow(dead_code)] // used by render regression tests (not yet wired up)
+pub(crate) fn create_storage_texture(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Compute Output"),
         size: wgpu::Extent3d {
@@ -145,7 +178,10 @@ fn create_storage_texture(device: &wgpu::Device, width: u32, height: u32) -> wgp
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+        // COPY_SRC enables pixel readback in headless render regression tests.
+        usage: wgpu::TextureUsages::STORAGE_BINDING
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     })
 }

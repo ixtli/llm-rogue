@@ -25,6 +25,7 @@ impl Default for Camera {
 
 impl Camera {
     /// Compute forward, right, up vectors from yaw and pitch.
+    #[must_use]
     pub fn orientation_vectors(&self) -> ([f32; 3], [f32; 3], [f32; 3]) {
         let (sy, cy) = self.yaw.sin_cos();
         let (sp, cp) = self.pitch.sin_cos();
@@ -113,6 +114,7 @@ impl Camera {
     }
 
     /// Build the GPU-uploadable uniform struct.
+    #[must_use]
     pub fn to_uniform(&self, width: u32, height: u32) -> CameraUniform {
         let (forward, right, up) = self.orientation_vectors();
         CameraUniform {
