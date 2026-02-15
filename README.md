@@ -6,11 +6,12 @@ Solid.js UI overlay. LLMs interact with the world in real time via MCP.
 
 ## Current State
 
-Phase 2 (single-chunk ray marching) is complete. The engine renders a 32x32x32
+Phase 3 (render regression harness) is complete. The engine renders a 32x32x32
 Perlin noise terrain chunk using DDA ray marching in a WGSL compute shader.
-Camera controls: WASD move, QE yaw, RF pitch.
+Camera controls: WASD move, QE yaw, RF pitch. Headless wgpu regression tests
+verify rendering from three camera angles against reference PNGs.
 
-Next milestone: Phase 3 (multi-chunk streaming with game logic worker).
+Next milestone: Phase 4 (multi-chunk streaming with game logic worker).
 
 ## Prerequisites
 
@@ -48,7 +49,7 @@ All feature work follows red-green-refactor TDD:
 
 ```bash
 # Run tests (repeat during red/green/refactor)
-cargo test -p engine     # Rust engine tests
+cargo test -p engine     # Rust engine tests (unit + regression)
 bun run test             # UI component tests (vitest)
 bun run lint
 
@@ -71,14 +72,17 @@ bun run check
 
 ```
 crates/engine/src/
-  lib.rs              # WASM entry points (init_renderer, render_frame, key events)
+  lib.rs              # WASM entry points (gated behind "wasm" feature)
   camera.rs           # Camera state, CameraUniform (GPU layout), InputState, keyboard controls
   voxel.rs            # Voxel packing (4-byte format), Chunk struct, Perlin terrain generation
   render/
-    mod.rs            # Renderer: owns GPU context, camera, passes; drives the frame loop
-    gpu.rs            # GpuContext: wgpu device/queue/surface initialization from OffscreenCanvas
+    mod.rs            # Renderer (WASM), palette, storage texture helpers
+    gpu.rs            # GpuContext: device+queue, new() for WASM, new_headless() for native
     raymarch_pass.rs  # Compute pipeline: DDA ray march through voxel chunk
-    blit_pass.rs      # Fullscreen blit from storage texture to surface
+    blit_pass.rs      # Fullscreen blit from storage texture to surface (WASM only)
+crates/engine/tests/
+  render_regression.rs  # Headless render regression tests (3 camera angles)
+  fixtures/             # Reference PNGs for regression comparison
 
 shaders/
   raymarch.wgsl       # Compute shader: camera rays, AABB intersection, DDA voxel traversal

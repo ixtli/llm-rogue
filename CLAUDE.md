@@ -7,9 +7,11 @@ voxel octrees (SVOs) rendered via GPU ray marching in Rust/WASM (wgpu/WebGPU),
 with a Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md`
 for the full architecture.
 
-**Current state:** Phase 2 complete — single 32x32x32 chunk rendered with DDA
-ray marching, Perlin noise terrain, directional shading, WASD+QERF camera.
-Next: Phase 3 (multi-chunk streaming, game logic worker).
+**Current state:** Phase 3 complete — render regression harness with headless
+wgpu tests. Single 32x32x32 chunk rendered with DDA ray marching, Perlin noise
+terrain, directional shading, WASD+QERF camera. Three regression tests verify
+rendering from front, corner, and top-down angles against reference PNGs.
+Next: Phase 4 (multi-chunk streaming, game logic worker).
 
 ## Tech Stack
 
@@ -19,7 +21,8 @@ Next: Phase 3 (multi-chunk streaming, game logic worker).
 - **Game logic:** TypeScript (Web Worker — not yet implemented)
 - **Build:** Vite + vite-plugin-wasm + wasm-pack
 - **Package manager:** Bun (standard package.json, npm/pnpm as fallback)
-- **Testing (Rust):** `cargo test -p engine`
+- **Testing (Rust):** `cargo test -p engine` (unit + regression)
+- **Testing (Regression):** Headless wgpu render tests (`cargo test -p engine --test render_regression`)
 - **Testing (UI):** Vitest + @solidjs/testing-library (`bun run test`)
 
 ## Architecture Rules
@@ -37,9 +40,10 @@ Next: Phase 3 (multi-chunk streaming, game logic worker).
 
 ```bash
 bun install              # install dependencies
-bun run build:wasm       # compile rust to wasm
+bun run build:wasm       # compile rust to wasm (passes --features wasm)
 bun run dev              # vite dev server
-cargo test -p engine     # run rust tests
+cargo test -p engine     # run all rust tests (unit + regression)
+cargo test -p engine --test render_regression  # regression tests only
 bun run test             # run UI component tests (vitest)
 ```
 
@@ -59,7 +63,7 @@ test covering the new behavior.
 
 ```bash
 # Test (run frequently during red/green/refactor)
-cargo test -p engine     # Rust engine tests
+cargo test -p engine     # Rust engine tests (unit + regression)
 bun run test             # UI component tests (vitest)
 
 # Lint (run after each refactor cycle and before committing)
@@ -92,6 +96,32 @@ Or as a single check command (format + lint, no auto-fix):
 ```bash
 bun run check
 ```
+
+## Feature Gating
+
+The engine crate uses a `wasm` feature flag to gate browser-specific dependencies
+(`wasm-bindgen`, `web-sys`, etc.). This allows native compilation for integration
+tests without pulling in web-sys.
+
+- **`cargo test -p engine`** compiles natively (no WASM, no web-sys).
+- **`bun run build:wasm`** passes `--features wasm` to wasm-pack.
+- WASM entry points in `lib.rs` are gated with `#[cfg(feature = "wasm")]`.
+- `Renderer` and `BlitPass` are WASM-only. `GpuContext`, `RaymarchPass`,
+  `build_palette`, and `create_storage_texture` are always available.
+
+## Render Regression Tests
+
+Headless wgpu tests that render a deterministic chunk from known camera angles
+and compare against reference PNGs. See `crates/engine/tests/render_regression.rs`.
+
+- **Reference images:** `crates/engine/tests/fixtures/{front,corner,top_down}.png`
+- **Tolerance:** ±2 per channel (out of 255)
+- **Resolution:** 128x128
+- **Missing reference:** Test fails, saves actual to `<name>_actual.png` for
+  inspection. Copy to `<name>.png` to accept.
+- **Updating references:** After shader or data layout changes, run the tests,
+  inspect `_actual.png` files, and copy them over the reference PNGs.
+- `_actual.png` files are gitignored.
 
 ## Code Conventions
 
@@ -144,9 +174,10 @@ is shaded with a hardcoded directional light and the material's palette color.
 | `camera` | `crates/engine/src/camera.rs` | Camera state, GPU uniform struct, input state, keyboard mapping |
 | `voxel` | `crates/engine/src/voxel.rs` | Voxel pack/unpack, Chunk (32^3), Perlin terrain generation |
 | `render` | `crates/engine/src/render/mod.rs` | Renderer: owns GPU context, camera, passes |
-| `gpu` | `crates/engine/src/render/gpu.rs` | wgpu device/queue/surface from OffscreenCanvas |
+| `gpu` | `crates/engine/src/render/gpu.rs` | GpuContext (device+queue), `new()` for WASM, `new_headless()` for native |
 | `raymarch_pass` | `crates/engine/src/render/raymarch_pass.rs` | Compute pipeline + bind groups for ray march shader |
-| `blit_pass` | `crates/engine/src/render/blit_pass.rs` | Fullscreen blit from storage texture to surface |
+| `blit_pass` | `crates/engine/src/render/blit_pass.rs` | Fullscreen blit from storage texture to surface (WASM only) |
+| `render_regression` | `crates/engine/tests/render_regression.rs` | Headless render regression tests (3 camera angles, ±2/255 tolerance) |
 | `gpu-check` | `src/ui/gpu-check.ts` | WebGPU/OffscreenCanvas feature detection, browser guide URLs |
 | `messages` | `src/messages.ts` | Worker message types (init, key_down, key_up, ready) |
 
