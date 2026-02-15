@@ -17,9 +17,13 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
+    "@solidjs/testing-library": "^0.8.10",
+    "@testing-library/jest-dom": "^6.9.1",
+    "jsdom": "^28.1.0",
     "typescript": "^5",
     "vite": "^6",
     "vite-plugin-solid": "^2",
-    "vite-plugin-wasm": "^3"
+    "vite-plugin-wasm": "^3",
+    "vitest": "^4.0.18"
   }
 }
