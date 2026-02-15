@@ -244,13 +244,21 @@ loading/unloading, generates chunks with noise, sends them to the render worker.
 The message bus architecture gets exercised for real. Implement chunk eviction and
 LOD selection.
 
+Update the Phase 3 regression harness: add multi-chunk reference images (e.g.,
+camera at a chunk boundary viewing two adjacent chunks) and update existing
+references if the shader or data layout changes. The harness should catch
+regressions as the renderer evolves from single-chunk to multi-chunk.
+
 ### Phase 5 — Lighting
 
 1. Direct sunlight with hard shadows (secondary rays)
 2. Ambient occlusion
 3. Voxel cone tracing for approximate GI (if performance allows)
 
-Each is an incremental shader pass.
+Each is an incremental shader pass. Update regression harness reference images
+after each lighting stage lands — the existing angles will show lighting changes.
+Add a new reference angle if needed (e.g., a shadowed overhang to verify shadow
+rays).
 
 ### Phase 6 — Game and UI
 
