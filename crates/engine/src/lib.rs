@@ -1,30 +1,28 @@
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 use std::cell::RefCell;
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 use web_sys::OffscreenCanvas;
 
-#[allow(dead_code)]
-mod camera;
-#[cfg(target_arch = "wasm32")]
+pub mod camera;
+#[cfg(feature = "wasm")]
 mod render;
-#[allow(dead_code)]
-mod voxel;
+pub mod voxel;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 thread_local! {
     static RENDERER: RefCell<Option<render::Renderer>> = const { RefCell::new(None) };
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 #[wasm_bindgen(start)]
 fn main() {
     console_error_panic_hook::set_once();
 }
 
 /// Initializes the WebGPU renderer from the given [`OffscreenCanvas`].
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub async fn init_renderer(canvas: OffscreenCanvas, width: u32, height: u32) {
     let renderer = render::Renderer::new(canvas, width, height).await;
@@ -32,7 +30,7 @@ pub async fn init_renderer(canvas: OffscreenCanvas, width: u32, height: u32) {
 }
 
 /// Renders a single frame at the given timestamp (seconds).
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn render_frame(time: f32) {
     RENDERER.with(|r| {
@@ -43,7 +41,7 @@ pub fn render_frame(time: f32) {
 }
 
 /// Handle a key-down event. `key` is the JS `event.key` value, lowercased.
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn handle_key_down(key: &str) {
     RENDERER.with(|r| {
@@ -54,7 +52,7 @@ pub fn handle_key_down(key: &str) {
 }
 
 /// Handle a key-up event.
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn handle_key_up(key: &str) {
     RENDERER.with(|r| {
@@ -65,7 +63,7 @@ pub fn handle_key_up(key: &str) {
 }
 
 /// Handle a pointer move (look) event. dx/dy are pre-scaled radians.
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn handle_pointer_move(dx: f32, dy: f32) {
     RENDERER.with(|r| {
@@ -76,7 +74,7 @@ pub fn handle_pointer_move(dx: f32, dy: f32) {
 }
 
 /// Handle a scroll (dolly) event. dy is pre-scaled world units.
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn handle_scroll(dy: f32) {
     RENDERER.with(|r| {
@@ -87,7 +85,7 @@ pub fn handle_scroll(dy: f32) {
 }
 
 /// Handle a pan (strafe) event. dx/dy are pre-scaled world units.
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn handle_pan(dx: f32, dy: f32) {
     RENDERER.with(|r| {
