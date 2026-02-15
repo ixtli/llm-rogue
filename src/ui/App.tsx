@@ -1,26 +1,26 @@
 import { type Component, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { setupInputHandlers } from "../input";
 import type { MainToRenderMessage, RenderToMainMessage } from "../messages";
-
-function checkWebGPU(): string | null {
-  if (!navigator.gpu) {
-    return "WebGPU is not supported in this browser.";
-  }
-  if (typeof OffscreenCanvas === "undefined") {
-    return "OffscreenCanvas is not supported in this browser.";
-  }
-  return null;
-}
+import {
+  checkWebGPU as defaultCheckGpu,
+  getBrowserGuideUrl as defaultGetBrowserGuide,
+} from "./gpu-check";
 
 const COMPAT_BROWSERS = "Chrome 113+, Edge 113+, Opera 99+, or Samsung Internet 27+";
 
-const App: Component = () => {
+interface AppProps {
+  checkGpu?: () => string | null;
+  getBrowserGuide?: () => { name: string; url: string } | null;
+}
+
+const App: Component<AppProps> = (props) => {
   let canvasRef: HTMLCanvasElement | undefined;
   const [status, setStatus] = createSignal("loading engine...");
   const [error, setError] = createSignal<string | null>(null);
 
   onMount(() => {
-    const gpuError = checkWebGPU();
+    const checkGpu = props.checkGpu ?? defaultCheckGpu;
+    const gpuError = checkGpu();
     if (gpuError) {
       setError(gpuError);
       return;
@@ -108,6 +108,22 @@ const App: Component = () => {
             support is experimental and must be enabled in settings. Firefox Nightly has partial
             support behind a flag.
           </p>
+          {(() => {
+            const getBrowserGuide = props.getBrowserGuide ?? defaultGetBrowserGuide;
+            const guide = getBrowserGuide();
+            return guide ? (
+              <p style={{ "margin-top": "1rem" }}>
+                <a
+                  href={guide.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#60a5fa", "text-decoration": "underline" }}
+                >
+                  Enable WebGPU in {guide.name} →
+                </a>
+              </p>
+            ) : null;
+          })()}
         </div>
       }
     >
