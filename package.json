@@ -10,7 +10,9 @@
     "lint:fix": "biome check --fix src/",
     "fmt": "biome format --write src/",
     "fmt:check": "biome format src/",
-    "check": "bun run lint && cargo fmt --check -p engine && cargo clippy -p engine --target wasm32-unknown-unknown -- -D warnings"
+    "check": "bun run lint && cargo fmt --check -p engine && cargo clippy -p engine --target wasm32-unknown-unknown -- -D warnings",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "solid-js": "^1.9"
