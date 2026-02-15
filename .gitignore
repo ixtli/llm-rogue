@@ -181,3 +181,6 @@ dist/
 
 ### WASM ###
 crates/engine/pkg/
+
+### Render regression test outputs ###
+crates/engine/tests/fixtures/*_actual.png
