@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "bun run build:wasm && vite build",
-    "build:wasm": "wasm-pack build crates/engine --target web",
+    "build:wasm": "wasm-pack build crates/engine --target web -- --features wasm",
     "lint": "biome check src/",
     "lint:fix": "biome check --fix src/",
     "fmt": "biome format --write src/",
