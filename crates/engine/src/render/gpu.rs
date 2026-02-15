@@ -3,7 +3,6 @@ use web_sys::OffscreenCanvas;
 
 /// GPU context: device and queue only. Surface presentation is owned
 /// by the `Renderer`, not by `GpuContext`.
-#[allow(dead_code)] // used by render regression tests (not yet wired up)
 pub struct GpuContext {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -68,7 +67,6 @@ impl GpuContext {
     ///
     /// Panics if no GPU adapter is found or device creation fails.
     #[cfg(not(target_arch = "wasm32"))]
-    #[allow(dead_code)] // used by render regression tests (not yet wired up)
     pub async fn new_headless() -> Self {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,

@@ -1,7 +1,7 @@
 #[cfg(feature = "wasm")]
 mod blit_pass;
-pub(crate) mod gpu;
-pub(crate) mod raymarch_pass;
+pub mod gpu;
+pub mod raymarch_pass;
 
 #[cfg(feature = "wasm")]
 use blit_pass::BlitPass;
@@ -18,8 +18,8 @@ use crate::camera::{Camera, InputState};
 use crate::voxel::Chunk;
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
-#[allow(dead_code)] // used by render regression tests (not yet wired up)
-pub(crate) fn build_palette() -> Vec<[f32; 4]> {
+#[must_use]
+pub fn build_palette() -> Vec<[f32; 4]> {
     let mut palette = vec![[0.0, 0.0, 0.0, 1.0]; 256];
     palette[1] = [0.3, 0.7, 0.2, 1.0]; // grass
     palette[2] = [0.5, 0.3, 0.1, 1.0]; // dirt
@@ -161,8 +161,8 @@ impl Renderer {
 /// `COPY_SRC` is included to support headless render regression tests that
 /// read back the framebuffer for comparison against reference images.
 /// See `crates/engine/tests/render_regression.rs`.
-#[allow(dead_code)] // used by render regression tests (not yet wired up)
-pub(crate) fn create_storage_texture(
+#[must_use]
+pub fn create_storage_texture(
     device: &wgpu::Device,
     width: u32,
     height: u32,
