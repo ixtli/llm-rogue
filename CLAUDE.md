@@ -126,7 +126,11 @@ and compare against reference PNGs. See `crates/engine/tests/render_regression.r
 ## Code Conventions
 
 - Rust code lives in `crates/engine/`. Follow standard Rust conventions (rustfmt,
-  clippy clean).
+  clippy clean). Prefer idiomatic Rust style: small, well-named functions over
+  monolithic blocks; iterators and combinators over manual loops where they
+  improve clarity; expressive types over comments (e.g., newtypes, enums);
+  closures to DRY up repeated patterns. Functions should be short enough that
+  their name documents their purpose — never suppress `clippy::too_many_lines`.
 - TypeScript code lives in `src/`. Solid.js components use `.tsx` extension.
 - Shared message types are defined in `src/messages.ts` — both workers import from
   here. Keep this file as the single source of truth for the worker API.

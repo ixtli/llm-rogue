@@ -31,25 +31,8 @@ impl GpuContext {
             .create_surface(wgpu::SurfaceTarget::OffscreenCanvas(canvas))
             .expect("Failed to create surface");
 
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .expect("Failed to find adapter");
-
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                label: Some("Engine Device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                ..Default::default()
-            })
-            .await
-            .expect("Failed to create device");
+        let adapter = request_adapter(&instance, Some(&surface)).await;
+        let (device, queue) = request_device(&adapter, "Engine Device").await;
 
         let surface_config = surface
             .get_default_config(&adapter, width, height)
@@ -73,26 +56,36 @@ impl GpuContext {
             ..Default::default()
         });
 
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: None,
-                force_fallback_adapter: false,
-            })
-            .await
-            .expect("Failed to find adapter");
-
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                label: Some("Engine Device (headless)"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                ..Default::default()
-            })
-            .await
-            .expect("Failed to create device");
+        let adapter = request_adapter(&instance, None).await;
+        let (device, queue) = request_device(&adapter, "Engine Device (headless)").await;
 
         Self { device, queue }
     }
+}
+
+async fn request_adapter(
+    instance: &wgpu::Instance,
+    compatible_surface: Option<&wgpu::Surface<'_>>,
+) -> wgpu::Adapter {
+    instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface,
+            force_fallback_adapter: false,
+        })
+        .await
+        .expect("Failed to find adapter")
+}
+
+async fn request_device(adapter: &wgpu::Adapter, label: &str) -> (wgpu::Device, wgpu::Queue) {
+    adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some(label),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::default(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to create device")
 }
