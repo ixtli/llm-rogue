@@ -48,7 +48,8 @@ All feature work follows red-green-refactor TDD:
 
 ```bash
 # Run tests (repeat during red/green/refactor)
-cargo test -p engine
+cargo test -p engine     # Rust engine tests
+bun run test             # UI component tests (vitest)
 bun run lint
 
 # Full pre-commit check: format, lint, test, build
@@ -56,6 +57,7 @@ cargo fmt -p engine && bun run fmt
 cargo clippy -p engine --target wasm32-unknown-unknown -- -D warnings
 bun run lint
 cargo test -p engine
+bun run test
 bun run build:wasm && bun run dev
 ```
 
@@ -86,6 +88,8 @@ src/
   main.ts             # Solid.js app mount point
   messages.ts         # Shared message types for worker communication (single source of truth)
   ui/App.tsx          # Solid.js component: canvas, keyboard forwarding, status overlay
+  ui/gpu-check.ts     # WebGPU/OffscreenCanvas feature detection, browser guide URLs
+  ui/App.test.tsx     # UI component tests (vitest + @solidjs/testing-library)
   workers/render.worker.ts  # Render worker: WASM init, frame loop, input dispatch
 
 docs/plans/           # Architecture and design documents

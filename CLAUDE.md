@@ -20,6 +20,7 @@ Next: Phase 3 (multi-chunk streaming, game logic worker).
 - **Build:** Vite + vite-plugin-wasm + wasm-pack
 - **Package manager:** Bun (standard package.json, npm/pnpm as fallback)
 - **Testing (Rust):** `cargo test -p engine`
+- **Testing (UI):** Vitest + @solidjs/testing-library (`bun run test`)
 
 ## Architecture Rules
 
@@ -39,6 +40,7 @@ bun install              # install dependencies
 bun run build:wasm       # compile rust to wasm
 bun run dev              # vite dev server
 cargo test -p engine     # run rust tests
+bun run test             # run UI component tests (vitest)
 ```
 
 ## Development Process
@@ -57,7 +59,8 @@ test covering the new behavior.
 
 ```bash
 # Test (run frequently during red/green/refactor)
-cargo test -p engine
+cargo test -p engine     # Rust engine tests
+bun run test             # UI component tests (vitest)
 
 # Lint (run after each refactor cycle and before committing)
 cargo clippy -p engine --target wasm32-unknown-unknown -- -D warnings
@@ -77,6 +80,7 @@ bun run lint
 
 # 3. Test
 cargo test -p engine
+bun run test
 
 # 4. Build and verify in browser
 bun run build:wasm
@@ -143,6 +147,7 @@ is shaded with a hardcoded directional light and the material's palette color.
 | `gpu` | `crates/engine/src/render/gpu.rs` | wgpu device/queue/surface from OffscreenCanvas |
 | `raymarch_pass` | `crates/engine/src/render/raymarch_pass.rs` | Compute pipeline + bind groups for ray march shader |
 | `blit_pass` | `crates/engine/src/render/blit_pass.rs` | Fullscreen blit from storage texture to surface |
+| `gpu-check` | `src/ui/gpu-check.ts` | WebGPU/OffscreenCanvas feature detection, browser guide URLs |
 | `messages` | `src/messages.ts` | Worker message types (init, key_down, key_up, ready) |
 
 ## Skill Usage (mandatory)
