@@ -7,17 +7,32 @@ edition = "2024"
 workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+wasm = [
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:console_error_panic_hook",
+    "dep:web-sys",
+]
 
 [dependencies]
 wgpu = "28"
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-console_error_panic_hook = "0.1"
 log = "0.4"
 noise = "0.9"
 bytemuck = { version = "1", features = ["derive"] }
 
+# WASM-only dependencies, gated behind the "wasm" feature
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+
 [dependencies.web-sys]
 version = "0.3"
 features = ["OffscreenCanvas", "console"]
+optional = true
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+pollster = "0.4"
