@@ -6,8 +6,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::OffscreenCanvas;
 
 pub mod camera;
-#[cfg(feature = "wasm")]
-mod render;
+pub mod render;
 pub mod voxel;
 
 #[cfg(feature = "wasm")]
