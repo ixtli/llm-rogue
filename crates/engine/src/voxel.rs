@@ -9,6 +9,17 @@ pub const MAT_STONE: u8 = 3;
 
 const DIRT_DEPTH: usize = 3;
 
+/// Grid extent along the X axis (in chunks) for the test grid.
+pub const TEST_GRID_X: i32 = 4;
+/// Grid extent along the Y axis (in chunks) for the test grid.
+pub const TEST_GRID_Y: i32 = 2;
+/// Grid extent along the Z axis (in chunks) for the test grid.
+pub const TEST_GRID_Z: i32 = 4;
+/// Deterministic seed used by `build_test_grid`.
+pub const TEST_GRID_SEED: u32 = 42;
+/// Total number of chunks in the test grid (X * Y * Z).
+pub const TEST_GRID_TOTAL: usize = (TEST_GRID_X * TEST_GRID_Y * TEST_GRID_Z) as usize;
+
 #[inline]
 #[must_use]
 pub const fn pack_voxel(material_id: u8, param0: u8, param1: u8, flags: u8) -> u32 {
@@ -128,6 +139,23 @@ impl Chunk {
     }
 }
 
+/// Generates a [`TEST_GRID_X`]x[`TEST_GRID_Y`]x[`TEST_GRID_Z`] grid of terrain
+/// chunks with deterministic seed [`TEST_GRID_SEED`].
+/// Returns `(chunk_coord, chunk)` pairs in ZYX iteration order.
+#[must_use]
+pub fn build_test_grid() -> Vec<([i32; 3], Chunk)> {
+    (0..TEST_GRID_Z)
+        .flat_map(|z| {
+            (0..TEST_GRID_Y).flat_map(move |y| {
+                (0..TEST_GRID_X).map(move |x| {
+                    let coord = [x, y, z];
+                    (coord, Chunk::new_terrain_at(TEST_GRID_SEED, coord))
+                })
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,5 +270,21 @@ mod tests {
                 _ => panic!("One side has terrain, other is all air at z={z}"),
             }
         }
+    }
+
+    #[test]
+    fn build_test_grid_returns_expected_chunks() {
+        let grid = build_test_grid();
+        assert_eq!(grid.len(), TEST_GRID_TOTAL);
+
+        // Verify coordinates cover [0..GRID_X) x [0..GRID_Y) x [0..GRID_Z) in ZYX iteration order
+        let expected: Vec<[i32; 3]> = (0..TEST_GRID_Z)
+            .flat_map(|z| {
+                (0..TEST_GRID_Y)
+                    .flat_map(move |y| (0..TEST_GRID_X).map(move |x| [x, y, z]))
+            })
+            .collect();
+        let coords: Vec<[i32; 3]> = grid.iter().map(|(c, _)| *c).collect();
+        assert_eq!(coords, expected);
     }
 }
