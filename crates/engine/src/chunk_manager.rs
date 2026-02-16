@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use glam::{IVec3, UVec3};
+use glam::{IVec3, UVec3, Vec3};
 
 use crate::render::chunk_atlas::{ChunkAtlas, world_to_slot};
 use crate::voxel::Chunk;
@@ -83,6 +83,30 @@ impl ChunkManager {
     pub fn view_distance(&self) -> u32 {
         self.view_distance
     }
+
+    /// Compute the set of chunk coordinates visible from `camera_pos` with the
+    /// given `view_distance` (in chunks). Returns a box of (2*vd+1)^3 chunks
+    /// centered on the camera's chunk.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_wrap)]
+    pub fn compute_visible_set(camera_pos: Vec3, view_distance: u32) -> Vec<IVec3> {
+        let chunk_size = crate::voxel::CHUNK_SIZE as f32;
+        let cam_chunk = IVec3::new(
+            (camera_pos.x / chunk_size).floor() as i32,
+            (camera_pos.y / chunk_size).floor() as i32,
+            (camera_pos.z / chunk_size).floor() as i32,
+        );
+        let range = view_distance as i32;
+        let mut set = Vec::new();
+        for z in (cam_chunk.z - range)..=(cam_chunk.z + range) {
+            for y in (cam_chunk.y - range)..=(cam_chunk.y + range) {
+                for x in (cam_chunk.x - range)..=(cam_chunk.x + range) {
+                    set.push(IVec3::new(x, y, z));
+                }
+            }
+        }
+        set
+    }
 }
 
 #[cfg(test)]
@@ -130,5 +154,42 @@ mod tests {
         mgr.load_chunk(&gpu.queue, coord);
         // Still tracked as loaded (we know about it) but marked as empty
         assert!(mgr.is_loaded(coord));
+    }
+
+    #[test]
+    fn visible_set_at_origin() {
+        let set = ChunkManager::compute_visible_set(
+            Vec3::new(16.0, 16.0, 16.0), // center of chunk (0,0,0)
+            1,                           // view distance
+        );
+        // vd=1 -> 3x3x3 = 27 chunks centered on (0,0,0)
+        assert_eq!(set.len(), 27);
+        assert!(set.contains(&IVec3::ZERO));
+        assert!(set.contains(&IVec3::new(-1, -1, -1)));
+        assert!(set.contains(&IVec3::new(1, 1, 1)));
+        assert!(!set.contains(&IVec3::new(2, 0, 0)));
+    }
+
+    #[test]
+    fn visible_set_camera_in_different_chunk() {
+        let set = ChunkManager::compute_visible_set(
+            Vec3::new(80.0, 16.0, 80.0), // center of chunk (2,0,2)
+            1,
+        );
+        assert!(set.contains(&IVec3::new(2, 0, 2)));
+        assert!(set.contains(&IVec3::new(1, -1, 1)));
+        assert!(set.contains(&IVec3::new(3, 1, 3)));
+        assert!(!set.contains(&IVec3::new(0, 0, 0)));
+    }
+
+    #[test]
+    fn visible_set_negative_coords() {
+        let set = ChunkManager::compute_visible_set(
+            Vec3::new(-16.0, 16.0, -16.0), // center of chunk (-1,0,-1)
+            1,
+        );
+        assert!(set.contains(&IVec3::new(-1, 0, -1)));
+        assert!(set.contains(&IVec3::new(-2, -1, -2)));
+        assert!(set.contains(&IVec3::new(0, 1, 0)));
     }
 }
