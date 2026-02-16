@@ -115,7 +115,7 @@ impl Camera {
 
     /// Build the GPU-uploadable uniform struct.
     #[must_use]
-    pub fn to_uniform(&self, width: u32, height: u32) -> CameraUniform {
+    pub fn to_uniform(&self, width: u32, height: u32, grid: &GridInfo) -> CameraUniform {
         let (forward, right, up) = self.orientation_vectors();
         CameraUniform {
             position: self.position,
@@ -130,6 +130,12 @@ impl Camera {
             height,
             _pad3: 0,
             _pad4: 0,
+            grid_origin: grid.origin,
+            max_ray_distance: grid.max_ray_distance,
+            grid_size: grid.size,
+            _pad5: 0,
+            atlas_slots: grid.atlas_slots,
+            _pad6: 0,
         }
     }
 }
@@ -141,22 +147,53 @@ impl Camera {
 /// alignment. Since `fov` is f32 (align 4), it packs immediately after
 /// `up` at offset 60 — no padding between them.
 ///
-/// Total size: 80 bytes.
+/// Total size: 128 bytes.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct CameraUniform {
-    pub position: [f32; 3], // offset  0
-    _pad0: f32,             // offset 12
-    pub forward: [f32; 3],  // offset 16
-    _pad1: f32,             // offset 28
-    pub right: [f32; 3],    // offset 32
-    _pad2: f32,             // offset 44
-    pub up: [f32; 3],       // offset 48
-    pub fov: f32,           // offset 60
-    pub width: u32,         // offset 64
-    pub height: u32,        // offset 68
-    _pad3: u32,             // offset 72
-    _pad4: u32,             // offset 76
+    pub position: [f32; 3],      // offset  0
+    _pad0: f32,                  // offset 12
+    pub forward: [f32; 3],       // offset 16
+    _pad1: f32,                  // offset 28
+    pub right: [f32; 3],         // offset 32
+    _pad2: f32,                  // offset 44
+    pub up: [f32; 3],            // offset 48
+    pub fov: f32,                // offset 60
+    pub width: u32,              // offset 64
+    pub height: u32,             // offset 68
+    _pad3: u32,                  // offset 72
+    _pad4: u32,                  // offset 76
+    pub grid_origin: [i32; 3],   // offset 80
+    pub max_ray_distance: f32,   // offset 92
+    pub grid_size: [u32; 3],     // offset 96
+    _pad5: u32,                  // offset 108
+    pub atlas_slots: [u32; 3],   // offset 112
+    _pad6: u32,                  // offset 124
+}
+
+/// Default max ray distance for a single chunk (diagonal of 32^3 cube, rounded up).
+const SINGLE_CHUNK_MAX_RAY_DISTANCE: f32 = 64.0;
+
+/// Scene-level grid metadata, passed to `Camera::to_uniform`.
+pub struct GridInfo {
+    pub origin: [i32; 3],
+    pub size: [u32; 3],
+    pub atlas_slots: [u32; 3],
+    pub max_ray_distance: f32,
+}
+
+impl GridInfo {
+    /// Default for single-chunk backward compat (used nowhere in prod,
+    /// but keeps existing test helpers compiling during transition).
+    #[must_use]
+    pub fn single_chunk() -> Self {
+        Self {
+            origin: [0, 0, 0],
+            size: [1, 1, 1],
+            atlas_slots: [1, 1, 1],
+            max_ray_distance: SINGLE_CHUNK_MAX_RAY_DISTANCE,
+        }
+    }
 }
 
 /// Tracks which keys are currently pressed.
@@ -249,7 +286,7 @@ mod tests {
 
     #[test]
     fn gpu_uniform_size_matches_wgsl() {
-        assert_eq!(std::mem::size_of::<CameraUniform>(), 80);
+        assert_eq!(std::mem::size_of::<CameraUniform>(), 128);
     }
 
     #[test]
@@ -264,6 +301,13 @@ mod tests {
         assert_eq!(std::mem::offset_of!(CameraUniform, fov), 60);
         assert_eq!(std::mem::offset_of!(CameraUniform, width), 64);
         assert_eq!(std::mem::offset_of!(CameraUniform, height), 68);
+
+        // Grid and atlas fields added for multi-chunk rendering (Phase 4a).
+        assert_eq!(std::mem::offset_of!(CameraUniform, grid_origin), 80);
+        assert_eq!(std::mem::offset_of!(CameraUniform, max_ray_distance), 92);
+        assert_eq!(std::mem::offset_of!(CameraUniform, grid_size), 96);
+        assert_eq!(std::mem::offset_of!(CameraUniform, atlas_slots), 112);
+        assert_eq!(std::mem::size_of::<CameraUniform>(), 128);
     }
 
     #[test]

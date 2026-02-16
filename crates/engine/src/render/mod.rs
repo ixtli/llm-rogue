@@ -13,7 +13,7 @@ use raymarch_pass::RaymarchPass;
 use web_sys::OffscreenCanvas;
 
 #[cfg(feature = "wasm")]
-use crate::camera::{Camera, InputState};
+use crate::camera::{Camera, GridInfo, InputState};
 #[cfg(feature = "wasm")]
 use crate::voxel::Chunk;
 
@@ -57,7 +57,7 @@ impl Renderer {
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let camera = Camera::default();
-        let camera_uniform = camera.to_uniform(width, height);
+        let camera_uniform = camera.to_uniform(width, height, &GridInfo::single_chunk());
 
         let chunk = Chunk::new_terrain(42);
         let palette = build_palette();
@@ -104,7 +104,7 @@ impl Renderer {
 
         self.camera.update(&self.input, dt);
 
-        let camera_uniform = self.camera.to_uniform(self.width, self.height);
+        let camera_uniform = self.camera.to_uniform(self.width, self.height, &GridInfo::single_chunk());
         self.raymarch_pass
             .update_camera(&self.gpu.queue, &camera_uniform);
 

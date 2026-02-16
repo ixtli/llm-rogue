@@ -1,11 +1,15 @@
 struct Camera {
-    position: vec3<f32>,   // 12 + 4 pad
-    forward: vec3<f32>,    // 12 + 4 pad
-    right: vec3<f32>,      // 12 + 4 pad
-    up: vec3<f32>,         // 12 + 4 pad
-    fov: f32,              // 4
-    width: u32,            // 4
-    height: u32,           // 4 + 4 pad
+    position: vec3<f32>,       // 12 + 4 pad
+    forward: vec3<f32>,        // 12 + 4 pad
+    right: vec3<f32>,          // 12 + 4 pad
+    up: vec3<f32>,             // 12 + 4 pad (fov packs at offset 60)
+    fov: f32,                  // 4
+    width: u32,                // 4
+    height: u32,               // 4 + 4 pad
+    grid_origin: vec3<i32>,    // 12 (+ max_ray_distance packs at offset 92)
+    max_ray_distance: f32,     // 4
+    grid_size: vec3<u32>,      // 12 + 4 pad
+    atlas_slots: vec3<u32>,    // 12 + 4 pad
 }
 
 @group(0) @binding(0) var output: texture_storage_2d<rgba8unorm, write>;

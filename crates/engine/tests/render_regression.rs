@@ -13,7 +13,7 @@
 
 use std::path::PathBuf;
 
-use engine::camera::Camera;
+use engine::camera::{Camera, GridInfo};
 use engine::render::gpu::GpuContext;
 use engine::render::raymarch_pass::RaymarchPass;
 use engine::render::{build_palette, create_storage_texture};
@@ -47,7 +47,7 @@ impl HeadlessRenderer {
         let chunk = Chunk::new_terrain(42);
         let palette = build_palette();
         let camera = Camera::default();
-        let camera_uniform = camera.to_uniform(WIDTH, HEIGHT);
+        let camera_uniform = camera.to_uniform(WIDTH, HEIGHT, &GridInfo::single_chunk());
 
         let raymarch_pass = RaymarchPass::new(
             &gpu.device,
@@ -68,7 +68,7 @@ impl HeadlessRenderer {
 
     /// Render from the given camera and return RGBA8 pixel data.
     fn render(&self, camera: &Camera) -> Vec<u8> {
-        let uniform = camera.to_uniform(WIDTH, HEIGHT);
+        let uniform = camera.to_uniform(WIDTH, HEIGHT, &GridInfo::single_chunk());
         self.raymarch_pass
             .update_camera(&self.gpu.queue, &uniform);
 
