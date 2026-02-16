@@ -7,11 +7,13 @@ voxel octrees (SVOs) rendered via GPU ray marching in Rust/WASM (wgpu/WebGPU),
 with a Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md`
 for the full architecture.
 
-**Current state:** Phase 3 complete — render regression harness with headless
-wgpu tests. Single 32x32x32 chunk rendered with DDA ray marching, Perlin noise
-terrain, directional shading, WASD+QERF camera. Three regression tests verify
-rendering from front, corner, and top-down angles against reference PNGs.
-Next: Phase 4 (multi-chunk streaming, game logic worker).
+**Current state:** Phase 4a complete — multi-chunk rendering with 3D texture
+atlas. A 4×2×4 chunk grid (128×64×128 voxels) rendered via two-level DDA ray
+marching (chunk traversal + voxel traversal). Continuous Perlin terrain across
+chunk boundaries, directional shading, WASD+QERF camera with mouse/trackpad
+input. Five regression tests (front, corner, top-down, boundary, edge). Spatial
+types use glam (`Vec3`, `IVec3`, `UVec3`).
+Next: Phase 4b (game logic worker, chunk streaming, dynamic load/unload).
 
 ## Tech Stack
 
@@ -111,10 +113,11 @@ tests without pulling in web-sys.
 
 ## Render Regression Tests
 
-Headless wgpu tests that render a deterministic chunk from known camera angles
-and compare against reference PNGs. See `crates/engine/tests/render_regression.rs`.
+Headless wgpu tests that render a deterministic 4×2×4 multi-chunk terrain grid
+from known camera angles and compare against reference PNGs. See
+`crates/engine/tests/render_regression.rs`.
 
-- **Reference images:** `crates/engine/tests/fixtures/{front,corner,top_down}.png`
+- **Reference images:** `crates/engine/tests/fixtures/{front,corner,top_down,boundary,edge}.png`
 - **Tolerance:** ±2 per channel (out of 255)
 - **Resolution:** 128x128
 - **Missing reference:** Test fails, saves actual to `<name>_actual.png` for
@@ -167,21 +170,24 @@ The frame loop (`Renderer::render` in `crates/engine/src/render/mod.rs`):
 4. Encode `blit_pass` — fullscreen triangle samples storage texture onto surface.
 5. Submit and present.
 
-The ray marcher (`shaders/raymarch.wgsl`) uses DDA (Digital Differential
-Analyzer) to step through a flat 32x32x32 voxel array. Each non-air voxel hit
-is shaded with a hardcoded directional light and the material's palette color.
+The ray marcher (`shaders/raymarch.wgsl`) uses two-level DDA: an outer loop
+steps through grid chunks, an inner loop steps through voxels within each chunk.
+Chunk data is read from a 3D texture atlas via slot-based coordinate lookup.
+Each non-air voxel hit is shaded with a hardcoded directional light and the
+material's palette color.
 
 ## Key Modules
 
 | Module | Path | Purpose |
 |--------|------|---------|
-| `camera` | `crates/engine/src/camera.rs` | Camera state, GPU uniform struct, input state, keyboard mapping |
-| `voxel` | `crates/engine/src/voxel.rs` | Voxel pack/unpack, Chunk (32^3), Perlin terrain generation |
-| `render` | `crates/engine/src/render/mod.rs` | Renderer: owns GPU context, camera, passes |
+| `camera` | `crates/engine/src/camera.rs` | Camera state, GPU uniform struct, GridInfo, input state, keyboard mapping |
+| `voxel` | `crates/engine/src/voxel.rs` | Voxel pack/unpack, Chunk (32^3), Perlin terrain generation, test grid builder |
+| `chunk_atlas` | `crates/engine/src/render/chunk_atlas.rs` | 3D texture atlas for multi-chunk storage, GPU index buffer, slot management |
+| `render` | `crates/engine/src/render/mod.rs` | Renderer: owns GPU context, camera, atlas, passes |
 | `gpu` | `crates/engine/src/render/gpu.rs` | GpuContext (device+queue), `new()` for WASM, `new_headless()` for native |
 | `raymarch_pass` | `crates/engine/src/render/raymarch_pass.rs` | Compute pipeline + bind groups for ray march shader |
 | `blit_pass` | `crates/engine/src/render/blit_pass.rs` | Fullscreen blit from storage texture to surface (WASM only) |
-| `render_regression` | `crates/engine/tests/render_regression.rs` | Headless render regression tests (3 camera angles, ±2/255 tolerance) |
+| `render_regression` | `crates/engine/tests/render_regression.rs` | Headless render regression tests (5 camera angles, ±2/255 tolerance) |
 | `gpu-check` | `src/ui/gpu-check.ts` | WebGPU/OffscreenCanvas feature detection, browser guide URLs |
 | `messages` | `src/messages.ts` | Worker message types (init, key_down, key_up, ready) |
 
