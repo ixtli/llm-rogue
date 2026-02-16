@@ -1,7 +1,7 @@
 //! Render regression tests.
 //!
-//! These tests render a deterministic voxel chunk from known camera angles
-//! using headless wgpu (native Metal/Vulkan backend), read back the
+//! These tests render a deterministic multi-chunk voxel scene from known camera
+//! angles using headless wgpu (native Metal/Vulkan backend), read back the
 //! framebuffer, and compare against reference PNGs.
 //!
 //! **First run:** Reference images won't exist yet. Tests will fail and save
@@ -14,18 +14,86 @@
 use std::path::PathBuf;
 
 use engine::camera::{Camera, GridInfo};
+use engine::render::chunk_atlas::ChunkAtlas;
 use engine::render::gpu::GpuContext;
 use engine::render::raymarch_pass::RaymarchPass;
 use engine::render::{build_palette, create_storage_texture};
-use engine::voxel::Chunk;
+use engine::voxel::{build_test_grid, CHUNK_SIZE, TEST_GRID_X, TEST_GRID_Y, TEST_GRID_Z};
 
 const WIDTH: u32 = 128;
 const HEIGHT: u32 = 128;
 /// Per-channel tolerance for pixel comparison (out of 255).
 const TOLERANCE: u8 = 2;
 
+/// Atlas slot dimensions: 2x the grid size to allow room for streaming.
+const ATLAS_SLOTS: [u32; 3] = [
+    TEST_GRID_X as u32 * 2,
+    TEST_GRID_Y as u32,
+    TEST_GRID_Z as u32 * 2,
+];
+
+/// Maximum ray distance in voxels — long enough to traverse the full grid diagonal.
+const MAX_RAY_DISTANCE: f32 = 256.0;
+
+/// Grid metadata for the multi-chunk test scene.
+const GRID_INFO: GridInfo = GridInfo {
+    origin: [0, 0, 0],
+    size: [TEST_GRID_X as u32, TEST_GRID_Y as u32, TEST_GRID_Z as u32],
+    atlas_slots: ATLAS_SLOTS,
+    max_ray_distance: MAX_RAY_DISTANCE,
+};
+
+/// World-space extent of the grid along X in voxels.
+const GRID_EXTENT_X: f32 = TEST_GRID_X as f32 * CHUNK_SIZE as f32;
+/// World-space extent of the grid along Z in voxels.
+const GRID_EXTENT_Z: f32 = TEST_GRID_Z as f32 * CHUNK_SIZE as f32;
+
+// Camera position constants for each regression test.
+
+/// Front view: centered on X, elevated, pulled back behind grid on -Z side,
+/// looking toward +Z across the terrain. (yaw=PI => forward=[0,0,+1])
+const FRONT_POSITION: [f32; 3] = [GRID_EXTENT_X * 0.5, 40.0, -20.0];
+const FRONT_YAW: f32 = std::f32::consts::PI;
+const FRONT_PITCH: f32 = -0.3;
+
+/// Corner view: offset past +X edge and behind on -Z, looking diagonally
+/// toward grid center. (yaw~2.4 => forward points toward -X and +Z)
+const CORNER_POSITION: [f32; 3] = [GRID_EXTENT_X + 12.0, 50.0, -20.0];
+const CORNER_YAW: f32 = 2.4;
+const CORNER_PITCH: f32 = -0.3;
+
+/// Top-down view: directly above grid center, looking straight down.
+/// (At pitch=-1.5 the horizontal yaw has negligible effect.)
+const TOP_DOWN_POSITION: [f32; 3] = [GRID_EXTENT_X * 0.5, 100.0, GRID_EXTENT_Z * 0.5];
+const TOP_DOWN_YAW: f32 = 0.0;
+const TOP_DOWN_PITCH: f32 = -1.5;
+
+/// Boundary view: elevated above the seam between chunks, looking along +Z
+/// with a slight downward pitch to see the chunk boundary below.
+/// (yaw=PI => forward=[0,0,+1])
+const BOUNDARY_POSITION: [f32; 3] = [GRID_EXTENT_X * 0.5, 45.0, GRID_EXTENT_Z * 0.375];
+const BOUNDARY_YAW: f32 = std::f32::consts::PI;
+const BOUNDARY_PITCH: f32 = -0.3;
+
+/// Edge view: near grid corner, elevated above terrain, looking into the
+/// grid along +Z with a downward pitch. Rays near the edges exit into sky.
+/// (yaw=PI => forward=[0,0,+1])
+const EDGE_POSITION: [f32; 3] = [2.0, 45.0, 2.0];
+const EDGE_YAW: f32 = std::f32::consts::PI;
+const EDGE_PITCH: f32 = -0.3;
+
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+}
+
+/// Build a `Camera` with the given position, yaw, and pitch.
+fn test_camera(position: [f32; 3], yaw: f32, pitch: f32) -> Camera {
+    Camera {
+        position,
+        yaw,
+        pitch,
+        ..Camera::default()
+    }
 }
 
 /// Minimal headless renderer that runs the raymarch compute pass and reads
@@ -34,6 +102,7 @@ struct HeadlessRenderer {
     gpu: GpuContext,
     raymarch_pass: RaymarchPass,
     storage_texture: wgpu::Texture,
+    _atlas: ChunkAtlas,
 }
 
 impl HeadlessRenderer {
@@ -44,15 +113,20 @@ impl HeadlessRenderer {
         let storage_view =
             storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let chunk = Chunk::new_terrain(42);
+        let mut atlas = ChunkAtlas::new(&gpu.device, GRID_INFO.atlas_slots);
+        let grid = build_test_grid();
+        for (i, (coord, chunk)) in grid.iter().enumerate() {
+            atlas.upload_chunk(&gpu.queue, i as u32, chunk, *coord);
+        }
+
         let palette = build_palette();
         let camera = Camera::default();
-        let camera_uniform = camera.to_uniform(WIDTH, HEIGHT, &GridInfo::single_chunk());
+        let camera_uniform = camera.to_uniform(WIDTH, HEIGHT, &GRID_INFO);
 
         let raymarch_pass = RaymarchPass::new(
             &gpu.device,
             &storage_view,
-            &chunk.voxels,
+            &atlas,
             &palette,
             &camera_uniform,
             WIDTH,
@@ -63,12 +137,13 @@ impl HeadlessRenderer {
             gpu,
             raymarch_pass,
             storage_texture,
+            _atlas: atlas,
         }
     }
 
     /// Render from the given camera and return RGBA8 pixel data.
     fn render(&self, camera: &Camera) -> Vec<u8> {
-        let uniform = camera.to_uniform(WIDTH, HEIGHT, &GridInfo::single_chunk());
+        let uniform = camera.to_uniform(WIDTH, HEIGHT, &GRID_INFO);
         self.raymarch_pass
             .update_camera(&self.gpu.queue, &uniform);
 
@@ -181,9 +256,8 @@ fn load_png(path: &std::path::Path) -> Vec<u8> {
 }
 
 /// Run a regression test for a single camera angle.
-fn regression_check(name: &str, camera: Camera) {
-    let renderer = HeadlessRenderer::new();
-    let actual_pixels = renderer.render(&camera);
+fn regression_check(renderer: &HeadlessRenderer, name: &str, camera: &Camera) {
+    let actual_pixels = renderer.render(camera);
 
     let fixtures = fixtures_dir();
     let reference_path = fixtures.join(format!("{name}.png"));
@@ -214,31 +288,35 @@ fn regression_check(name: &str, camera: Camera) {
 
 #[test]
 fn regression_front() {
-    regression_check("front", Camera::default());
+    let renderer = HeadlessRenderer::new();
+    let camera = test_camera(FRONT_POSITION, FRONT_YAW, FRONT_PITCH);
+    regression_check(&renderer, "front", &camera);
 }
 
 #[test]
 fn regression_corner() {
-    regression_check(
-        "corner",
-        Camera {
-            position: [40.0, 24.0, 40.0],
-            yaw: std::f32::consts::FRAC_PI_4,       // 45 degrees
-            pitch: -20.0_f32.to_radians(),           // -20 degrees
-            ..Camera::default()
-        },
-    );
+    let renderer = HeadlessRenderer::new();
+    let camera = test_camera(CORNER_POSITION, CORNER_YAW, CORNER_PITCH);
+    regression_check(&renderer, "corner", &camera);
 }
 
 #[test]
 fn regression_top_down() {
-    regression_check(
-        "top_down",
-        Camera {
-            position: [16.0, 48.0, 16.0],
-            yaw: 0.0,
-            pitch: -89.0_f32.to_radians(),           // -89 degrees
-            ..Camera::default()
-        },
-    );
+    let renderer = HeadlessRenderer::new();
+    let camera = test_camera(TOP_DOWN_POSITION, TOP_DOWN_YAW, TOP_DOWN_PITCH);
+    regression_check(&renderer, "top_down", &camera);
+}
+
+#[test]
+fn regression_boundary() {
+    let renderer = HeadlessRenderer::new();
+    let camera = test_camera(BOUNDARY_POSITION, BOUNDARY_YAW, BOUNDARY_PITCH);
+    regression_check(&renderer, "boundary", &camera);
+}
+
+#[test]
+fn regression_edge() {
+    let renderer = HeadlessRenderer::new();
+    let camera = test_camera(EDGE_POSITION, EDGE_YAW, EDGE_PITCH);
+    regression_check(&renderer, "edge", &camera);
 }
