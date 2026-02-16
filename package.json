@@ -21,6 +21,7 @@
     "@biomejs/biome": "^2.3.14",
     "@solidjs/testing-library": "^0.8.10",
     "@testing-library/jest-dom": "^6.9.1",
+    "@webgpu/types": "^0.1.69",
     "jsdom": "^28.1.0",
     "typescript": "^5",
     "vite": "^6",
