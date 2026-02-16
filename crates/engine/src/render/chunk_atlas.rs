@@ -31,6 +31,23 @@ pub fn slot_to_atlas_origin(slot: u32, slots_per_axis: UVec3) -> UVec3 {
     )
 }
 
+/// Compute the atlas slot index for a world chunk coordinate using modular
+/// arithmetic. The slot is deterministic from the world coordinate alone,
+/// so chunks keep their slot assignment as the camera view shifts.
+///
+/// Formula: `slot = (z % sz) * sx * sy + (y % sy) * sx + (x % sx)`
+/// where `%` is Euclidean modulo (always non-negative).
+#[must_use]
+pub fn world_to_slot(coord: IVec3, atlas_slots: UVec3) -> u32 {
+    let slots = atlas_slots.as_ivec3();
+    let wrapped = IVec3::new(
+        coord.x.rem_euclid(slots.x),
+        coord.y.rem_euclid(slots.y),
+        coord.z.rem_euclid(slots.z),
+    );
+    (wrapped.z * slots.x * slots.y + wrapped.y * slots.x + wrapped.x).cast_unsigned()
+}
+
 /// A 3D texture atlas holding multiple voxel chunks, plus a GPU-side index
 /// buffer mapping each slot to its world chunk coordinate.
 pub struct ChunkAtlas {
@@ -197,6 +214,39 @@ mod tests {
         assert_eq!(slot_to_atlas_origin(16, slots), UVec3::new(0, 0, chunk));
         // Slot 9 -> (CHUNK_SIZE,CHUNK_SIZE,0)
         assert_eq!(slot_to_atlas_origin(9, slots), UVec3::new(chunk, chunk, 0));
+    }
+
+    #[test]
+    fn world_to_slot_origin() {
+        let slots = UVec3::new(8, 2, 8);
+        assert_eq!(world_to_slot(IVec3::ZERO, slots), 0);
+    }
+
+    #[test]
+    fn world_to_slot_positive_coords() {
+        let slots = UVec3::new(8, 2, 8);
+        assert_eq!(world_to_slot(IVec3::new(1, 0, 0), slots), 1);
+        assert_eq!(world_to_slot(IVec3::new(0, 1, 0), slots), 8);
+        assert_eq!(world_to_slot(IVec3::new(0, 0, 1), slots), 16);
+        assert_eq!(
+            world_to_slot(IVec3::new(3, 1, 3), slots),
+            3 * 16 + 1 * 8 + 3
+        );
+    }
+
+    #[test]
+    fn world_to_slot_wraps_at_atlas_boundary() {
+        let slots = UVec3::new(8, 2, 8);
+        assert_eq!(world_to_slot(IVec3::new(8, 0, 0), slots), 0);
+        assert_eq!(world_to_slot(IVec3::new(9, 0, 0), slots), 1);
+    }
+
+    #[test]
+    fn world_to_slot_negative_coords() {
+        let slots = UVec3::new(8, 2, 8);
+        assert_eq!(world_to_slot(IVec3::new(-1, 0, 0), slots), 7);
+        assert_eq!(world_to_slot(IVec3::new(-8, 0, 0), slots), 0);
+        assert_eq!(world_to_slot(IVec3::new(-1, -1, -1), slots), 127);
     }
 
     #[test]
