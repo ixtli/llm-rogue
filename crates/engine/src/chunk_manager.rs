@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use glam::{IVec3, UVec3, Vec3};
 
@@ -107,6 +107,65 @@ impl ChunkManager {
         }
         set
     }
+
+    /// Advance chunk streaming: load visible chunks, unload stale chunks.
+    /// Returns a [`GridInfo`](crate::camera::GridInfo) describing the bounding
+    /// box of loaded chunks.
+    pub fn tick(&mut self, queue: &wgpu::Queue, camera_pos: Vec3) -> crate::camera::GridInfo {
+        let visible = Self::compute_visible_set(camera_pos, self.view_distance);
+        let visible_set: HashSet<IVec3> = visible.iter().copied().collect();
+
+        // Unload chunks no longer visible.
+        let stale: Vec<IVec3> = self
+            .loaded
+            .keys()
+            .filter(|coord| !visible_set.contains(coord))
+            .copied()
+            .collect();
+        for coord in stale {
+            self.unload_chunk(queue, coord);
+        }
+
+        // Load newly visible chunks.
+        for coord in &visible {
+            self.load_chunk(queue, *coord);
+        }
+
+        self.compute_grid_info()
+    }
+
+    /// Compute the [`GridInfo`](crate::camera::GridInfo) bounding box from
+    /// currently loaded chunks.
+    #[allow(clippy::cast_precision_loss)]
+    fn compute_grid_info(&self) -> crate::camera::GridInfo {
+        if self.loaded.is_empty() {
+            return crate::camera::GridInfo {
+                origin: IVec3::ZERO,
+                size: UVec3::ZERO,
+                atlas_slots: self.atlas_slots,
+                max_ray_distance: 0.0,
+            };
+        }
+
+        let mut min_coord = IVec3::new(i32::MAX, i32::MAX, i32::MAX);
+        let mut max_coord = IVec3::new(i32::MIN, i32::MIN, i32::MIN);
+        for coord in self.loaded.keys() {
+            min_coord = min_coord.min(*coord);
+            max_coord = max_coord.max(*coord);
+        }
+
+        let size = (max_coord - min_coord + IVec3::ONE).as_uvec3();
+        let chunk_size_f = crate::voxel::CHUNK_SIZE as f32;
+        let extent = size.as_vec3() * chunk_size_f;
+        let max_ray_distance = extent.length().ceil();
+
+        crate::camera::GridInfo {
+            origin: min_coord,
+            size,
+            atlas_slots: self.atlas_slots,
+            max_ray_distance,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -191,5 +250,36 @@ mod tests {
         assert!(set.contains(&IVec3::new(-1, 0, -1)));
         assert!(set.contains(&IVec3::new(-2, -1, -2)));
         assert!(set.contains(&IVec3::new(0, 1, 0)));
+    }
+
+    #[test]
+    fn tick_loads_visible_chunks() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        // Camera at center of chunk (0,0,0)
+        let grid_info = mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
+        // vd=1 -> 27 visible chunks, all should be loaded
+        assert_eq!(mgr.loaded_count(), 27);
+        // GridInfo should encompass loaded chunks
+        assert_eq!(grid_info.origin, IVec3::new(-1, -1, -1));
+        assert_eq!(grid_info.size, UVec3::new(3, 3, 3));
+    }
+
+    #[test]
+    fn tick_unloads_when_camera_moves() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        // First tick at origin
+        mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
+        // Move camera far enough that old chunks leave view
+        mgr.tick(&gpu.queue, Vec3::new(16.0 + 5.0 * 32.0, 16.0, 16.0));
+        // Some old chunks should be unloaded, new ones loaded
+        assert!(mgr.is_loaded(IVec3::new(5, 0, 0)));
+        assert!(!mgr.is_loaded(IVec3::new(-1, 0, 0)));
+    }
+
+    #[test]
+    fn tick_grid_info_tracks_bounding_box() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        let info = mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
+        assert_eq!(info.atlas_slots, mgr.atlas_slots());
     }
 }
