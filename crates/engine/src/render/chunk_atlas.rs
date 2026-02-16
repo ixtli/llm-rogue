@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::IVec3;
+use glam::{IVec3, UVec3};
 use wgpu::util::DeviceExt;
 
 use crate::voxel::{CHUNK_SIZE, Chunk};
@@ -22,14 +22,13 @@ pub struct ChunkSlotGpu {
 ///
 /// Each slot occupies `CHUNK_SIZE` texels along each axis.
 #[must_use]
-pub fn slot_to_atlas_origin(slot: u32, slots_per_axis: [u32; 3]) -> [u32; 3] {
+pub fn slot_to_atlas_origin(slot: u32, slots_per_axis: UVec3) -> UVec3 {
     let chunk = CHUNK_SIZE as u32;
-    let [sx, sy, _sz] = slots_per_axis;
-    [
-        (slot % sx) * chunk,
-        ((slot / sx) % sy) * chunk,
-        (slot / (sx * sy)) * chunk,
-    ]
+    UVec3::new(
+        (slot % slots_per_axis.x) * chunk,
+        ((slot / slots_per_axis.x) % slots_per_axis.y) * chunk,
+        (slot / (slots_per_axis.x * slots_per_axis.y)) * chunk,
+    )
 }
 
 /// A 3D texture atlas holding multiple voxel chunks, plus a GPU-side index
@@ -39,7 +38,7 @@ pub struct ChunkAtlas {
     atlas_view: wgpu::TextureView,
     index_buffer: wgpu::Buffer,
     pub slots: Vec<ChunkSlotGpu>,
-    slots_per_axis: [u32; 3],
+    slots_per_axis: UVec3,
 }
 
 impl ChunkAtlas {
@@ -49,9 +48,8 @@ impl ChunkAtlas {
     /// along each axis. The index buffer holds one `ChunkSlotGpu` per slot,
     /// all initialized to empty (flags == 0).
     #[must_use]
-    pub fn new(device: &wgpu::Device, slots_per_axis: [u32; 3]) -> Self {
-        let [sx, sy, sz] = slots_per_axis;
-        let total_slots = (sx * sy * sz) as usize;
+    pub fn new(device: &wgpu::Device, slots_per_axis: UVec3) -> Self {
+        let total_slots = (slots_per_axis.x * slots_per_axis.y * slots_per_axis.z) as usize;
 
         let atlas_texture = Self::create_atlas_texture(device, slots_per_axis);
         let atlas_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -96,9 +94,9 @@ impl ChunkAtlas {
                 texture: &self.atlas_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d {
-                    x: origin[0],
-                    y: origin[1],
-                    z: origin[2],
+                    x: origin.x,
+                    y: origin.y,
+                    z: origin.z,
                 },
                 aspect: wgpu::TextureAspect::All,
             },
@@ -150,19 +148,18 @@ impl ChunkAtlas {
 
     /// Returns the slot dimensions of the atlas.
     #[must_use]
-    pub fn slots_per_axis(&self) -> [u32; 3] {
+    pub fn slots_per_axis(&self) -> UVec3 {
         self.slots_per_axis
     }
 
-    fn create_atlas_texture(device: &wgpu::Device, slots_per_axis: [u32; 3]) -> wgpu::Texture {
+    fn create_atlas_texture(device: &wgpu::Device, slots_per_axis: UVec3) -> wgpu::Texture {
         let chunk_u32 = CHUNK_SIZE as u32;
-        let [sx, sy, sz] = slots_per_axis;
         device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Chunk Atlas"),
             size: wgpu::Extent3d {
-                width: sx * chunk_u32,
-                height: sy * chunk_u32,
-                depth_or_array_layers: sz * chunk_u32,
+                width: slots_per_axis.x * chunk_u32,
+                height: slots_per_axis.y * chunk_u32,
+                depth_or_array_layers: slots_per_axis.z * chunk_u32,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -189,23 +186,23 @@ mod tests {
     #[test]
     fn slot_to_atlas_origin_maps_correctly() {
         let chunk = CHUNK_SIZE as u32;
-        let slots = [8, 2, 8];
+        let slots = UVec3::new(8, 2, 8);
         // Slot 0 -> (0,0,0)
-        assert_eq!(slot_to_atlas_origin(0, slots), [0, 0, 0]);
+        assert_eq!(slot_to_atlas_origin(0, slots), UVec3::ZERO);
         // Slot 1 -> (CHUNK_SIZE,0,0)
-        assert_eq!(slot_to_atlas_origin(1, slots), [chunk, 0, 0]);
+        assert_eq!(slot_to_atlas_origin(1, slots), UVec3::new(chunk, 0, 0));
         // Slot 8 -> (0,CHUNK_SIZE,0) (wraps to next Y layer)
-        assert_eq!(slot_to_atlas_origin(8, slots), [0, chunk, 0]);
+        assert_eq!(slot_to_atlas_origin(8, slots), UVec3::new(0, chunk, 0));
         // Slot 16 -> (0,0,CHUNK_SIZE) (wraps to next Z layer)
-        assert_eq!(slot_to_atlas_origin(16, slots), [0, 0, chunk]);
+        assert_eq!(slot_to_atlas_origin(16, slots), UVec3::new(0, 0, chunk));
         // Slot 9 -> (CHUNK_SIZE,CHUNK_SIZE,0)
-        assert_eq!(slot_to_atlas_origin(9, slots), [chunk, chunk, 0]);
+        assert_eq!(slot_to_atlas_origin(9, slots), UVec3::new(chunk, chunk, 0));
     }
 
     #[test]
     fn atlas_upload_populates_index() {
         let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
-        let mut atlas = ChunkAtlas::new(&gpu.device, [8, 2, 8]);
+        let mut atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
 
         let grid = build_test_grid();
         for (i, (coord, chunk)) in grid.iter().enumerate() {
