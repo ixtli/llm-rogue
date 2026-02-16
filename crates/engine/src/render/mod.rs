@@ -7,8 +7,6 @@ pub mod raymarch_pass;
 #[cfg(feature = "wasm")]
 use blit_pass::BlitPass;
 #[cfg(feature = "wasm")]
-use chunk_atlas::{ChunkAtlas, world_to_slot};
-#[cfg(feature = "wasm")]
 use gpu::GpuContext;
 #[cfg(feature = "wasm")]
 use raymarch_pass::RaymarchPass;
@@ -18,9 +16,11 @@ use web_sys::OffscreenCanvas;
 #[cfg(feature = "wasm")]
 use crate::camera::{Camera, GridInfo, InputState};
 #[cfg(feature = "wasm")]
-use crate::voxel::{TEST_GRID_X, TEST_GRID_Y, TEST_GRID_Z, build_test_grid};
+use crate::chunk_manager::ChunkManager;
 #[cfg(feature = "wasm")]
-use glam::{IVec3, UVec3};
+use crate::voxel::TEST_GRID_SEED;
+#[cfg(feature = "wasm")]
+use glam::UVec3;
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
@@ -37,14 +37,13 @@ pub fn build_palette() -> Vec<[f32; 4]> {
 #[cfg(feature = "wasm")]
 const ATLAS_SLOTS_X: u32 = 8;
 #[cfg(feature = "wasm")]
-const ATLAS_SLOTS_Y: u32 = 2;
+const ATLAS_SLOTS_Y: u32 = 4;
 #[cfg(feature = "wasm")]
 const ATLAS_SLOTS_Z: u32 = 8;
 
-/// Maximum ray distance in voxel-space units. Covers the diagonal of the
-/// full grid (4*32)^2 + (2*32)^2 + (4*32)^2 ~ 218, rounded up generously.
+/// View distance in chunks. The camera sees chunks within this radius.
 #[cfg(feature = "wasm")]
-const MAX_RAY_DISTANCE: f32 = 256.0;
+const VIEW_DISTANCE: u32 = 3;
 
 #[cfg(feature = "wasm")]
 pub struct Renderer {
@@ -55,7 +54,7 @@ pub struct Renderer {
     raymarch_pass: RaymarchPass,
     blit_pass: BlitPass,
     _storage_texture: wgpu::Texture,
-    _atlas: ChunkAtlas,
+    chunk_manager: ChunkManager,
     camera: Camera,
     grid_info: GridInfo,
     input: InputState,
@@ -78,28 +77,20 @@ impl Renderer {
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let atlas_slots = UVec3::new(ATLAS_SLOTS_X, ATLAS_SLOTS_Y, ATLAS_SLOTS_Z);
-        let mut atlas = ChunkAtlas::new(&gpu.device, atlas_slots);
-        let grid = build_test_grid();
-        for (coord, chunk) in &grid {
-            let slot = world_to_slot(*coord, atlas_slots);
-            atlas.upload_chunk(&gpu.queue, slot, chunk, *coord);
-        }
+        let mut chunk_manager =
+            ChunkManager::new(&gpu.device, TEST_GRID_SEED, VIEW_DISTANCE, atlas_slots);
 
-        let grid_info = GridInfo {
-            origin: IVec3::ZERO,
-            size: UVec3::new(TEST_GRID_X as u32, TEST_GRID_Y as u32, TEST_GRID_Z as u32),
-            atlas_slots,
-            max_ray_distance: MAX_RAY_DISTANCE,
-        };
-
+        // Initial tick loads chunks around default camera position.
         let camera = Camera::default();
+        let grid_info = chunk_manager.tick(&gpu.queue, camera.position);
+
         let camera_uniform = camera.to_uniform(width, height, &grid_info);
         let palette = build_palette();
 
         let raymarch_pass = RaymarchPass::new(
             &gpu.device,
             &storage_view,
-            &atlas,
+            chunk_manager.atlas(),
             &palette,
             &camera_uniform,
             width,
@@ -115,7 +106,7 @@ impl Renderer {
             raymarch_pass,
             blit_pass,
             _storage_texture: storage_texture,
-            _atlas: atlas,
+            chunk_manager,
             camera,
             grid_info,
             input: InputState::default(),
@@ -139,6 +130,9 @@ impl Renderer {
         self.last_time = time;
 
         self.camera.update(&self.input, dt);
+        self.grid_info = self
+            .chunk_manager
+            .tick(&self.gpu.queue, self.camera.position);
 
         let camera_uniform = self
             .camera
