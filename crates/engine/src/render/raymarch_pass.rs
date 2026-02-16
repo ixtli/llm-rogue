@@ -28,7 +28,12 @@ impl RaymarchPass {
         let shader = Self::load_shader(device);
         let layout = Self::create_bind_group_layout(device);
         let bind_group = Self::create_bind_group(
-            device, &layout, storage_view, &camera_buffer, atlas, &palette_buffer,
+            device,
+            &layout,
+            storage_view,
+            &camera_buffer,
+            atlas,
+            &palette_buffer,
         );
         let pipeline = Self::create_pipeline(device, &layout, &shader);
 

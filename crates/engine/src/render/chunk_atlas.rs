@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
-use crate::voxel::{Chunk, CHUNK_SIZE};
+use crate::voxel::{CHUNK_SIZE, Chunk};
 
 /// Per-slot metadata stored in the chunk index GPU buffer.
 /// Matches the WGSL `ChunkSlot` struct layout (16 bytes).
@@ -153,10 +153,7 @@ impl ChunkAtlas {
         self.slots_per_axis
     }
 
-    fn create_atlas_texture(
-        device: &wgpu::Device,
-        slots_per_axis: [u32; 3],
-    ) -> wgpu::Texture {
+    fn create_atlas_texture(device: &wgpu::Device, slots_per_axis: [u32; 3]) -> wgpu::Texture {
         let chunk_u32 = CHUNK_SIZE as u32;
         let [sx, sy, sz] = slots_per_axis;
         device.create_texture(&wgpu::TextureDescriptor {
@@ -179,7 +176,7 @@ impl ChunkAtlas {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{build_test_grid, CHUNK_SIZE};
+    use crate::voxel::{CHUNK_SIZE, build_test_grid};
 
     #[test]
     fn atlas_slot_gpu_layout_matches_wgsl() {

@@ -18,7 +18,7 @@ use web_sys::OffscreenCanvas;
 #[cfg(feature = "wasm")]
 use crate::camera::{Camera, GridInfo, InputState};
 #[cfg(feature = "wasm")]
-use crate::voxel::{build_test_grid, TEST_GRID_X, TEST_GRID_Y, TEST_GRID_Z};
+use crate::voxel::{TEST_GRID_X, TEST_GRID_Y, TEST_GRID_Z, build_test_grid};
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
@@ -138,7 +138,9 @@ impl Renderer {
 
         self.camera.update(&self.input, dt);
 
-        let camera_uniform = self.camera.to_uniform(self.width, self.height, &self.grid_info);
+        let camera_uniform = self
+            .camera
+            .to_uniform(self.width, self.height, &self.grid_info);
         self.raymarch_pass
             .update_camera(&self.gpu.queue, &camera_uniform);
 
@@ -196,11 +198,7 @@ impl Renderer {
 /// read back the framebuffer for comparison against reference images.
 /// See `crates/engine/tests/render_regression.rs`.
 #[must_use]
-pub fn create_storage_texture(
-    device: &wgpu::Device,
-    width: u32,
-    height: u32,
-) -> wgpu::Texture {
+pub fn create_storage_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Compute Output"),
         size: wgpu::Extent3d {

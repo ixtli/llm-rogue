@@ -18,7 +18,7 @@ use engine::render::chunk_atlas::ChunkAtlas;
 use engine::render::gpu::GpuContext;
 use engine::render::raymarch_pass::RaymarchPass;
 use engine::render::{build_palette, create_storage_texture};
-use engine::voxel::{build_test_grid, CHUNK_SIZE, TEST_GRID_X, TEST_GRID_Y, TEST_GRID_Z};
+use engine::voxel::{CHUNK_SIZE, TEST_GRID_X, TEST_GRID_Y, TEST_GRID_Z, build_test_grid};
 
 const WIDTH: u32 = 128;
 const HEIGHT: u32 = 128;
@@ -110,8 +110,7 @@ impl HeadlessRenderer {
         let gpu = pollster::block_on(GpuContext::new_headless());
 
         let storage_texture = create_storage_texture(&gpu.device, WIDTH, HEIGHT);
-        let storage_view =
-            storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut atlas = ChunkAtlas::new(&gpu.device, GRID_INFO.atlas_slots);
         let grid = build_test_grid();
@@ -144,8 +143,7 @@ impl HeadlessRenderer {
     /// Render from the given camera and return RGBA8 pixel data.
     fn render(&self, camera: &Camera) -> Vec<u8> {
         let uniform = camera.to_uniform(WIDTH, HEIGHT, &GRID_INFO);
-        self.raymarch_pass
-            .update_camera(&self.gpu.queue, &uniform);
+        self.raymarch_pass.update_camera(&self.gpu.queue, &uniform);
 
         let mut encoder = self
             .gpu
@@ -199,7 +197,10 @@ impl HeadlessRenderer {
         slice.map_async(wgpu::MapMode::Read, move |result| {
             tx.send(result).unwrap();
         });
-        self.gpu.device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+        self.gpu
+            .device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .unwrap();
         rx.recv().unwrap().unwrap();
 
         let mapped = slice.get_mapped_range();
@@ -241,17 +242,16 @@ fn compare_images(actual: &[u8], reference: &[u8]) -> Result<(), String> {
 
 /// Save RGBA8 pixels as a PNG file.
 fn save_png(path: &std::path::Path, pixels: &[u8]) {
-    let img =
-        image::ImageBuffer::<image::Rgba<u8>, _>::from_raw(WIDTH, HEIGHT, pixels)
-            .expect("Failed to create image buffer");
+    let img = image::ImageBuffer::<image::Rgba<u8>, _>::from_raw(WIDTH, HEIGHT, pixels)
+        .expect("Failed to create image buffer");
     img.save(path)
         .unwrap_or_else(|e| panic!("Failed to save {}: {e}", path.display()));
 }
 
 /// Load a PNG file as RGBA8 pixels.
 fn load_png(path: &std::path::Path) -> Vec<u8> {
-    let img = image::open(path)
-        .unwrap_or_else(|e| panic!("Failed to load {}: {e}", path.display()));
+    let img =
+        image::open(path).unwrap_or_else(|e| panic!("Failed to load {}: {e}", path.display()));
     img.into_rgba8().into_raw()
 }
 

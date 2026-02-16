@@ -151,24 +151,24 @@ impl Camera {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct CameraUniform {
-    pub position: [f32; 3],      // offset  0
-    _pad0: f32,                  // offset 12
-    pub forward: [f32; 3],       // offset 16
-    _pad1: f32,                  // offset 28
-    pub right: [f32; 3],         // offset 32
-    _pad2: f32,                  // offset 44
-    pub up: [f32; 3],            // offset 48
-    pub fov: f32,                // offset 60
-    pub width: u32,              // offset 64
-    pub height: u32,             // offset 68
-    _pad3: u32,                  // offset 72
-    _pad4: u32,                  // offset 76
-    pub grid_origin: [i32; 3],   // offset 80
-    pub max_ray_distance: f32,   // offset 92
-    pub grid_size: [u32; 3],     // offset 96
-    _pad5: u32,                  // offset 108
-    pub atlas_slots: [u32; 3],   // offset 112
-    _pad6: u32,                  // offset 124
+    pub position: [f32; 3],    // offset  0
+    _pad0: f32,                // offset 12
+    pub forward: [f32; 3],     // offset 16
+    _pad1: f32,                // offset 28
+    pub right: [f32; 3],       // offset 32
+    _pad2: f32,                // offset 44
+    pub up: [f32; 3],          // offset 48
+    pub fov: f32,              // offset 60
+    pub width: u32,            // offset 64
+    pub height: u32,           // offset 68
+    _pad3: u32,                // offset 72
+    _pad4: u32,                // offset 76
+    pub grid_origin: [i32; 3], // offset 80
+    pub max_ray_distance: f32, // offset 92
+    pub grid_size: [u32; 3],   // offset 96
+    _pad5: u32,                // offset 108
+    pub atlas_slots: [u32; 3], // offset 112
+    _pad6: u32,                // offset 124
 }
 
 /// Default max ray distance for a single chunk (diagonal of 32^3 cube, rounded up).

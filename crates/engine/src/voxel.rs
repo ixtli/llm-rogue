@@ -68,8 +68,8 @@ impl Chunk {
                 let noise_val = perlin.get([nx * 4.0, nz * 4.0]);
                 let half_chunk = CHUNK_SIZE / 2;
                 let quarter_chunk = CHUNK_SIZE / 4;
-                let height = ((noise_val + 1.0) * 0.5 * half_chunk as f64 + quarter_chunk as f64)
-                    as usize;
+                let height =
+                    ((noise_val + 1.0) * 0.5 * half_chunk as f64 + quarter_chunk as f64) as usize;
                 let height = height.min(CHUNK_SIZE - 1);
 
                 for y in 0..=height {
@@ -113,8 +113,8 @@ impl Chunk {
                 let wz = (cz * chunk_f64 + z as f64) / chunk_f64;
                 let noise_val = perlin.get([wx * 4.0, wz * 4.0]);
 
-                let world_height = ((noise_val + 1.0) * 0.5 * CHUNK_SIZE as f64
-                    + (CHUNK_SIZE / 4) as f64) as i32;
+                let world_height =
+                    ((noise_val + 1.0) * 0.5 * CHUNK_SIZE as f64 + (CHUNK_SIZE / 4) as f64) as i32;
                 let y_offset = cy * CHUNK_SIZE as i32;
 
                 for y in 0..CHUNK_SIZE {
@@ -280,8 +280,7 @@ mod tests {
         // Verify coordinates cover [0..GRID_X) x [0..GRID_Y) x [0..GRID_Z) in ZYX iteration order
         let expected: Vec<[i32; 3]> = (0..TEST_GRID_Z)
             .flat_map(|z| {
-                (0..TEST_GRID_Y)
-                    .flat_map(move |y| (0..TEST_GRID_X).map(move |x| [x, y, z]))
+                (0..TEST_GRID_Y).flat_map(move |y| (0..TEST_GRID_X).map(move |x| [x, y, z]))
             })
             .collect();
         let coords: Vec<[i32; 3]> = grid.iter().map(|(c, _)| *c).collect();

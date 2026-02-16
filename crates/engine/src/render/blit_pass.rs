@@ -16,7 +16,8 @@ impl BlitPass {
         let shader = Self::load_shader(device);
         let sampler = Self::create_sampler(device);
         let bind_group_layout = Self::create_bind_group_layout(device);
-        let bind_group = Self::create_bind_group(device, &bind_group_layout, storage_view, &sampler);
+        let bind_group =
+            Self::create_bind_group(device, &bind_group_layout, storage_view, &sampler);
         let pipeline = Self::create_pipeline(device, &bind_group_layout, &shader, surface_format);
 
         Self {
