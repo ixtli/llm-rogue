@@ -56,6 +56,12 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    /// Returns `true` if every voxel in the chunk is air (`material_id` == 0).
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.voxels.iter().all(|&v| v == 0)
+    }
+
     #[must_use]
     #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
     pub fn new_terrain(seed: u32) -> Self {
@@ -271,6 +277,23 @@ mod tests {
                 _ => panic!("One side has terrain, other is all air at z={z}"),
             }
         }
+    }
+
+    #[test]
+    fn empty_chunk_detected() {
+        let empty = Chunk {
+            voxels: vec![0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE],
+        };
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn nonempty_chunk_detected() {
+        let mut chunk = Chunk {
+            voxels: vec![0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE],
+        };
+        chunk.voxels[0] = pack_voxel(MAT_STONE, 0, 0, 0);
+        assert!(!chunk.is_empty());
     }
 
     #[test]
