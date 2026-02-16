@@ -16,6 +16,8 @@ use raymarch_pass::RaymarchPass;
 use web_sys::OffscreenCanvas;
 
 #[cfg(feature = "wasm")]
+use glam::IVec3;
+#[cfg(feature = "wasm")]
 use crate::camera::{Camera, GridInfo, InputState};
 #[cfg(feature = "wasm")]
 use crate::voxel::{TEST_GRID_X, TEST_GRID_Y, TEST_GRID_Z, build_test_grid};
@@ -84,7 +86,7 @@ impl Renderer {
         }
 
         let grid_info = GridInfo {
-            origin: [0, 0, 0],
+            origin: IVec3::ZERO,
             size: [TEST_GRID_X as u32, TEST_GRID_Y as u32, TEST_GRID_Z as u32],
             atlas_slots,
             max_ray_distance: MAX_RAY_DISTANCE,

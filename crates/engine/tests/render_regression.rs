@@ -13,7 +13,7 @@
 
 use std::path::PathBuf;
 
-use glam::Vec3;
+use glam::{IVec3, Vec3};
 
 use engine::camera::{Camera, GridInfo};
 use engine::render::chunk_atlas::ChunkAtlas;
@@ -39,7 +39,7 @@ const MAX_RAY_DISTANCE: f32 = 256.0;
 
 /// Grid metadata for the multi-chunk test scene.
 const GRID_INFO: GridInfo = GridInfo {
-    origin: [0, 0, 0],
+    origin: IVec3::ZERO,
     size: [TEST_GRID_X as u32, TEST_GRID_Y as u32, TEST_GRID_Z as u32],
     atlas_slots: ATLAS_SLOTS,
     max_ray_distance: MAX_RAY_DISTANCE,

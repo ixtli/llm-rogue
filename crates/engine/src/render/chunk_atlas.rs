@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use glam::IVec3;
 use wgpu::util::DeviceExt;
 
 use crate::voxel::{CHUNK_SIZE, Chunk};
@@ -8,7 +9,7 @@ use crate::voxel::{CHUNK_SIZE, Chunk};
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct ChunkSlotGpu {
-    pub world_pos: [i32; 3],
+    pub world_pos: IVec3,
     pub flags: u32,
 }
 
@@ -57,7 +58,7 @@ impl ChunkAtlas {
 
         let slots = vec![
             ChunkSlotGpu {
-                world_pos: [0; 3],
+                world_pos: IVec3::ZERO,
                 flags: 0,
             };
             total_slots
@@ -85,7 +86,7 @@ impl ChunkAtlas {
         queue: &wgpu::Queue,
         slot: u32,
         chunk: &Chunk,
-        world_coord: [i32; 3],
+        world_coord: IVec3,
     ) {
         let chunk_u32 = CHUNK_SIZE as u32;
         let origin = slot_to_atlas_origin(slot, self.slots_per_axis);
@@ -211,9 +212,9 @@ mod tests {
             atlas.upload_chunk(&gpu.queue, i as u32, chunk, *coord);
         }
 
-        assert_eq!(atlas.slots[0].world_pos, [0, 0, 0]);
+        assert_eq!(atlas.slots[0].world_pos, IVec3::ZERO);
         assert_eq!(atlas.slots[0].flags, 1);
-        assert_eq!(atlas.slots[31].world_pos, [3, 1, 3]);
+        assert_eq!(atlas.slots[31].world_pos, IVec3::new(3, 1, 3));
         assert_eq!(atlas.slots[31].flags, 1);
         assert_eq!(atlas.slots[32].flags, 0); // unoccupied
     }

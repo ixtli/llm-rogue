@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::Vec3;
+use glam::{IVec3, Vec3};
 
 const MOVE_SPEED: f32 = 10.0;
 const ROTATE_SPEED: f32 = 2.0;
@@ -150,7 +150,7 @@ pub struct CameraUniform {
     pub height: u32,           // offset 68
     _pad3: u32,                // offset 72
     _pad4: u32,                // offset 76
-    pub grid_origin: [i32; 3], // offset 80
+    pub grid_origin: IVec3,    // offset 80
     pub max_ray_distance: f32, // offset 92
     pub grid_size: [u32; 3],   // offset 96
     _pad5: u32,                // offset 108
@@ -163,7 +163,7 @@ const SINGLE_CHUNK_MAX_RAY_DISTANCE: f32 = 64.0;
 
 /// Scene-level grid metadata, passed to `Camera::to_uniform`.
 pub struct GridInfo {
-    pub origin: [i32; 3],
+    pub origin: IVec3,
     pub size: [u32; 3],
     pub atlas_slots: [u32; 3],
     pub max_ray_distance: f32,
@@ -175,7 +175,7 @@ impl GridInfo {
     #[must_use]
     pub fn single_chunk() -> Self {
         Self {
-            origin: [0, 0, 0],
+            origin: IVec3::ZERO,
             size: [1, 1, 1],
             atlas_slots: [1, 1, 1],
             max_ray_distance: SINGLE_CHUNK_MAX_RAY_DISTANCE,
