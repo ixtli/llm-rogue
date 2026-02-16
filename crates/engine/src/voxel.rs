@@ -55,7 +55,10 @@ impl Chunk {
                 let nx = x as f64 / CHUNK_SIZE as f64;
                 let nz = z as f64 / CHUNK_SIZE as f64;
                 let noise_val = perlin.get([nx * 4.0, nz * 4.0]);
-                let height = ((noise_val + 1.0) * 0.5 * 16.0 + 8.0) as usize;
+                let half_chunk = CHUNK_SIZE / 2;
+                let quarter_chunk = CHUNK_SIZE / 4;
+                let height = ((noise_val + 1.0) * 0.5 * half_chunk as f64 + quarter_chunk as f64)
+                    as usize;
                 let height = height.min(CHUNK_SIZE - 1);
 
                 for y in 0..=height {
@@ -66,7 +69,57 @@ impl Chunk {
                     } else {
                         MAT_STONE
                     };
-                    voxels[z * 1024 + y * 32 + x] = pack_voxel(mat, 0, 0, 0);
+                    voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] =
+                        pack_voxel(mat, 0, 0, 0);
+                }
+            }
+        }
+
+        Self { voxels }
+    }
+
+    /// Generates terrain for a chunk at the given world chunk coordinate.
+    /// Uses world-space Perlin noise so terrain is continuous across chunk
+    /// boundaries. Height range ~8-40 world voxels (spans two vertical layers).
+    #[must_use]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap
+    )]
+    pub fn new_terrain_at(seed: u32, chunk_coord: [i32; 3]) -> Self {
+        let perlin = Perlin::new(seed);
+        let mut voxels = vec![0u32; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+
+        let cx = f64::from(chunk_coord[0]);
+        let cy = chunk_coord[1];
+        let cz = f64::from(chunk_coord[2]);
+        let chunk_f64 = CHUNK_SIZE as f64;
+
+        for z in 0..CHUNK_SIZE {
+            for x in 0..CHUNK_SIZE {
+                let wx = (cx * chunk_f64 + x as f64) / chunk_f64;
+                let wz = (cz * chunk_f64 + z as f64) / chunk_f64;
+                let noise_val = perlin.get([wx * 4.0, wz * 4.0]);
+
+                let world_height = ((noise_val + 1.0) * 0.5 * CHUNK_SIZE as f64
+                    + (CHUNK_SIZE / 4) as f64) as i32;
+                let y_offset = cy * CHUNK_SIZE as i32;
+
+                for y in 0..CHUNK_SIZE {
+                    let world_y = y_offset + y as i32;
+                    if world_y > world_height {
+                        break;
+                    }
+                    let mat = if world_y == world_height {
+                        MAT_GRASS
+                    } else if world_y + DIRT_DEPTH as i32 >= world_height {
+                        MAT_DIRT
+                    } else {
+                        MAT_STONE
+                    };
+                    voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] =
+                        pack_voxel(mat, 0, 0, 0);
                 }
             }
         }
@@ -123,7 +176,7 @@ mod tests {
             for z in 0..CHUNK_SIZE {
                 let mut found_surface = false;
                 for y in (0..CHUNK_SIZE).rev() {
-                    let v = chunk.voxels[z * 1024 + y * 32 + x];
+                    let v = chunk.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x];
                     let mat = material_id(v);
                     if mat != 0 && !found_surface {
                         assert_eq!(mat, 1, "top solid voxel should be grass at ({x},{y},{z})");
@@ -146,5 +199,48 @@ mod tests {
         let a = Chunk::new_terrain(1);
         let b = Chunk::new_terrain(2);
         assert_ne!(a.voxels, b.voxels);
+    }
+
+    #[test]
+    fn terrain_at_generates_32_cubed_voxels() {
+        let chunk = Chunk::new_terrain_at(42, [0, 0, 0]);
+        assert_eq!(chunk.voxels.len(), CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+        // Should have some non-air voxels (terrain exists)
+        assert!(chunk.voxels.iter().any(|&v| material_id(v) != MAT_AIR));
+    }
+
+    #[test]
+    fn terrain_is_continuous_across_chunk_boundary() {
+        let left = Chunk::new_terrain_at(42, [0, 0, 0]);
+        let right = Chunk::new_terrain_at(42, [1, 0, 0]);
+        // Check the x=CHUNK_SIZE-1 column of `left` against x=0 column of `right`
+        // for every (y, z). The terrain height at the boundary should be close
+        // because both chunks sample the same continuous Perlin noise.
+        //
+        // Tolerance: adjacent columns straddle the chunk boundary and differ
+        // by 1 voxel in noise-input space (scaled by freq 4.0). Perlin
+        // gradients near integer lattice points can produce height deltas
+        // up to ~CHUNK_SIZE/8. We assert < CHUNK_SIZE/4 to catch genuine
+        // discontinuities (e.g., wrong seed or non-world-space coordinates)
+        // while allowing normal noise variation.
+        let max_allowed_diff = CHUNK_SIZE / 4;
+        for z in 0..CHUNK_SIZE {
+            let left_height = (0..CHUNK_SIZE).rev().find(|&y| {
+                material_id(
+                    left.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + (CHUNK_SIZE - 1)],
+                ) != MAT_AIR
+            });
+            let right_height = (0..CHUNK_SIZE).rev().find(|&y| {
+                material_id(right.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE]) != MAT_AIR
+            });
+            match (left_height, right_height) {
+                (Some(l), Some(r)) => assert!(
+                    l.abs_diff(r) <= max_allowed_diff,
+                    "Height mismatch at z={z}: left={l}, right={r} (max allowed: {max_allowed_diff})"
+                ),
+                (None, None) => {} // both air columns, fine
+                _ => panic!("One side has terrain, other is all air at z={z}"),
+            }
+        }
     }
 }
