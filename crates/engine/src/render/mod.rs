@@ -16,11 +16,11 @@ use raymarch_pass::RaymarchPass;
 use web_sys::OffscreenCanvas;
 
 #[cfg(feature = "wasm")]
-use glam::{IVec3, UVec3};
-#[cfg(feature = "wasm")]
 use crate::camera::{Camera, GridInfo, InputState};
 #[cfg(feature = "wasm")]
 use crate::voxel::{TEST_GRID_X, TEST_GRID_Y, TEST_GRID_Z, build_test_grid};
+#[cfg(feature = "wasm")]
+use glam::{IVec3, UVec3};
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
