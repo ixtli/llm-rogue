@@ -7,7 +7,7 @@ pub mod raymarch_pass;
 #[cfg(feature = "wasm")]
 use blit_pass::BlitPass;
 #[cfg(feature = "wasm")]
-use chunk_atlas::ChunkAtlas;
+use chunk_atlas::{ChunkAtlas, world_to_slot};
 #[cfg(feature = "wasm")]
 use gpu::GpuContext;
 #[cfg(feature = "wasm")]
@@ -80,9 +80,9 @@ impl Renderer {
         let atlas_slots = UVec3::new(ATLAS_SLOTS_X, ATLAS_SLOTS_Y, ATLAS_SLOTS_Z);
         let mut atlas = ChunkAtlas::new(&gpu.device, atlas_slots);
         let grid = build_test_grid();
-        for (i, (coord, chunk)) in grid.iter().enumerate() {
-            #[allow(clippy::cast_possible_truncation)]
-            atlas.upload_chunk(&gpu.queue, i as u32, chunk, *coord);
+        for (coord, chunk) in &grid {
+            let slot = world_to_slot(*coord, atlas_slots);
+            atlas.upload_chunk(&gpu.queue, slot, chunk, *coord);
         }
 
         let grid_info = GridInfo {

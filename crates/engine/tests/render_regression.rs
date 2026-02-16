@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use glam::{IVec3, UVec3, Vec3};
 
 use engine::camera::{Camera, GridInfo};
-use engine::render::chunk_atlas::ChunkAtlas;
+use engine::render::chunk_atlas::{ChunkAtlas, world_to_slot};
 use engine::render::gpu::GpuContext;
 use engine::render::raymarch_pass::RaymarchPass;
 use engine::render::{build_palette, create_storage_texture};
@@ -116,8 +116,9 @@ impl HeadlessRenderer {
 
         let mut atlas = ChunkAtlas::new(&gpu.device, GRID_INFO.atlas_slots);
         let grid = build_test_grid();
-        for (i, (coord, chunk)) in grid.iter().enumerate() {
-            atlas.upload_chunk(&gpu.queue, i as u32, chunk, *coord);
+        for (coord, chunk) in &grid {
+            let slot = world_to_slot(*coord, GRID_INFO.atlas_slots);
+            atlas.upload_chunk(&gpu.queue, slot, chunk, *coord);
         }
 
         let palette = build_palette();

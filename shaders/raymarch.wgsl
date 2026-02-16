@@ -76,14 +76,17 @@ fn atlas_origin(slot: u32) -> vec3<u32> {
     );
 }
 
-/// Look up the atlas slot for a grid-local chunk coordinate.
+/// Look up the atlas slot for a world chunk coordinate.
 /// Returns the flat slot index, or -1 if outside the grid or empty.
-fn lookup_chunk(local: vec3<i32>) -> i32 {
-    let gs = vec3<i32>(camera.grid_size);
-    if any(local < vec3(0)) || any(local >= gs) {
+fn lookup_chunk(world: vec3<i32>) -> i32 {
+    let local = world - camera.grid_origin;
+    let grid = vec3<i32>(camera.grid_size);
+    if any(local < vec3(0)) || any(local >= grid) {
         return -1;
     }
-    let idx = local.z * gs.x * gs.y + local.y * gs.x + local.x;
+    let slots = vec3<i32>(camera.atlas_slots);
+    let wrapped = ((world % slots) + slots) % slots;
+    let idx = wrapped.z * slots.x * slots.y + wrapped.y * slots.x + wrapped.x;
     if chunk_index[idx].flags == 0u {
         return -1;
     }
@@ -110,8 +113,7 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
     let step = vec3<i32>(sign(dir));
 
     for (var ci = 0u; ci < MAX_CHUNK_STEPS; ci++) {
-        let local = chunk_coord - camera.grid_origin;
-        let slot = lookup_chunk(local);
+        let slot = lookup_chunk(chunk_coord);
         if slot < 0 {
             return SKY;
         }
