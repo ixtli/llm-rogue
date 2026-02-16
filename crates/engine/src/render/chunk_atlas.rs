@@ -119,7 +119,7 @@ impl ChunkAtlas {
         };
         queue.write_buffer(
             &self.index_buffer,
-            u64::from(slot) * std::mem::size_of::<ChunkSlotGpu>() as u64,
+            u64::from(slot) * size_of::<ChunkSlotGpu>() as u64,
             bytemuck::bytes_of(&self.slots[slot as usize]),
         );
     }
@@ -129,7 +129,7 @@ impl ChunkAtlas {
         self.slots[slot as usize].flags = 0;
         queue.write_buffer(
             &self.index_buffer,
-            u64::from(slot) * std::mem::size_of::<ChunkSlotGpu>() as u64,
+            u64::from(slot) * size_of::<ChunkSlotGpu>() as u64,
             bytemuck::bytes_of(&self.slots[slot as usize]),
         );
     }
@@ -180,7 +180,7 @@ mod tests {
     fn atlas_slot_gpu_layout_matches_wgsl() {
         assert_eq!(std::mem::offset_of!(ChunkSlotGpu, world_pos), 0);
         assert_eq!(std::mem::offset_of!(ChunkSlotGpu, flags), 12);
-        assert_eq!(std::mem::size_of::<ChunkSlotGpu>(), 16);
+        assert_eq!(size_of::<ChunkSlotGpu>(), 16);
     }
 
     #[test]
