@@ -1,5 +1,6 @@
 #[cfg(feature = "wasm")]
 mod blit_pass;
+pub mod chunk_atlas;
 pub mod gpu;
 pub mod raymarch_pass;
 
