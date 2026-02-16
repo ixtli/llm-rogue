@@ -13,6 +13,8 @@
 
 use std::path::PathBuf;
 
+use glam::{IVec3, UVec3, Vec3};
+
 use engine::camera::{Camera, GridInfo};
 use engine::render::chunk_atlas::ChunkAtlas;
 use engine::render::gpu::GpuContext;
@@ -26,19 +28,19 @@ const HEIGHT: u32 = 128;
 const TOLERANCE: u8 = 2;
 
 /// Atlas slot dimensions: 2x the grid size to allow room for streaming.
-const ATLAS_SLOTS: [u32; 3] = [
+const ATLAS_SLOTS: UVec3 = UVec3::new(
     TEST_GRID_X as u32 * 2,
     TEST_GRID_Y as u32,
     TEST_GRID_Z as u32 * 2,
-];
+);
 
 /// Maximum ray distance in voxels — long enough to traverse the full grid diagonal.
 const MAX_RAY_DISTANCE: f32 = 256.0;
 
 /// Grid metadata for the multi-chunk test scene.
 const GRID_INFO: GridInfo = GridInfo {
-    origin: [0, 0, 0],
-    size: [TEST_GRID_X as u32, TEST_GRID_Y as u32, TEST_GRID_Z as u32],
+    origin: IVec3::ZERO,
+    size: UVec3::new(TEST_GRID_X as u32, TEST_GRID_Y as u32, TEST_GRID_Z as u32),
     atlas_slots: ATLAS_SLOTS,
     max_ray_distance: MAX_RAY_DISTANCE,
 };
@@ -52,33 +54,33 @@ const GRID_EXTENT_Z: f32 = TEST_GRID_Z as f32 * CHUNK_SIZE as f32;
 
 /// Front view: centered on X, elevated, pulled back behind grid on -Z side,
 /// looking toward +Z across the terrain. (yaw=PI => forward=[0,0,+1])
-const FRONT_POSITION: [f32; 3] = [GRID_EXTENT_X * 0.5, 40.0, -20.0];
+const FRONT_POSITION: Vec3 = Vec3::new(GRID_EXTENT_X * 0.5, 40.0, -20.0);
 const FRONT_YAW: f32 = std::f32::consts::PI;
 const FRONT_PITCH: f32 = -0.3;
 
 /// Corner view: offset past +X edge and behind on -Z, looking diagonally
 /// toward grid center. (yaw~2.4 => forward points toward -X and +Z)
-const CORNER_POSITION: [f32; 3] = [GRID_EXTENT_X + 12.0, 50.0, -20.0];
+const CORNER_POSITION: Vec3 = Vec3::new(GRID_EXTENT_X + 12.0, 50.0, -20.0);
 const CORNER_YAW: f32 = 2.4;
 const CORNER_PITCH: f32 = -0.3;
 
 /// Top-down view: directly above grid center, looking straight down.
 /// (At pitch=-1.5 the horizontal yaw has negligible effect.)
-const TOP_DOWN_POSITION: [f32; 3] = [GRID_EXTENT_X * 0.5, 100.0, GRID_EXTENT_Z * 0.5];
+const TOP_DOWN_POSITION: Vec3 = Vec3::new(GRID_EXTENT_X * 0.5, 100.0, GRID_EXTENT_Z * 0.5);
 const TOP_DOWN_YAW: f32 = 0.0;
 const TOP_DOWN_PITCH: f32 = -1.5;
 
 /// Boundary view: elevated above the seam between chunks, looking along +Z
 /// with a slight downward pitch to see the chunk boundary below.
 /// (yaw=PI => forward=[0,0,+1])
-const BOUNDARY_POSITION: [f32; 3] = [GRID_EXTENT_X * 0.5, 45.0, GRID_EXTENT_Z * 0.375];
+const BOUNDARY_POSITION: Vec3 = Vec3::new(GRID_EXTENT_X * 0.5, 45.0, GRID_EXTENT_Z * 0.375);
 const BOUNDARY_YAW: f32 = std::f32::consts::PI;
 const BOUNDARY_PITCH: f32 = -0.3;
 
 /// Edge view: near grid corner, elevated above terrain, looking into the
 /// grid along +Z with a downward pitch. Rays near the edges exit into sky.
 /// (yaw=PI => forward=[0,0,+1])
-const EDGE_POSITION: [f32; 3] = [2.0, 45.0, 2.0];
+const EDGE_POSITION: Vec3 = Vec3::new(2.0, 45.0, 2.0);
 const EDGE_YAW: f32 = std::f32::consts::PI;
 const EDGE_PITCH: f32 = -0.3;
 
@@ -87,7 +89,7 @@ fn fixtures_dir() -> PathBuf {
 }
 
 /// Build a `Camera` with the given position, yaw, and pitch.
-fn test_camera(position: [f32; 3], yaw: f32, pitch: f32) -> Camera {
+fn test_camera(position: Vec3, yaw: f32, pitch: f32) -> Camera {
     Camera {
         position,
         yaw,

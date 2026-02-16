@@ -19,6 +19,8 @@ use web_sys::OffscreenCanvas;
 use crate::camera::{Camera, GridInfo, InputState};
 #[cfg(feature = "wasm")]
 use crate::voxel::{TEST_GRID_X, TEST_GRID_Y, TEST_GRID_Z, build_test_grid};
+#[cfg(feature = "wasm")]
+use glam::{IVec3, UVec3};
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
@@ -75,7 +77,7 @@ impl Renderer {
         let storage_texture = create_storage_texture(&gpu.device, width, height);
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let atlas_slots = [ATLAS_SLOTS_X, ATLAS_SLOTS_Y, ATLAS_SLOTS_Z];
+        let atlas_slots = UVec3::new(ATLAS_SLOTS_X, ATLAS_SLOTS_Y, ATLAS_SLOTS_Z);
         let mut atlas = ChunkAtlas::new(&gpu.device, atlas_slots);
         let grid = build_test_grid();
         for (i, (coord, chunk)) in grid.iter().enumerate() {
@@ -84,8 +86,8 @@ impl Renderer {
         }
 
         let grid_info = GridInfo {
-            origin: [0, 0, 0],
-            size: [TEST_GRID_X as u32, TEST_GRID_Y as u32, TEST_GRID_Z as u32],
+            origin: IVec3::ZERO,
+            size: UVec3::new(TEST_GRID_X as u32, TEST_GRID_Y as u32, TEST_GRID_Z as u32),
             atlas_slots,
             max_ray_distance: MAX_RAY_DISTANCE,
         };

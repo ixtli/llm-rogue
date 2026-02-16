@@ -1,3 +1,4 @@
+use glam::IVec3;
 use noise::{NoiseFn, Perlin};
 
 pub const CHUNK_SIZE: usize = 32;
@@ -98,13 +99,13 @@ impl Chunk {
         clippy::cast_sign_loss,
         clippy::cast_possible_wrap
     )]
-    pub fn new_terrain_at(seed: u32, chunk_coord: [i32; 3]) -> Self {
+    pub fn new_terrain_at(seed: u32, chunk_coord: IVec3) -> Self {
         let perlin = Perlin::new(seed);
         let mut voxels = vec![0u32; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
 
-        let cx = f64::from(chunk_coord[0]);
-        let cy = chunk_coord[1];
-        let cz = f64::from(chunk_coord[2]);
+        let cx = f64::from(chunk_coord.x);
+        let cy = chunk_coord.y;
+        let cz = f64::from(chunk_coord.z);
         let chunk_f64 = CHUNK_SIZE as f64;
 
         for z in 0..CHUNK_SIZE {
@@ -143,12 +144,12 @@ impl Chunk {
 /// chunks with deterministic seed [`TEST_GRID_SEED`].
 /// Returns `(chunk_coord, chunk)` pairs in ZYX iteration order.
 #[must_use]
-pub fn build_test_grid() -> Vec<([i32; 3], Chunk)> {
+pub fn build_test_grid() -> Vec<(IVec3, Chunk)> {
     (0..TEST_GRID_Z)
         .flat_map(|z| {
             (0..TEST_GRID_Y).flat_map(move |y| {
                 (0..TEST_GRID_X).map(move |x| {
-                    let coord = [x, y, z];
+                    let coord = IVec3::new(x, y, z);
                     (coord, Chunk::new_terrain_at(TEST_GRID_SEED, coord))
                 })
             })
@@ -231,7 +232,7 @@ mod tests {
 
     #[test]
     fn terrain_at_generates_32_cubed_voxels() {
-        let chunk = Chunk::new_terrain_at(42, [0, 0, 0]);
+        let chunk = Chunk::new_terrain_at(42, IVec3::ZERO);
         assert_eq!(chunk.voxels.len(), CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
         // Should have some non-air voxels (terrain exists)
         assert!(chunk.voxels.iter().any(|&v| material_id(v) != MAT_AIR));
@@ -239,8 +240,8 @@ mod tests {
 
     #[test]
     fn terrain_is_continuous_across_chunk_boundary() {
-        let left = Chunk::new_terrain_at(42, [0, 0, 0]);
-        let right = Chunk::new_terrain_at(42, [1, 0, 0]);
+        let left = Chunk::new_terrain_at(42, IVec3::ZERO);
+        let right = Chunk::new_terrain_at(42, IVec3::new(1, 0, 0));
         // Check the x=CHUNK_SIZE-1 column of `left` against x=0 column of `right`
         // for every (y, z). The terrain height at the boundary should be close
         // because both chunks sample the same continuous Perlin noise.
@@ -278,12 +279,13 @@ mod tests {
         assert_eq!(grid.len(), TEST_GRID_TOTAL);
 
         // Verify coordinates cover [0..GRID_X) x [0..GRID_Y) x [0..GRID_Z) in ZYX iteration order
-        let expected: Vec<[i32; 3]> = (0..TEST_GRID_Z)
+        let expected: Vec<IVec3> = (0..TEST_GRID_Z)
             .flat_map(|z| {
-                (0..TEST_GRID_Y).flat_map(move |y| (0..TEST_GRID_X).map(move |x| [x, y, z]))
+                (0..TEST_GRID_Y)
+                    .flat_map(move |y| (0..TEST_GRID_X).map(move |x| IVec3::new(x, y, z)))
             })
             .collect();
-        let coords: Vec<[i32; 3]> = grid.iter().map(|(c, _)| *c).collect();
+        let coords: Vec<IVec3> = grid.iter().map(|(c, _)| *c).collect();
         assert_eq!(coords, expected);
     }
 }

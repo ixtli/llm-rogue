@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use glam::{IVec3, UVec3, Vec3};
 
 const MOVE_SPEED: f32 = 10.0;
 const ROTATE_SPEED: f32 = 2.0;
@@ -6,7 +7,7 @@ const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
 
 /// Camera state: position plus yaw/pitch Euler angles.
 pub struct Camera {
-    pub position: [f32; 3],
+    pub position: Vec3,
     pub yaw: f32,
     pub pitch: f32,
     pub fov: f32,
@@ -15,7 +16,7 @@ pub struct Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            position: [16.0, 20.0, 48.0],
+            position: Vec3::new(16.0, 20.0, 48.0),
             yaw: 0.0,
             pitch: -0.3,
             fov: 60.0_f32.to_radians(),
@@ -26,13 +27,13 @@ impl Default for Camera {
 impl Camera {
     /// Compute forward, right, up vectors from yaw and pitch.
     #[must_use]
-    pub fn orientation_vectors(&self) -> ([f32; 3], [f32; 3], [f32; 3]) {
+    pub fn orientation_vectors(&self) -> (Vec3, Vec3, Vec3) {
         let (sy, cy) = self.yaw.sin_cos();
         let (sp, cp) = self.pitch.sin_cos();
 
-        let forward = [-sy * cp, sp, -cy * cp];
-        let right = [cy, 0.0, -sy];
-        let up = [sy * sp, cp, cy * sp];
+        let forward = Vec3::new(-sy * cp, sp, -cy * cp);
+        let right = Vec3::new(cy, 0.0, -sy);
+        let up = Vec3::new(sy * sp, cp, cy * sp);
 
         (forward, right, up)
     }
@@ -50,24 +51,16 @@ impl Camera {
         let rot_amount = ROTATE_SPEED * dt;
 
         if input.forward {
-            for (p, &f) in self.position.iter_mut().zip(&forward) {
-                *p += f * move_amount;
-            }
+            self.position += forward * move_amount;
         }
         if input.backward {
-            for (p, &f) in self.position.iter_mut().zip(&forward) {
-                *p -= f * move_amount;
-            }
+            self.position -= forward * move_amount;
         }
         if input.left {
-            for (p, &r) in self.position.iter_mut().zip(&right) {
-                *p -= r * move_amount;
-            }
+            self.position -= right * move_amount;
         }
         if input.right {
-            for (p, &r) in self.position.iter_mut().zip(&right) {
-                *p += r * move_amount;
-            }
+            self.position += right * move_amount;
         }
         if input.yaw_left {
             self.yaw -= rot_amount;
@@ -96,21 +89,15 @@ impl Camera {
     /// Move the camera along the look direction by `amount` world units.
     pub fn apply_dolly(&mut self, amount: f32) {
         let (forward, _, _) = self.orientation_vectors();
-        for (p, &f) in self.position.iter_mut().zip(&forward) {
-            *p += f * amount;
-        }
+        self.position += forward * amount;
     }
 
     /// Strafe the camera along its right (`dx`) and up (`dy`) vectors,
     /// in world units.
     pub fn apply_pan(&mut self, dx: f32, dy: f32) {
         let (_, right, up) = self.orientation_vectors();
-        for (p, &r) in self.position.iter_mut().zip(&right) {
-            *p += r * dx;
-        }
-        for (p, &u) in self.position.iter_mut().zip(&up) {
-            *p += u * dy;
-        }
+        self.position += right * dx;
+        self.position += up * dy;
     }
 
     /// Build the GPU-uploadable uniform struct.
@@ -151,23 +138,23 @@ impl Camera {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct CameraUniform {
-    pub position: [f32; 3],    // offset  0
+    pub position: Vec3,        // offset  0
     _pad0: f32,                // offset 12
-    pub forward: [f32; 3],     // offset 16
+    pub forward: Vec3,         // offset 16
     _pad1: f32,                // offset 28
-    pub right: [f32; 3],       // offset 32
+    pub right: Vec3,           // offset 32
     _pad2: f32,                // offset 44
-    pub up: [f32; 3],          // offset 48
+    pub up: Vec3,              // offset 48
     pub fov: f32,              // offset 60
     pub width: u32,            // offset 64
     pub height: u32,           // offset 68
     _pad3: u32,                // offset 72
     _pad4: u32,                // offset 76
-    pub grid_origin: [i32; 3], // offset 80
+    pub grid_origin: IVec3,    // offset 80
     pub max_ray_distance: f32, // offset 92
-    pub grid_size: [u32; 3],   // offset 96
+    pub grid_size: UVec3,      // offset 96
     _pad5: u32,                // offset 108
-    pub atlas_slots: [u32; 3], // offset 112
+    pub atlas_slots: UVec3,    // offset 112
     _pad6: u32,                // offset 124
 }
 
@@ -176,9 +163,9 @@ const SINGLE_CHUNK_MAX_RAY_DISTANCE: f32 = 64.0;
 
 /// Scene-level grid metadata, passed to `Camera::to_uniform`.
 pub struct GridInfo {
-    pub origin: [i32; 3],
-    pub size: [u32; 3],
-    pub atlas_slots: [u32; 3],
+    pub origin: IVec3,
+    pub size: UVec3,
+    pub atlas_slots: UVec3,
     pub max_ray_distance: f32,
 }
 
@@ -188,9 +175,9 @@ impl GridInfo {
     #[must_use]
     pub fn single_chunk() -> Self {
         Self {
-            origin: [0, 0, 0],
-            size: [1, 1, 1],
-            atlas_slots: [1, 1, 1],
+            origin: IVec3::ZERO,
+            size: UVec3::ONE,
+            atlas_slots: UVec3::ONE,
             max_ray_distance: SINGLE_CHUNK_MAX_RAY_DISTANCE,
         }
     }
@@ -244,7 +231,7 @@ mod tests {
     #[test]
     fn default_camera_looks_at_chunk() {
         let cam = Camera::default();
-        assert!(cam.position[2] > 32.0, "camera should start behind chunk");
+        assert!(cam.position.z > 32.0, "camera should start behind chunk");
     }
 
     #[test]
@@ -255,9 +242,9 @@ mod tests {
             ..Camera::default()
         };
         let (fwd, _, _) = cam.orientation_vectors();
-        assert!((fwd[2] - (-1.0)).abs() < 1e-5);
-        assert!(fwd[0].abs() < 1e-5);
-        assert!(fwd[1].abs() < 1e-5);
+        assert!((fwd.z - (-1.0)).abs() < 1e-5);
+        assert!(fwd.x.abs() < 1e-5);
+        assert!(fwd.y.abs() < 1e-5);
     }
 
     #[test]
@@ -268,8 +255,8 @@ mod tests {
             ..Camera::default()
         };
         let (fwd, _, _) = cam.orientation_vectors();
-        assert!((fwd[0] - (-1.0)).abs() < 1e-5);
-        assert!(fwd[2].abs() < 1e-5);
+        assert!((fwd.x - (-1.0)).abs() < 1e-5);
+        assert!(fwd.z.abs() < 1e-5);
     }
 
     #[test]
@@ -339,10 +326,10 @@ mod tests {
             pitch: 0.0,
             ..Camera::default()
         };
-        let z_before = cam.position[2];
+        let z_before = cam.position.z;
         cam.apply_dolly(1.0);
         // At yaw=0, pitch=0, forward is [0, 0, -1]
-        assert!((cam.position[2] - (z_before - 1.0)).abs() < 1e-5);
+        assert!((cam.position.z - (z_before - 1.0)).abs() < 1e-5);
     }
 
     #[test]
@@ -352,10 +339,10 @@ mod tests {
             pitch: 0.0,
             ..Camera::default()
         };
-        let x_before = cam.position[0];
+        let x_before = cam.position.x;
         cam.apply_pan(1.0, 0.0);
         // At yaw=0, right is [1, 0, 0]
-        assert!((cam.position[0] - (x_before + 1.0)).abs() < 1e-5);
+        assert!((cam.position.x - (x_before + 1.0)).abs() < 1e-5);
     }
 
     #[test]
