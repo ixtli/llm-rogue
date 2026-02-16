@@ -192,6 +192,11 @@ impl Renderer {
     pub fn pan(&mut self, dx: f32, dy: f32) {
         self.camera.apply_pan(dx, dy);
     }
+
+    /// Orient the camera to look at the given world-space position.
+    pub fn look_at(&mut self, x: f32, y: f32, z: f32) {
+        self.camera.look_at(glam::Vec3::new(x, y, z));
+    }
 }
 
 /// Creates the storage texture used as the ray march output target.

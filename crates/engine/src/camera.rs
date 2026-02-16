@@ -13,12 +13,24 @@ pub struct Camera {
     pub fov: f32,
 }
 
+/// Default camera target: center of the test grid at terrain level.
+const DEFAULT_LOOK_TARGET: Vec3 = Vec3::new(64.0, 20.0, 64.0);
+/// Default camera position: pulled back behind -Z edge, centered on X, elevated.
+const DEFAULT_POSITION: Vec3 = Vec3::new(64.0, 70.0, -40.0);
+
 impl Default for Camera {
     fn default() -> Self {
+        // Pre-computed yaw/pitch from look_at(DEFAULT_LOOK_TARGET):
+        //   dir = (0, -50, 104)
+        //   yaw = atan2(0, -104) = PI
+        //   pitch = atan2(-50, 104) ≈ -0.4480
+        let dir = DEFAULT_LOOK_TARGET - DEFAULT_POSITION;
+        let yaw = (-dir.x).atan2(-dir.z);
+        let pitch = dir.y.atan2((dir.x * dir.x + dir.z * dir.z).sqrt());
         Self {
-            position: Vec3::new(16.0, 20.0, 48.0),
-            yaw: 0.0,
-            pitch: -0.3,
+            position: DEFAULT_POSITION,
+            yaw,
+            pitch,
             fov: 60.0_f32.to_radians(),
         }
     }
@@ -98,6 +110,15 @@ impl Camera {
         let (_, right, up) = self.orientation_vectors();
         self.position += right * dx;
         self.position += up * dy;
+    }
+
+    /// Orient the camera to look at `target`. Sets yaw and pitch so the
+    /// forward vector points from the current position toward `target`.
+    pub fn look_at(&mut self, target: Vec3) {
+        let dir = target - self.position;
+        self.yaw = (-dir.x).atan2(-dir.z);
+        self.pitch = dir.y.atan2((dir.x * dir.x + dir.z * dir.z).sqrt());
+        self.clamp_pitch();
     }
 
     /// Build the GPU-uploadable uniform struct.
@@ -229,9 +250,13 @@ mod tests {
     use std::f32::consts::FRAC_PI_2;
 
     #[test]
-    fn default_camera_looks_at_chunk() {
+    fn default_camera_starts_behind_grid() {
         let cam = Camera::default();
-        assert!(cam.position.z > 32.0, "camera should start behind chunk");
+        assert!(
+            cam.position.z < 0.0,
+            "camera should start behind grid on -Z side"
+        );
+        assert!(cam.position.y > 40.0, "camera should be elevated");
     }
 
     #[test]
@@ -295,6 +320,41 @@ mod tests {
         assert_eq!(std::mem::offset_of!(CameraUniform, grid_size), 96);
         assert_eq!(std::mem::offset_of!(CameraUniform, atlas_slots), 112);
         assert_eq!(std::mem::size_of::<CameraUniform>(), 128);
+    }
+
+    #[test]
+    fn look_at_sets_forward_direction() {
+        let mut cam = Camera {
+            position: Vec3::ZERO,
+            yaw: 0.0,
+            pitch: 0.0,
+            fov: 60.0_f32.to_radians(),
+        };
+        // Look at a point along +Z => forward should be [0,0,+1]
+        cam.look_at(Vec3::new(0.0, 0.0, 10.0));
+        let (fwd, _, _) = cam.orientation_vectors();
+        assert!(fwd.z > 0.99, "forward Z should be ~+1, got {}", fwd.z);
+        assert!(fwd.x.abs() < 1e-3);
+        assert!(fwd.y.abs() < 1e-3);
+
+        // Look at a point along -X => forward should be [-1,0,0]
+        cam.look_at(Vec3::new(-10.0, 0.0, 0.0));
+        let (fwd, _, _) = cam.orientation_vectors();
+        assert!(fwd.x < -0.99, "forward X should be ~-1, got {}", fwd.x);
+        assert!(fwd.z.abs() < 1e-3);
+    }
+
+    #[test]
+    fn look_at_with_elevation() {
+        let mut cam = Camera {
+            position: Vec3::ZERO,
+            yaw: 0.0,
+            pitch: 0.0,
+            fov: 60.0_f32.to_radians(),
+        };
+        // Look at a point directly above => pitch should be near +PI/2
+        cam.look_at(Vec3::new(0.0, 100.0, -0.001));
+        assert!(cam.pitch > 1.0, "pitch should be steep upward");
     }
 
     #[test]

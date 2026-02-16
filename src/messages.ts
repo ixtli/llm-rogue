@@ -4,6 +4,7 @@ export type MainToRenderMessage =
   | { type: "key_up"; key: string }
   | { type: "pointer_move"; dx: number; dy: number }
   | { type: "scroll"; dy: number }
-  | { type: "pan"; dx: number; dy: number };
+  | { type: "pan"; dx: number; dy: number }
+  | { type: "look_at"; x: number; y: number; z: number };
 
 export type RenderToMainMessage = { type: "ready" } | { type: "error"; message: string };

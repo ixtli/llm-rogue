@@ -5,6 +5,7 @@ import init, {
   handle_pointer_move,
   handle_scroll,
   init_renderer,
+  look_at,
   render_frame,
 } from "../../crates/engine/pkg/engine";
 import type { MainToRenderMessage } from "../messages";
@@ -40,5 +41,7 @@ self.onmessage = async (e: MessageEvent<MainToRenderMessage>) => {
     handle_scroll(msg.dy);
   } else if (msg.type === "pan") {
     handle_pan(msg.dx, msg.dy);
+  } else if (msg.type === "look_at") {
+    look_at(msg.x, msg.y, msg.z);
   }
 };

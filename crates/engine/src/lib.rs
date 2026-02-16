@@ -93,3 +93,14 @@ pub fn handle_pan(dx: f32, dy: f32) {
         }
     });
 }
+
+/// Orient the camera to look at the given world-space voxel coordinate.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn look_at(x: f32, y: f32, z: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.look_at(x, y, z);
+        }
+    });
+}
