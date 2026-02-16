@@ -1,8 +1,9 @@
 use wgpu::util::DeviceExt;
 
+use super::chunk_atlas::ChunkAtlas;
 use crate::camera::CameraUniform;
 
-/// A compute pass that ray-marches a voxel chunk and writes color to a storage texture.
+/// A compute pass that ray-marches a multi-chunk voxel atlas.
 pub struct RaymarchPass {
     pipeline: wgpu::ComputePipeline,
     bind_group: wgpu::BindGroup,
@@ -16,27 +17,20 @@ impl RaymarchPass {
     pub fn new(
         device: &wgpu::Device,
         storage_view: &wgpu::TextureView,
-        chunk_data: &[u32],
+        atlas: &ChunkAtlas,
         palette_data: &[[f32; 4]],
         camera_uniform: &CameraUniform,
         width: u32,
         height: u32,
     ) -> Self {
         let camera_buffer = Self::create_camera_buffer(device, camera_uniform);
-        let chunk_buffer = Self::create_storage_buffer(device, "Chunk Voxels", chunk_data);
         let palette_buffer = Self::create_storage_buffer(device, "Material Palette", palette_data);
-
         let shader = Self::load_shader(device);
-        let bind_group_layout = Self::create_bind_group_layout(device);
+        let layout = Self::create_bind_group_layout(device);
         let bind_group = Self::create_bind_group(
-            device,
-            &bind_group_layout,
-            storage_view,
-            &camera_buffer,
-            &chunk_buffer,
-            &palette_buffer,
+            device, &layout, storage_view, &camera_buffer, atlas, &palette_buffer,
         );
-        let pipeline = Self::create_pipeline(device, &bind_group_layout, &shader);
+        let pipeline = Self::create_pipeline(device, &layout, &shader);
 
         Self {
             pipeline,
@@ -93,28 +87,6 @@ impl RaymarchPass {
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         let compute = wgpu::ShaderStages::COMPUTE;
 
-        let storage_texture_entry = wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: compute,
-            ty: wgpu::BindingType::StorageTexture {
-                access: wgpu::StorageTextureAccess::WriteOnly,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                view_dimension: wgpu::TextureViewDimension::D2,
-            },
-            count: None,
-        };
-
-        let uniform_buffer_entry = wgpu::BindGroupLayoutEntry {
-            binding: 1,
-            visibility: compute,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        };
-
         let read_only_storage = |binding| wgpu::BindGroupLayoutEntry {
             binding,
             visibility: compute,
@@ -129,10 +101,43 @@ impl RaymarchPass {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Raymarch BGL"),
             entries: &[
-                storage_texture_entry,
-                uniform_buffer_entry,
-                read_only_storage(2),
+                // 0: output storage texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: compute,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
+                    count: None,
+                },
+                // 1: camera uniform
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: compute,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                // 2: chunk atlas (3D texture)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: compute,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // 3: chunk index buffer
                 read_only_storage(3),
+                // 4: material palette
+                read_only_storage(4),
             ],
         })
     }
@@ -142,7 +147,7 @@ impl RaymarchPass {
         layout: &wgpu::BindGroupLayout,
         storage_view: &wgpu::TextureView,
         camera_buffer: &wgpu::Buffer,
-        chunk_buffer: &wgpu::Buffer,
+        atlas: &ChunkAtlas,
         palette_buffer: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -159,10 +164,14 @@ impl RaymarchPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: chunk_buffer.as_entire_binding(),
+                    resource: wgpu::BindingResource::TextureView(atlas.view()),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
+                    resource: atlas.index_buffer().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
                     resource: palette_buffer.as_entire_binding(),
                 },
             ],
