@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::OffscreenCanvas;
 
 pub mod camera;
+pub mod chunk_manager;
 pub mod render;
 pub mod voxel;
 
