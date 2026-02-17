@@ -37,7 +37,7 @@ pub fn build_palette() -> Vec<[f32; 4]> {
 #[cfg(feature = "wasm")]
 const ATLAS_SLOTS_X: u32 = 8;
 #[cfg(feature = "wasm")]
-const ATLAS_SLOTS_Y: u32 = 4;
+const ATLAS_SLOTS_Y: u32 = 8;
 #[cfg(feature = "wasm")]
 const ATLAS_SLOTS_Z: u32 = 8;
 

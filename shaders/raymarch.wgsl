@@ -77,13 +77,9 @@ fn atlas_origin(slot: u32) -> vec3<u32> {
 }
 
 /// Look up the atlas slot for a world chunk coordinate.
-/// Returns the flat slot index, or -1 if outside the grid or empty.
+/// Returns the flat slot index, or -1 if the slot is empty.
+/// Caller must ensure `world` is within grid bounds before calling.
 fn lookup_chunk(world: vec3<i32>) -> i32 {
-    let local = world - camera.grid_origin;
-    let grid = vec3<i32>(camera.grid_size);
-    if any(local < vec3(0)) || any(local >= grid) {
-        return -1;
-    }
     let slots = vec3<i32>(camera.atlas_slots);
     let wrapped = ((world % slots) + slots) % slots;
     let idx = wrapped.z * slots.x * slots.y + wrapped.y * slots.x + wrapped.x;
@@ -91,6 +87,26 @@ fn lookup_chunk(world: vec3<i32>) -> i32 {
         return -1;
     }
     return idx;
+}
+
+/// Determine which face of a chunk AABB the ray exits through and advance
+/// `chunk_coord` to the next chunk. Uses per-axis exit-t values: the smallest
+/// t_exit tells us which face the ray leaves first.
+fn advance_chunk(origin: vec3<f32>, dir: vec3<f32>, c_min: vec3<f32>,
+                 c_max: vec3<f32>, step: vec3<i32>, cc: vec3<i32>) -> vec3<i32> {
+    let inv = 1.0 / dir;
+    let t0 = (c_min - origin) * inv;
+    let t1 = (c_max - origin) * inv;
+    let t_exit = max(t0, t1);
+    var out = cc;
+    if t_exit.x < t_exit.y && t_exit.x < t_exit.z {
+        out.x += step.x;
+    } else if t_exit.y < t_exit.z {
+        out.y += step.y;
+    } else {
+        out.z += step.z;
+    }
+    return out;
 }
 
 fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
@@ -113,14 +129,24 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
     let step = vec3<i32>(sign(dir));
 
     for (var ci = 0u; ci < MAX_CHUNK_STEPS; ci++) {
-        let slot = lookup_chunk(chunk_coord);
-        if slot < 0 {
+        // Bounds check: if we left the grid, it's sky.
+        let local = chunk_coord - camera.grid_origin;
+        let grid = vec3<i32>(camera.grid_size);
+        if any(local < vec3(0)) || any(local >= grid) {
             return SKY;
         }
 
-        let ao = atlas_origin(u32(slot));
         let c_min = vec3<f32>(chunk_coord) * CHUNK;
         let c_max = c_min + CHUNK;
+
+        let slot = lookup_chunk(chunk_coord);
+        if slot < 0 {
+            // Empty chunk within grid — skip through to next chunk.
+            chunk_coord = advance_chunk(origin, dir, c_min, c_max, step, chunk_coord);
+            continue;
+        }
+
+        let ao = atlas_origin(u32(slot));
         let c_aabb = intersect_aabb(origin, dir, c_min, c_max);
         let ct = max(c_aabb.x, 0.0) + 0.001;
 

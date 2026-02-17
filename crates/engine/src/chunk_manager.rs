@@ -20,8 +20,18 @@ pub struct ChunkManager {
 }
 
 impl ChunkManager {
+    /// # Panics
+    ///
+    /// Panics if any axis of `atlas_slots` is smaller than `2 * view_distance + 1`.
+    /// The atlas must be at least as large as the visible set to avoid modular
+    /// slot collisions.
     #[must_use]
     pub fn new(device: &wgpu::Device, seed: u32, view_distance: u32, atlas_slots: UVec3) -> Self {
+        let min_slots = 2 * view_distance + 1;
+        assert!(
+            atlas_slots.x >= min_slots && atlas_slots.y >= min_slots && atlas_slots.z >= min_slots,
+            "atlas_slots ({atlas_slots}) must be >= 2*view_distance+1 ({min_slots}) on every axis"
+        );
         Self {
             atlas: ChunkAtlas::new(device, atlas_slots),
             loaded: HashMap::new(),
@@ -175,7 +185,7 @@ mod tests {
 
     fn make_manager(seed: u32, view_distance: u32) -> (GpuContext, ChunkManager) {
         let gpu = pollster::block_on(GpuContext::new_headless());
-        let atlas_slots = UVec3::new(8, 4, 8);
+        let atlas_slots = UVec3::new(8, 8, 8);
         let mgr = ChunkManager::new(&gpu.device, seed, view_distance, atlas_slots);
         (gpu, mgr)
     }
@@ -281,5 +291,13 @@ mod tests {
         let (gpu, mut mgr) = make_manager(42, 1);
         let info = mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
         assert_eq!(info.atlas_slots, mgr.atlas_slots());
+    }
+
+    #[test]
+    #[should_panic(expected = "must be >= 2*view_distance+1")]
+    fn new_panics_on_undersized_atlas() {
+        let gpu = pollster::block_on(GpuContext::new_headless());
+        // vd=3 needs at least 7 per axis; (8, 4, 8) is too small on Y
+        let _mgr = ChunkManager::new(&gpu.device, 42, 3, UVec3::new(8, 4, 8));
     }
 }
