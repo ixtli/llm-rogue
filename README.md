@@ -1,5 +1,7 @@
 # LLM Rogue
 
+**[Try it in your browser](https://ixtli.github.io/llm-rogue/)** (requires WebGPU — Chrome 113+, Edge 113+)
+
 A roguelike with an LLM-generated infinite voxel world. The engine uses sparse
 voxel octrees rendered via GPU ray marching in Rust/WASM (WebGPU), with a
 Solid.js UI overlay. LLMs interact with the world in real time via MCP.
