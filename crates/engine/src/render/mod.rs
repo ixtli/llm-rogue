@@ -14,7 +14,7 @@ use raymarch_pass::RaymarchPass;
 use web_sys::OffscreenCanvas;
 
 #[cfg(feature = "wasm")]
-use crate::camera::{Camera, GridInfo, InputState};
+use crate::camera::{Camera, GridInfo, InputState, SPRINT_MULTIPLIER};
 #[cfg(feature = "wasm")]
 use crate::chunk_manager::ChunkManager;
 #[cfg(feature = "wasm")]
@@ -174,17 +174,24 @@ impl Renderer {
 
     /// Handle a pointer move (look) event. dx/dy are pre-scaled radians.
     pub fn pointer_move(&mut self, dx: f32, dy: f32) {
-        self.camera.apply_look_delta(dx, dy);
+        let m = self.sprint_multiplier();
+        self.camera.apply_look_delta(dx * m, dy * m);
     }
 
     /// Handle a scroll (dolly) event. dy is pre-scaled world units.
     pub fn scroll(&mut self, dy: f32) {
-        self.camera.apply_dolly(dy);
+        let m = self.sprint_multiplier();
+        self.camera.apply_dolly(dy * m);
     }
 
     /// Handle a pan (strafe) event. dx/dy are pre-scaled world units.
     pub fn pan(&mut self, dx: f32, dy: f32) {
-        self.camera.apply_pan(dx, dy);
+        let m = self.sprint_multiplier();
+        self.camera.apply_pan(dx * m, dy * m);
+    }
+
+    fn sprint_multiplier(&self) -> f32 {
+        if self.input.sprint { SPRINT_MULTIPLIER } else { 1.0 }
     }
 
     /// Orient the camera to look at the given world-space position.

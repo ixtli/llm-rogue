@@ -4,8 +4,11 @@ use glam::{IVec3, UVec3, Vec3};
 const MOVE_SPEED: f32 = 10.0;
 const ROTATE_SPEED: f32 = 2.0;
 const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
+/// Speed multiplier when shift is held.
+pub const SPRINT_MULTIPLIER: f32 = 4.0;
 
 /// Camera state: position plus yaw/pitch Euler angles.
+#[derive(Clone)]
 pub struct Camera {
     pub position: Vec3,
     pub yaw: f32,
@@ -59,8 +62,9 @@ impl Camera {
     pub fn update(&mut self, input: &InputState, dt: f32) {
         let (forward, right, _) = self.orientation_vectors();
 
-        let move_amount = MOVE_SPEED * dt;
-        let rot_amount = ROTATE_SPEED * dt;
+        let sprint = if input.sprint { SPRINT_MULTIPLIER } else { 1.0 };
+        let move_amount = MOVE_SPEED * dt * sprint;
+        let rot_amount = ROTATE_SPEED * dt * sprint;
 
         if input.forward {
             self.position += forward * move_amount;
@@ -216,6 +220,7 @@ pub struct InputState {
     pub yaw_right: bool,
     pub pitch_up: bool,
     pub pitch_down: bool,
+    pub sprint: bool,
 }
 
 impl InputState {
@@ -239,6 +244,7 @@ impl InputState {
             "e" => self.yaw_right = pressed,
             "r" => self.pitch_up = pressed,
             "f" => self.pitch_down = pressed,
+            "shift" => self.sprint = pressed,
             _ => {}
         }
     }
@@ -415,6 +421,15 @@ mod tests {
     }
 
     #[test]
+    fn shift_maps_to_sprint() {
+        let mut input = InputState::default();
+        input.key_down("shift");
+        assert!(input.sprint);
+        input.key_up("shift");
+        assert!(!input.sprint);
+    }
+
+    #[test]
     fn update_moves_camera() {
         let mut cam = Camera::default();
         let mut input = InputState::default();
@@ -422,5 +437,30 @@ mod tests {
         let pos_before = cam.position;
         cam.update(&input, 1.0 / 60.0);
         assert_ne!(cam.position, pos_before);
+    }
+
+    #[test]
+    fn sprint_moves_faster() {
+        let dt = 1.0 / 60.0;
+        let mut cam_normal = Camera {
+            yaw: 0.0,
+            pitch: 0.0,
+            ..Camera::default()
+        };
+        let mut cam_sprint = cam_normal.clone();
+
+        let mut input = InputState::default();
+        input.forward = true;
+        cam_normal.update(&input, dt);
+
+        input.sprint = true;
+        cam_sprint.update(&input, dt);
+
+        let normal_dist = (cam_normal.position - DEFAULT_POSITION).length();
+        let sprint_dist = (cam_sprint.position - DEFAULT_POSITION).length();
+        assert!(
+            sprint_dist > normal_dist * (SPRINT_MULTIPLIER - 0.1),
+            "sprint should move ~{SPRINT_MULTIPLIER}x faster"
+        );
     }
 }
