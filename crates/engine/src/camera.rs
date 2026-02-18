@@ -35,6 +35,71 @@ impl EasingKind {
     }
 }
 
+/// Smooth camera transition from one pose to another with easing.
+pub struct CameraAnimation {
+    from_position: Vec3,
+    from_yaw: f32,
+    from_pitch: f32,
+    to_position: Vec3,
+    to_yaw: f32,
+    to_pitch: f32,
+    duration: f32,
+    elapsed: f32,
+    easing: fn(f32) -> f32,
+}
+
+impl CameraAnimation {
+    /// Create a new animation that interpolates between two camera poses.
+    #[must_use]
+    pub fn new(
+        from_position: Vec3,
+        from_yaw: f32,
+        from_pitch: f32,
+        to_position: Vec3,
+        to_yaw: f32,
+        to_pitch: f32,
+        duration: f32,
+        easing_kind: EasingKind,
+    ) -> Self {
+        Self {
+            from_position,
+            from_yaw,
+            from_pitch,
+            to_position,
+            to_yaw,
+            to_pitch,
+            duration,
+            elapsed: 0.0,
+            easing: easing_kind.to_fn(),
+        }
+    }
+
+    /// Advance the animation by `dt` seconds.
+    pub fn advance(&mut self, dt: f32) {
+        self.elapsed = (self.elapsed + dt).min(self.duration);
+    }
+
+    /// Returns `true` when the animation has reached its end.
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        self.elapsed >= self.duration
+    }
+
+    /// Interpolate position, yaw, and pitch at the current elapsed time.
+    #[must_use]
+    pub fn interpolate(&self) -> (Vec3, f32, f32) {
+        let t = if self.duration > 0.0 {
+            (self.easing)(self.elapsed / self.duration)
+        } else {
+            1.0
+        };
+        let pos = self.from_position.lerp(self.to_position, t);
+        let yaw = self.from_yaw + (self.to_yaw - self.from_yaw) * t;
+        let pitch = self.from_pitch + (self.to_pitch - self.from_pitch) * t;
+        (pos, yaw, pitch)
+    }
+}
+
 /// Camera state: position plus yaw/pitch Euler angles.
 #[derive(Clone)]
 pub struct Camera {
@@ -482,6 +547,96 @@ mod tests {
         // At t=0.25, cubic_in_out should differ from linear
         assert!((linear(0.25) - 0.25).abs() < 1e-5);
         assert!((cubic(0.25) - 0.25).abs() > 0.01);
+    }
+
+    #[test]
+    fn animation_starts_at_from() {
+        let anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            1.0,
+            EasingKind::Linear,
+        );
+        let (pos, yaw, pitch) = anim.interpolate();
+        assert!((pos.x).abs() < 1e-5);
+        assert!((yaw).abs() < 1e-5);
+        assert!((pitch).abs() < 1e-5);
+    }
+
+    #[test]
+    fn animation_ends_at_to() {
+        let mut anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            1.0,
+            0.5,
+            1.0,
+            EasingKind::Linear,
+        );
+        anim.advance(1.0);
+        let (pos, yaw, pitch) = anim.interpolate();
+        assert!((pos.x - 10.0).abs() < 1e-5);
+        assert!((yaw - 1.0).abs() < 1e-5);
+        assert!((pitch - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn animation_midpoint_linear() {
+        let mut anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            2.0,
+            EasingKind::Linear,
+        );
+        anim.advance(1.0);
+        let (pos, _, _) = anim.interpolate();
+        assert!((pos.x - 5.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn animation_completes() {
+        let mut anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            1.0,
+            EasingKind::Linear,
+        );
+        assert!(!anim.is_complete());
+        anim.advance(0.5);
+        assert!(!anim.is_complete());
+        anim.advance(0.6);
+        assert!(anim.is_complete());
+    }
+
+    #[test]
+    fn animation_clamps_overshoot() {
+        let mut anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            1.0,
+            EasingKind::Linear,
+        );
+        anim.advance(5.0); // way past duration
+        let (pos, _, _) = anim.interpolate();
+        assert!((pos.x - 10.0).abs() < 1e-5);
     }
 
     #[test]
