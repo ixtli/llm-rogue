@@ -13,7 +13,13 @@ gains a `CameraAnimation` state machine that interpolates camera position using
 the `simple-easing` crate. Existing debug input exports are kept but unused by
 production code.
 
-**Tech Stack:** Rust (wgpu, glam, simple-easing), WGSL, TypeScript, Solid.js
+**Enum boundary:** `CameraIntent` and `EasingKind` enums are defined in Rust
+with `#[wasm_bindgen]`. wasm-bindgen auto-generates TypeScript enum definitions
+in the WASM package. TypeScript imports them from the generated package — no
+hand-maintained ordinal const objects. Single source of truth for the enum
+values lives in Rust.
+
+**Tech Stack:** Rust (wgpu, glam, simple-easing, wasm-bindgen), WGSL, TypeScript, Solid.js
 
 ---
 
@@ -23,8 +29,9 @@ production code.
 - Modify: `crates/engine/Cargo.toml`
 - Modify: `crates/engine/src/camera.rs`
 
-This task adds the easing dependency and a Rust enum that maps `u32` values from
-the WASM boundary to `simple_easing::*` functions.
+This task adds the easing dependency and a Rust enum exported via
+`#[wasm_bindgen]`. wasm-bindgen auto-generates TypeScript definitions — no
+hand-maintained const objects needed.
 
 **Step 1: Add dependency**
 
@@ -40,23 +47,17 @@ Add to `camera.rs` tests module:
 
 ```rust
 #[test]
-fn easing_kind_from_u32_linear() {
-    let f = EasingKind::from_u32(0).to_fn();
+fn easing_kind_linear() {
+    let f = EasingKind::Linear.to_fn();
     assert!((f(0.0)).abs() < 1e-5);
     assert!((f(1.0) - 1.0).abs() < 1e-5);
     assert!((f(0.5) - 0.5).abs() < 1e-5);
 }
 
 #[test]
-fn easing_kind_from_u32_defaults_to_linear() {
-    let f = EasingKind::from_u32(999).to_fn();
-    assert!((f(0.5) - 0.5).abs() < 1e-5);
-}
-
-#[test]
 fn easing_kind_nonlinear_differs() {
-    let linear = EasingKind::from_u32(0).to_fn();
-    let cubic = EasingKind::from_u32(2).to_fn();
+    let linear = EasingKind::Linear.to_fn();
+    let cubic = EasingKind::CubicInOut.to_fn();
     // At t=0.25, cubic_in_out should differ from linear
     assert!((linear(0.25) - 0.25).abs() < 1e-5);
     assert!((cubic(0.25) - 0.25).abs() > 0.01);
@@ -69,33 +70,30 @@ Run: `cargo test -p engine --lib easing_kind`
 
 **Step 4: Implement**
 
-Add to `camera.rs`, above the `Camera` struct:
+Add a conditional import to the top of `camera.rs`:
 
 ```rust
-/// Maps a u32 easing identifier from the WASM boundary to a
-/// `simple_easing` function.
-#[derive(Clone, Copy, Debug)]
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+```
+
+Add the enum above the `Camera` struct:
+
+```rust
+/// Easing curve for camera animations. Exported to TypeScript via
+/// `#[wasm_bindgen]` — import from the WASM package, not messages.ts.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EasingKind {
-    Linear,
-    QuadInOut,
-    CubicInOut,
-    SineInOut,
-    ExpoInOut,
+    Linear = 0,
+    QuadInOut = 1,
+    CubicInOut = 2,
+    SineInOut = 3,
+    ExpoInOut = 4,
 }
 
 impl EasingKind {
-    #[must_use]
-    pub fn from_u32(value: u32) -> Self {
-        match value {
-            0 => Self::Linear,
-            1 => Self::QuadInOut,
-            2 => Self::CubicInOut,
-            3 => Self::SineInOut,
-            4 => Self::ExpoInOut,
-            _ => Self::Linear,
-        }
-    }
-
+    /// Map to a `simple_easing` function pointer.
     #[must_use]
     pub fn to_fn(self) -> fn(f32) -> f32 {
         match self {
@@ -108,6 +106,10 @@ impl EasingKind {
     }
 }
 ```
+
+No `from_u32()` method needed — wasm-bindgen handles the u32 ↔ enum conversion
+at the WASM boundary automatically. Invalid values throw a JavaScript error
+rather than silently defaulting.
 
 **Step 5: Run tests — expect PASS**
 
@@ -279,9 +281,9 @@ feat(camera): add CameraAnimation with easing interpolation
 **Files:**
 - Modify: `crates/engine/src/camera.rs`
 
-Replace key-string matching in `InputState` with an intent enum. The enum uses
-camera terminology (track, truck, pan, tilt). `begin_intent`/`end_intent`
-methods set the boolean fields.
+Replace key-string matching in `InputState` with an intent enum exported via
+`#[wasm_bindgen]`. The enum uses camera terminology (track, truck, pan, tilt).
+`begin_intent`/`end_intent` methods set the boolean fields.
 
 **Step 1: Write tests**
 
@@ -324,14 +326,6 @@ fn intent_all_directions() {
         assert!(!check(&input), "end {intent:?} should clear field");
     }
 }
-
-#[test]
-fn intent_from_u32_round_trips() {
-    for i in 0..=8 {
-        let intent = CameraIntent::from_u32(i);
-        assert!(intent.is_some() || i > 8);
-    }
-}
 ```
 
 **Step 2: Run tests — expect FAIL**
@@ -340,11 +334,14 @@ Run: `cargo test -p engine --lib intent`
 
 **Step 3: Implement**
 
-Add to `camera.rs`:
+Add to `camera.rs` (the `#[cfg(feature = "wasm")] use wasm_bindgen::prelude::*;`
+import was already added in Task 1):
 
 ```rust
 /// Camera movement intents using standard camera terminology.
-/// These cross the WASM boundary as `u32` discriminants.
+/// Exported to TypeScript via `#[wasm_bindgen]` — import from the WASM
+/// package, not messages.ts.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CameraIntent {
     TrackForward = 0,
@@ -357,25 +354,11 @@ pub enum CameraIntent {
     TiltDown = 7,
     Sprint = 8,
 }
-
-impl CameraIntent {
-    #[must_use]
-    pub fn from_u32(value: u32) -> Option<Self> {
-        match value {
-            0 => Some(Self::TrackForward),
-            1 => Some(Self::TrackBackward),
-            2 => Some(Self::TruckLeft),
-            3 => Some(Self::TruckRight),
-            4 => Some(Self::PanLeft),
-            5 => Some(Self::PanRight),
-            6 => Some(Self::TiltUp),
-            7 => Some(Self::TiltDown),
-            8 => Some(Self::Sprint),
-            _ => None,
-        }
-    }
-}
 ```
+
+No `from_u32()` method needed — wasm-bindgen handles the conversion at the
+WASM boundary. Invalid values throw a JavaScript error rather than returning
+`None`.
 
 Add to `impl InputState`:
 
@@ -461,12 +444,12 @@ pub fn animate_camera(
     &mut self,
     to_x: f32, to_y: f32, to_z: f32,
     to_yaw: f32, to_pitch: f32,
-    duration: f32, easing: u32,
+    duration: f32, easing: EasingKind,
 ) {
     self.animation = Some(CameraAnimation::new(
         self.camera.position, self.camera.yaw, self.camera.pitch,
         Vec3::new(to_x, to_y, to_z), to_yaw, to_pitch,
-        duration, EasingKind::from_u32(easing),
+        duration, easing,
     ));
 }
 
@@ -503,17 +486,13 @@ pub fn camera_yaw(&self) -> f32 { self.camera.yaw }
 pub fn camera_pitch(&self) -> f32 { self.camera.pitch }
 
 /// Begin a camera intent (track, truck, pan, tilt, sprint).
-pub fn begin_intent(&mut self, intent_id: u32) {
-    if let Some(intent) = CameraIntent::from_u32(intent_id) {
-        self.input.begin_intent(intent);
-    }
+pub fn begin_intent(&mut self, intent: CameraIntent) {
+    self.input.begin_intent(intent);
 }
 
 /// End a camera intent.
-pub fn end_intent(&mut self, intent_id: u32) {
-    if let Some(intent) = CameraIntent::from_u32(intent_id) {
-        self.input.end_intent(intent);
-    }
+pub fn end_intent(&mut self, intent: CameraIntent) {
+    self.input.end_intent(intent);
 }
 ```
 
@@ -589,12 +568,25 @@ feat(render): integrate CameraAnimation and intent-based input into Renderer
 Thin wrappers that delegate to `Renderer` methods added in Task 4. Follow the
 existing pattern (RENDERER thread-local, borrow_mut).
 
-**Step 1: Add exports**
+`begin_intent` and `end_intent` take `CameraIntent` directly; `animate_camera`
+takes `EasingKind` directly. wasm-bindgen handles the u32 ↔ enum conversion
+at the JS boundary — TypeScript callers pass enum values.
+
+**Step 1: Add imports and exports**
+
+Add to `lib.rs` imports (inside the existing `#[cfg(feature = "wasm")]` block):
+
+```rust
+#[cfg(feature = "wasm")]
+use camera::{CameraIntent, EasingKind};
+```
+
+Add the exports:
 
 ```rust
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
-pub fn begin_intent(intent: u32) {
+pub fn begin_intent(intent: CameraIntent) {
     RENDERER.with(|r| {
         if let Some(renderer) = r.borrow_mut().as_mut() {
             renderer.begin_intent(intent);
@@ -604,7 +596,7 @@ pub fn begin_intent(intent: u32) {
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
-pub fn end_intent(intent: u32) {
+pub fn end_intent(intent: CameraIntent) {
     RENDERER.with(|r| {
         if let Some(renderer) = r.borrow_mut().as_mut() {
             renderer.end_intent(intent);
@@ -627,7 +619,7 @@ pub fn set_camera(x: f32, y: f32, z: f32, yaw: f32, pitch: f32) {
 pub fn animate_camera(
     to_x: f32, to_y: f32, to_z: f32,
     to_yaw: f32, to_pitch: f32,
-    duration: f32, easing: u32,
+    duration: f32, easing: EasingKind,
 ) {
     RENDERER.with(|r| {
         if let Some(renderer) = r.borrow_mut().as_mut() {
@@ -766,32 +758,20 @@ Replace the current message types with the three-thread message vocabulary.
 Keep backward compatibility — the old `MainToRenderMessage` type stays as an
 alias until all consumers are migrated.
 
+**No enum const objects in this file.** `CameraIntent` and `EasingKind` are
+defined in Rust and exported via `#[wasm_bindgen]`. TypeScript imports them
+from the generated WASM package (`crates/engine/pkg/engine`). The message
+types use `number` for intent/easing fields since structured clone (used by
+`postMessage`) serializes enum values as plain numbers.
+
 **Step 1: Write new message types**
 
 Replace `src/messages.ts` contents with:
 
 ```typescript
-// --- Intent enum (mirrors Rust CameraIntent discriminants) ---
-
-export const CameraIntent = {
-  TrackForward: 0,
-  TrackBackward: 1,
-  TruckLeft: 2,
-  TruckRight: 3,
-  PanLeft: 4,
-  PanRight: 5,
-  TiltUp: 6,
-  TiltDown: 7,
-  Sprint: 8,
-} as const;
-
-export const Easing = {
-  Linear: 0,
-  QuadInOut: 1,
-  CubicInOut: 2,
-  SineInOut: 3,
-  ExpoInOut: 4,
-} as const;
+// CameraIntent and EasingKind enums are NOT defined here.
+// They are exported from Rust via #[wasm_bindgen] and imported from the WASM
+// package: import { CameraIntent, EasingKind } from "../../crates/engine/pkg/engine";
 
 // --- UI → Game Worker ---
 
@@ -883,7 +863,10 @@ Import the new WASM exports. Add animation completion polling to the frame loop.
 
 **Step 1: Update imports from WASM**
 
-Add new imports:
+Add new imports. Note: `CameraIntent` and `EasingKind` are also available from
+the WASM package but aren't needed in the render worker — it receives raw
+numeric values via `postMessage` and passes them directly to the WASM functions
+(which accept the enum types; wasm-bindgen converts numbers at the boundary).
 
 ```typescript
 import init, {
@@ -1013,7 +996,8 @@ import type {
   RenderToGameMessage,
   GameToUIMessage,
 } from "../messages";
-import { CameraIntent } from "../messages";
+// CameraIntent is exported from Rust via #[wasm_bindgen] — single source of truth.
+import { CameraIntent } from "../../crates/engine/pkg/engine";
 
 // --- Sensitivity constants (moved from input.ts) ---
 
