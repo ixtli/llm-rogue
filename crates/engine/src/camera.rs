@@ -35,6 +35,23 @@ impl EasingKind {
     }
 }
 
+/// Camera movement intents using standard camera terminology.
+/// Exported to TypeScript via `#[wasm_bindgen]` — import from the WASM
+/// package, not messages.ts.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CameraIntent {
+    TrackForward = 0,
+    TrackBackward = 1,
+    TruckLeft = 2,
+    TruckRight = 3,
+    PanLeft = 4,
+    PanRight = 5,
+    TiltUp = 6,
+    TiltDown = 7,
+    Sprint = 8,
+}
+
 /// Smooth camera transition from one pose to another with easing.
 pub struct CameraAnimation {
     from_position: Vec3,
@@ -341,6 +358,30 @@ impl InputState {
             _ => {}
         }
     }
+
+    /// Activate a camera intent.
+    pub fn begin_intent(&mut self, intent: CameraIntent) {
+        self.set_intent(intent, true);
+    }
+
+    /// Deactivate a camera intent.
+    pub fn end_intent(&mut self, intent: CameraIntent) {
+        self.set_intent(intent, false);
+    }
+
+    fn set_intent(&mut self, intent: CameraIntent, active: bool) {
+        match intent {
+            CameraIntent::TrackForward => self.forward = active,
+            CameraIntent::TrackBackward => self.backward = active,
+            CameraIntent::TruckLeft => self.left = active,
+            CameraIntent::TruckRight => self.right = active,
+            CameraIntent::PanLeft => self.yaw_left = active,
+            CameraIntent::PanRight => self.yaw_right = active,
+            CameraIntent::TiltUp => self.pitch_up = active,
+            CameraIntent::TiltDown => self.pitch_down = active,
+            CameraIntent::Sprint => self.sprint = active,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -637,6 +678,45 @@ mod tests {
         anim.advance(5.0); // way past duration
         let (pos, _, _) = anim.interpolate();
         assert!((pos.x - 10.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn intent_begin_end() {
+        let mut input = InputState::default();
+        input.begin_intent(CameraIntent::TrackForward);
+        assert!(input.forward);
+        input.end_intent(CameraIntent::TrackForward);
+        assert!(!input.forward);
+    }
+
+    #[test]
+    fn intent_sprint() {
+        let mut input = InputState::default();
+        input.begin_intent(CameraIntent::Sprint);
+        assert!(input.sprint);
+        input.end_intent(CameraIntent::Sprint);
+        assert!(!input.sprint);
+    }
+
+    #[test]
+    fn intent_all_directions() {
+        let mut input = InputState::default();
+        let intents: [(CameraIntent, fn(&InputState) -> bool); 8] = [
+            (CameraIntent::TrackForward, |i: &InputState| i.forward),
+            (CameraIntent::TrackBackward, |i: &InputState| i.backward),
+            (CameraIntent::TruckLeft, |i: &InputState| i.left),
+            (CameraIntent::TruckRight, |i: &InputState| i.right),
+            (CameraIntent::PanLeft, |i: &InputState| i.yaw_left),
+            (CameraIntent::PanRight, |i: &InputState| i.yaw_right),
+            (CameraIntent::TiltUp, |i: &InputState| i.pitch_up),
+            (CameraIntent::TiltDown, |i: &InputState| i.pitch_down),
+        ];
+        for (intent, check) in &intents {
+            input.begin_intent(*intent);
+            assert!(check(&input), "begin {intent:?} should set field");
+            input.end_intent(*intent);
+            assert!(!check(&input), "end {intent:?} should clear field");
+        }
     }
 
     #[test]
