@@ -191,7 +191,11 @@ impl Renderer {
     }
 
     fn sprint_multiplier(&self) -> f32 {
-        if self.input.sprint { SPRINT_MULTIPLIER } else { 1.0 }
+        if self.input.sprint {
+            SPRINT_MULTIPLIER
+        } else {
+            1.0
+        }
     }
 
     /// Orient the camera to look at the given world-space position.

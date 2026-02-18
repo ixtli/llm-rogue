@@ -1,11 +1,39 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{IVec3, UVec3, Vec3};
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
 
 const MOVE_SPEED: f32 = 10.0;
 const ROTATE_SPEED: f32 = 2.0;
 const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
 /// Speed multiplier when shift is held.
 pub const SPRINT_MULTIPLIER: f32 = 4.0;
+
+/// Easing curve for camera animations. Exported to TypeScript via
+/// `#[wasm_bindgen]` — import from the WASM package, not messages.ts.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EasingKind {
+    Linear = 0,
+    QuadInOut = 1,
+    CubicInOut = 2,
+    SineInOut = 3,
+    ExpoInOut = 4,
+}
+
+impl EasingKind {
+    /// Map to a `simple_easing` function pointer.
+    #[must_use]
+    pub fn to_fn(self) -> fn(f32) -> f32 {
+        match self {
+            Self::Linear => simple_easing::linear,
+            Self::QuadInOut => simple_easing::quad_in_out,
+            Self::CubicInOut => simple_easing::cubic_in_out,
+            Self::SineInOut => simple_easing::sine_in_out,
+            Self::ExpoInOut => simple_easing::expo_in_out,
+        }
+    }
+}
 
 /// Camera state: position plus yaw/pitch Euler angles.
 #[derive(Clone)]
@@ -437,6 +465,23 @@ mod tests {
         let pos_before = cam.position;
         cam.update(&input, 1.0 / 60.0);
         assert_ne!(cam.position, pos_before);
+    }
+
+    #[test]
+    fn easing_kind_linear() {
+        let f = EasingKind::Linear.to_fn();
+        assert!((f(0.0)).abs() < 1e-5);
+        assert!((f(1.0) - 1.0).abs() < 1e-5);
+        assert!((f(0.5) - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn easing_kind_nonlinear_differs() {
+        let linear = EasingKind::Linear.to_fn();
+        let cubic = EasingKind::CubicInOut.to_fn();
+        // At t=0.25, cubic_in_out should differ from linear
+        assert!((linear(0.25) - 0.25).abs() < 1e-5);
+        assert!((cubic(0.25) - 0.25).abs() > 0.01);
     }
 
     #[test]

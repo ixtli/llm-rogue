@@ -198,6 +198,7 @@ dependencies = [
  "log",
  "noise",
  "pollster",
+ "simple-easing",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -853,6 +854,12 @@ name = "simd-adler32"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
+
+[[package]]
+name = "simple-easing"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c82d449ab1bccfeec125893c6875008206f038d4eb8a09e1e10caf86f44d574e"
 
 [[package]]
 name = "slab"
