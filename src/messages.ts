@@ -1,3 +1,63 @@
+// CameraIntent and EasingKind enums are NOT defined here.
+// They are exported from Rust via #[wasm_bindgen] and imported from the WASM
+// package: import { CameraIntent, EasingKind } from "../../crates/engine/pkg/engine";
+
+// --- UI → Game Worker ---
+
+export type UIToGameMessage =
+  | { type: "init"; canvas: OffscreenCanvas; width: number; height: number }
+  | { type: "key_down"; key: string }
+  | { type: "key_up"; key: string }
+  | { type: "pointer_move"; dx: number; dy: number }
+  | { type: "scroll"; dy: number }
+  | { type: "pan"; dx: number; dy: number };
+
+// --- Game Worker → Render Worker ---
+
+export type GameToRenderMessage =
+  | { type: "init"; canvas: OffscreenCanvas; width: number; height: number }
+  | { type: "begin_intent"; intent: number }
+  | { type: "end_intent"; intent: number }
+  | { type: "set_look_delta"; dyaw: number; dpitch: number }
+  | { type: "set_dolly"; amount: number }
+  | { type: "set_camera"; x: number; y: number; z: number; yaw: number; pitch: number }
+  | {
+      type: "animate_camera";
+      x: number;
+      y: number;
+      z: number;
+      yaw: number;
+      pitch: number;
+      duration: number;
+      easing: number;
+    }
+  | { type: "preload_view"; x: number; y: number; z: number }
+  | { type: "query_camera_position"; id: number }
+  | { type: "query_chunk_loaded"; id: number; cx: number; cy: number; cz: number };
+
+// --- Render Worker → Game Worker ---
+
+export type RenderToGameMessage =
+  | { type: "ready" }
+  | { type: "error"; message: string }
+  | { type: "animation_complete" }
+  | {
+      type: "camera_position";
+      id: number;
+      x: number;
+      y: number;
+      z: number;
+      yaw: number;
+      pitch: number;
+    }
+  | { type: "chunk_loaded"; id: number; loaded: boolean };
+
+// --- Game Worker → UI ---
+
+export type GameToUIMessage = { type: "ready" } | { type: "error"; message: string };
+
+// --- Backward compatibility (used by old debug input path) ---
+
 export type MainToRenderMessage =
   | { type: "init"; canvas: OffscreenCanvas; width: number; height: number }
   | { type: "key_down"; key: string }
