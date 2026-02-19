@@ -1,11 +1,121 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{IVec3, UVec3, Vec3};
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
 
 const MOVE_SPEED: f32 = 10.0;
 const ROTATE_SPEED: f32 = 2.0;
 const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
 /// Speed multiplier when shift is held.
 pub const SPRINT_MULTIPLIER: f32 = 4.0;
+
+/// Easing curve for camera animations. Exported to TypeScript via
+/// `#[wasm_bindgen]` — import from the WASM package, not messages.ts.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EasingKind {
+    Linear = 0,
+    QuadInOut = 1,
+    CubicInOut = 2,
+    SineInOut = 3,
+    ExpoInOut = 4,
+}
+
+impl EasingKind {
+    /// Map to a `simple_easing` function pointer.
+    #[must_use]
+    pub fn to_fn(self) -> fn(f32) -> f32 {
+        match self {
+            Self::Linear => simple_easing::linear,
+            Self::QuadInOut => simple_easing::quad_in_out,
+            Self::CubicInOut => simple_easing::cubic_in_out,
+            Self::SineInOut => simple_easing::sine_in_out,
+            Self::ExpoInOut => simple_easing::expo_in_out,
+        }
+    }
+}
+
+/// Camera movement intents using standard camera terminology.
+/// Exported to TypeScript via `#[wasm_bindgen]` — import from the WASM
+/// package, not messages.ts.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CameraIntent {
+    TrackForward = 0,
+    TrackBackward = 1,
+    TruckLeft = 2,
+    TruckRight = 3,
+    PanLeft = 4,
+    PanRight = 5,
+    TiltUp = 6,
+    TiltDown = 7,
+    Sprint = 8,
+}
+
+/// Smooth camera transition from one pose to another with easing.
+pub struct CameraAnimation {
+    from_position: Vec3,
+    from_yaw: f32,
+    from_pitch: f32,
+    to_position: Vec3,
+    to_yaw: f32,
+    to_pitch: f32,
+    duration: f32,
+    elapsed: f32,
+    easing: fn(f32) -> f32,
+}
+
+impl CameraAnimation {
+    /// Create a new animation that interpolates between two camera poses.
+    #[must_use]
+    pub fn new(
+        from_position: Vec3,
+        from_yaw: f32,
+        from_pitch: f32,
+        to_position: Vec3,
+        to_yaw: f32,
+        to_pitch: f32,
+        duration: f32,
+        easing_kind: EasingKind,
+    ) -> Self {
+        Self {
+            from_position,
+            from_yaw,
+            from_pitch,
+            to_position,
+            to_yaw,
+            to_pitch,
+            duration,
+            elapsed: 0.0,
+            easing: easing_kind.to_fn(),
+        }
+    }
+
+    /// Advance the animation by `dt` seconds.
+    pub fn advance(&mut self, dt: f32) {
+        self.elapsed = (self.elapsed + dt).min(self.duration);
+    }
+
+    /// Returns `true` when the animation has reached its end.
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        self.elapsed >= self.duration
+    }
+
+    /// Interpolate position, yaw, and pitch at the current elapsed time.
+    #[must_use]
+    pub fn interpolate(&self) -> (Vec3, f32, f32) {
+        let t = if self.duration > 0.0 {
+            (self.easing)(self.elapsed / self.duration)
+        } else {
+            1.0
+        };
+        let pos = self.from_position.lerp(self.to_position, t);
+        let yaw = self.from_yaw + (self.to_yaw - self.from_yaw) * t;
+        let pitch = self.from_pitch + (self.to_pitch - self.from_pitch) * t;
+        (pos, yaw, pitch)
+    }
+}
 
 /// Camera state: position plus yaw/pitch Euler angles.
 #[derive(Clone)]
@@ -248,6 +358,30 @@ impl InputState {
             _ => {}
         }
     }
+
+    /// Activate a camera intent.
+    pub fn begin_intent(&mut self, intent: CameraIntent) {
+        self.set_intent(intent, true);
+    }
+
+    /// Deactivate a camera intent.
+    pub fn end_intent(&mut self, intent: CameraIntent) {
+        self.set_intent(intent, false);
+    }
+
+    fn set_intent(&mut self, intent: CameraIntent, active: bool) {
+        match intent {
+            CameraIntent::TrackForward => self.forward = active,
+            CameraIntent::TrackBackward => self.backward = active,
+            CameraIntent::TruckLeft => self.left = active,
+            CameraIntent::TruckRight => self.right = active,
+            CameraIntent::PanLeft => self.yaw_left = active,
+            CameraIntent::PanRight => self.yaw_right = active,
+            CameraIntent::TiltUp => self.pitch_up = active,
+            CameraIntent::TiltDown => self.pitch_down = active,
+            CameraIntent::Sprint => self.sprint = active,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -437,6 +571,152 @@ mod tests {
         let pos_before = cam.position;
         cam.update(&input, 1.0 / 60.0);
         assert_ne!(cam.position, pos_before);
+    }
+
+    #[test]
+    fn easing_kind_linear() {
+        let f = EasingKind::Linear.to_fn();
+        assert!((f(0.0)).abs() < 1e-5);
+        assert!((f(1.0) - 1.0).abs() < 1e-5);
+        assert!((f(0.5) - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn easing_kind_nonlinear_differs() {
+        let linear = EasingKind::Linear.to_fn();
+        let cubic = EasingKind::CubicInOut.to_fn();
+        // At t=0.25, cubic_in_out should differ from linear
+        assert!((linear(0.25) - 0.25).abs() < 1e-5);
+        assert!((cubic(0.25) - 0.25).abs() > 0.01);
+    }
+
+    #[test]
+    fn animation_starts_at_from() {
+        let anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            1.0,
+            EasingKind::Linear,
+        );
+        let (pos, yaw, pitch) = anim.interpolate();
+        assert!((pos.x).abs() < 1e-5);
+        assert!((yaw).abs() < 1e-5);
+        assert!((pitch).abs() < 1e-5);
+    }
+
+    #[test]
+    fn animation_ends_at_to() {
+        let mut anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            1.0,
+            0.5,
+            1.0,
+            EasingKind::Linear,
+        );
+        anim.advance(1.0);
+        let (pos, yaw, pitch) = anim.interpolate();
+        assert!((pos.x - 10.0).abs() < 1e-5);
+        assert!((yaw - 1.0).abs() < 1e-5);
+        assert!((pitch - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn animation_midpoint_linear() {
+        let mut anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            2.0,
+            EasingKind::Linear,
+        );
+        anim.advance(1.0);
+        let (pos, _, _) = anim.interpolate();
+        assert!((pos.x - 5.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn animation_completes() {
+        let mut anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            1.0,
+            EasingKind::Linear,
+        );
+        assert!(!anim.is_complete());
+        anim.advance(0.5);
+        assert!(!anim.is_complete());
+        anim.advance(0.6);
+        assert!(anim.is_complete());
+    }
+
+    #[test]
+    fn animation_clamps_overshoot() {
+        let mut anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(10.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            1.0,
+            EasingKind::Linear,
+        );
+        anim.advance(5.0); // way past duration
+        let (pos, _, _) = anim.interpolate();
+        assert!((pos.x - 10.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn intent_begin_end() {
+        let mut input = InputState::default();
+        input.begin_intent(CameraIntent::TrackForward);
+        assert!(input.forward);
+        input.end_intent(CameraIntent::TrackForward);
+        assert!(!input.forward);
+    }
+
+    #[test]
+    fn intent_sprint() {
+        let mut input = InputState::default();
+        input.begin_intent(CameraIntent::Sprint);
+        assert!(input.sprint);
+        input.end_intent(CameraIntent::Sprint);
+        assert!(!input.sprint);
+    }
+
+    #[test]
+    fn intent_all_directions() {
+        let mut input = InputState::default();
+        let intents: [(CameraIntent, fn(&InputState) -> bool); 8] = [
+            (CameraIntent::TrackForward, |i: &InputState| i.forward),
+            (CameraIntent::TrackBackward, |i: &InputState| i.backward),
+            (CameraIntent::TruckLeft, |i: &InputState| i.left),
+            (CameraIntent::TruckRight, |i: &InputState| i.right),
+            (CameraIntent::PanLeft, |i: &InputState| i.yaw_left),
+            (CameraIntent::PanRight, |i: &InputState| i.yaw_right),
+            (CameraIntent::TiltUp, |i: &InputState| i.pitch_up),
+            (CameraIntent::TiltDown, |i: &InputState| i.pitch_down),
+        ];
+        for (intent, check) in &intents {
+            input.begin_intent(*intent);
+            assert!(check(&input), "begin {intent:?} should set field");
+            input.end_intent(*intent);
+            assert!(!check(&input), "end {intent:?} should clear field");
+        }
     }
 
     #[test]

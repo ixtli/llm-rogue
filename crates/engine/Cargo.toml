@@ -23,6 +23,7 @@ log = "0.4"
 noise = "0.9"
 bytemuck = { version = "1", features = ["derive"] }
 glam = { version = "0.29", features = ["bytemuck"] }
+simple-easing = "1"
 
 # WASM-only dependencies, gated behind the "wasm" feature
 wasm-bindgen = { version = "0.2", optional = true }

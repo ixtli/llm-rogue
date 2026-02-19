@@ -1,6 +1,6 @@
 import { type Component, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { setupInputHandlers } from "../input";
-import type { MainToRenderMessage, RenderToMainMessage } from "../messages";
+import type { GameToUIMessage, UIToGameMessage } from "../messages";
 import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
@@ -29,11 +29,11 @@ const App: Component<AppProps> = (props) => {
     if (!canvasRef) return;
 
     const offscreen = canvasRef.transferControlToOffscreen();
-    const worker = new Worker(new URL("../workers/render.worker.ts", import.meta.url), {
+    const worker = new Worker(new URL("../workers/game.worker.ts", import.meta.url), {
       type: "module",
     });
 
-    worker.onmessage = (e: MessageEvent<RenderToMainMessage>) => {
+    worker.onmessage = (e: MessageEvent<GameToUIMessage>) => {
       if (e.data.type === "ready") {
         setStatus("click to look | WASD move | scroll zoom");
       } else if (e.data.type === "error") {
@@ -47,18 +47,18 @@ const App: Component<AppProps> = (props) => {
         canvas: offscreen,
         width: window.innerWidth,
         height: window.innerHeight,
-      } satisfies MainToRenderMessage,
+      } satisfies UIToGameMessage,
       [offscreen],
     );
 
     // Keyboard input
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      worker.postMessage({ type: "key_down", key } satisfies MainToRenderMessage);
+      worker.postMessage({ type: "key_down", key } satisfies UIToGameMessage);
     };
     const onKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      worker.postMessage({ type: "key_up", key } satisfies MainToRenderMessage);
+      worker.postMessage({ type: "key_up", key } satisfies UIToGameMessage);
     };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);

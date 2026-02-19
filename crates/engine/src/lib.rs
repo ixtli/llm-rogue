@@ -5,6 +5,9 @@ use wasm_bindgen::prelude::*;
 #[cfg(feature = "wasm")]
 use web_sys::OffscreenCanvas;
 
+#[cfg(feature = "wasm")]
+use camera::{CameraIntent, EasingKind};
+
 pub mod camera;
 pub mod chunk_manager;
 pub mod render;
@@ -104,4 +107,162 @@ pub fn look_at(x: f32, y: f32, z: f32) {
             renderer.look_at(x, y, z);
         }
     });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn begin_intent(intent: CameraIntent) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.begin_intent(intent);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn end_intent(intent: CameraIntent) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.end_intent(intent);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn set_camera(x: f32, y: f32, z: f32, yaw: f32, pitch: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.set_camera(x, y, z, yaw, pitch);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn animate_camera(
+    to_x: f32,
+    to_y: f32,
+    to_z: f32,
+    to_yaw: f32,
+    to_pitch: f32,
+    duration: f32,
+    easing: EasingKind,
+) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.animate_camera(to_x, to_y, to_z, to_yaw, to_pitch, duration, easing);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn preload_view(x: f32, y: f32, z: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.preload_view(x, y, z);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn set_look_delta(dyaw: f32, dpitch: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.pointer_move(dyaw, dpitch);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn set_dolly(amount: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.scroll(amount);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn camera_x() -> f32 {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(0.0, |renderer| renderer.camera_x())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn camera_y() -> f32 {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(0.0, |renderer| renderer.camera_y())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn camera_z() -> f32 {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(0.0, |renderer| renderer.camera_z())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn camera_yaw() -> f32 {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(0.0, |renderer| renderer.camera_yaw())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn camera_pitch() -> f32 {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(0.0, |renderer| renderer.camera_pitch())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn is_animating() -> bool {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(false, |renderer| renderer.is_animating())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn take_animation_completed() -> bool {
+    RENDERER.with(|r| {
+        r.borrow_mut()
+            .as_mut()
+            .map_or(false, |renderer| renderer.take_animation_completed())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn is_chunk_loaded_at(cx: i32, cy: i32, cz: i32) -> bool {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(false, |renderer| renderer.is_chunk_loaded(cx, cy, cz))
+    })
 }

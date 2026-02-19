@@ -1,4 +1,4 @@
-import type { MainToRenderMessage } from "./messages";
+import type { UIToGameMessage } from "./messages";
 
 // --- Sensitivity constants ---
 
@@ -24,7 +24,7 @@ const TOUCH_PINCH_SPEED = 0.05;
 const TOUCH_PAN_SPEED = 0.05;
 
 export interface InputCallbacks {
-  postMessage(msg: MainToRenderMessage): void;
+  postMessage(msg: UIToGameMessage): void;
   onPointerLockChange(locked: boolean): void;
 }
 

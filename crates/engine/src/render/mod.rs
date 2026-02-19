@@ -14,13 +14,15 @@ use raymarch_pass::RaymarchPass;
 use web_sys::OffscreenCanvas;
 
 #[cfg(feature = "wasm")]
-use crate::camera::{Camera, GridInfo, InputState, SPRINT_MULTIPLIER};
+use crate::camera::{
+    Camera, CameraAnimation, CameraIntent, EasingKind, GridInfo, InputState, SPRINT_MULTIPLIER,
+};
 #[cfg(feature = "wasm")]
 use crate::chunk_manager::ChunkManager;
 #[cfg(feature = "wasm")]
 use crate::voxel::TEST_GRID_SEED;
 #[cfg(feature = "wasm")]
-use glam::UVec3;
+use glam::{UVec3, Vec3};
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
@@ -58,6 +60,9 @@ pub struct Renderer {
     camera: Camera,
     grid_info: GridInfo,
     input: InputState,
+    animation: Option<CameraAnimation>,
+    preload_position: Option<Vec3>,
+    animation_just_completed: bool,
     width: u32,
     height: u32,
     last_time: f32,
@@ -110,6 +115,9 @@ impl Renderer {
             camera,
             grid_info,
             input: InputState::default(),
+            animation: None,
+            preload_position: None,
+            animation_just_completed: false,
             width,
             height,
             last_time: 0.0,
@@ -129,10 +137,32 @@ impl Renderer {
         };
         self.last_time = time;
 
-        self.camera.update(&self.input, dt);
+        // Animation takes priority over manual input.
+        if let Some(anim) = &mut self.animation {
+            anim.advance(dt);
+            let (pos, yaw, pitch) = anim.interpolate();
+            self.camera.position = pos;
+            self.camera.yaw = yaw;
+            self.camera.pitch = pitch;
+            if anim.is_complete() {
+                self.animation = None;
+                self.animation_just_completed = true;
+            }
+        } else {
+            self.camera.update(&self.input, dt);
+        }
+
         self.grid_info = self
             .chunk_manager
             .tick(&self.gpu.queue, self.camera.position);
+
+        // Load chunks around preload position if set.
+        if let Some(preload) = self.preload_position {
+            let vd = self.chunk_manager.view_distance();
+            for coord in ChunkManager::compute_visible_set(preload, vd) {
+                self.chunk_manager.load_chunk(&self.gpu.queue, coord);
+            }
+        }
 
         let camera_uniform = self
             .camera
@@ -191,7 +221,101 @@ impl Renderer {
     }
 
     fn sprint_multiplier(&self) -> f32 {
-        if self.input.sprint { SPRINT_MULTIPLIER } else { 1.0 }
+        if self.input.sprint {
+            SPRINT_MULTIPLIER
+        } else {
+            1.0
+        }
+    }
+
+    /// Snap camera to a position and orientation. Cancels any animation.
+    pub fn set_camera(&mut self, x: f32, y: f32, z: f32, yaw: f32, pitch: f32) {
+        self.animation = None;
+        self.camera.position = Vec3::new(x, y, z);
+        self.camera.yaw = yaw;
+        self.camera.pitch = pitch;
+        self.camera.clamp_pitch();
+    }
+
+    /// Begin a smooth camera animation from the current pose.
+    pub fn animate_camera(
+        &mut self,
+        to_x: f32,
+        to_y: f32,
+        to_z: f32,
+        to_yaw: f32,
+        to_pitch: f32,
+        duration: f32,
+        easing: EasingKind,
+    ) {
+        self.animation = Some(CameraAnimation::new(
+            self.camera.position,
+            self.camera.yaw,
+            self.camera.pitch,
+            Vec3::new(to_x, to_y, to_z),
+            to_yaw,
+            to_pitch,
+            duration,
+            easing,
+        ));
+    }
+
+    /// Hint that the camera will move to this position soon.
+    /// Chunks around this position will be loaded.
+    pub fn preload_view(&mut self, x: f32, y: f32, z: f32) {
+        self.preload_position = Some(Vec3::new(x, y, z));
+    }
+
+    /// Whether a camera animation is currently in progress.
+    #[must_use]
+    pub fn is_animating(&self) -> bool {
+        self.animation.is_some()
+    }
+
+    /// Whether an animation completed since the last call to this method.
+    /// The render worker polls this each frame to send `animation_complete`.
+    pub fn take_animation_completed(&mut self) -> bool {
+        let completed = self.animation_just_completed;
+        self.animation_just_completed = false;
+        completed
+    }
+
+    // Camera state getters for query responses.
+    #[must_use]
+    pub fn camera_x(&self) -> f32 {
+        self.camera.position.x
+    }
+    #[must_use]
+    pub fn camera_y(&self) -> f32 {
+        self.camera.position.y
+    }
+    #[must_use]
+    pub fn camera_z(&self) -> f32 {
+        self.camera.position.z
+    }
+    #[must_use]
+    pub fn camera_yaw(&self) -> f32 {
+        self.camera.yaw
+    }
+    #[must_use]
+    pub fn camera_pitch(&self) -> f32 {
+        self.camera.pitch
+    }
+
+    /// Begin a camera intent (track, truck, pan, tilt, sprint).
+    pub fn begin_intent(&mut self, intent: CameraIntent) {
+        self.input.begin_intent(intent);
+    }
+
+    /// End a camera intent.
+    pub fn end_intent(&mut self, intent: CameraIntent) {
+        self.input.end_intent(intent);
+    }
+
+    /// Whether a chunk at the given chunk coordinate is currently loaded.
+    #[must_use]
+    pub fn is_chunk_loaded(&self, cx: i32, cy: i32, cz: i32) -> bool {
+        self.chunk_manager.is_loaded(glam::IVec3::new(cx, cy, cz))
     }
 
     /// Orient the camera to look at the given world-space position.
