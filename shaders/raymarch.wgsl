@@ -31,6 +31,68 @@ const SUN_DIR: vec3<f32> = vec3<f32>(0.3713907, 0.7427814, 0.2228344);
 const MAX_VOXEL_STEPS: u32 = 128u;
 const MAX_CHUNK_STEPS: u32 = 32u;
 const SHADOW_BIAS: f32 = 0.01;
+const AO_DISTANCE: f32 = 6.0;
+const AO_SAMPLES: u32 = 6u;
+
+// AO sample directions for +X normal face
+const AO_POS_X: array<vec3<f32>, 6> = array(
+    vec3(1.0, 0.0, 0.0),
+    vec3(0.707, 0.707, 0.0),
+    vec3(0.707, -0.707, 0.0),
+    vec3(0.707, 0.0, 0.707),
+    vec3(0.707, 0.0, -0.707),
+    vec3(0.577, 0.577, 0.577),
+);
+
+// AO sample directions for -X normal face
+const AO_NEG_X: array<vec3<f32>, 6> = array(
+    vec3(-1.0, 0.0, 0.0),
+    vec3(-0.707, 0.707, 0.0),
+    vec3(-0.707, -0.707, 0.0),
+    vec3(-0.707, 0.0, 0.707),
+    vec3(-0.707, 0.0, -0.707),
+    vec3(-0.577, 0.577, 0.577),
+);
+
+// AO sample directions for +Y normal face
+const AO_POS_Y: array<vec3<f32>, 6> = array(
+    vec3(0.0, 1.0, 0.0),
+    vec3(0.707, 0.707, 0.0),
+    vec3(-0.707, 0.707, 0.0),
+    vec3(0.0, 0.707, 0.707),
+    vec3(0.0, 0.707, -0.707),
+    vec3(0.577, 0.577, 0.577),
+);
+
+// AO sample directions for -Y normal face
+const AO_NEG_Y: array<vec3<f32>, 6> = array(
+    vec3(0.0, -1.0, 0.0),
+    vec3(0.707, -0.707, 0.0),
+    vec3(-0.707, -0.707, 0.0),
+    vec3(0.0, -0.707, 0.707),
+    vec3(0.0, -0.707, -0.707),
+    vec3(0.577, -0.577, 0.577),
+);
+
+// AO sample directions for +Z normal face
+const AO_POS_Z: array<vec3<f32>, 6> = array(
+    vec3(0.0, 0.0, 1.0),
+    vec3(0.707, 0.0, 0.707),
+    vec3(-0.707, 0.0, 0.707),
+    vec3(0.0, 0.707, 0.707),
+    vec3(0.0, -0.707, 0.707),
+    vec3(0.577, 0.577, 0.577),
+);
+
+// AO sample directions for -Z normal face
+const AO_NEG_Z: array<vec3<f32>, 6> = array(
+    vec3(0.0, 0.0, -1.0),
+    vec3(0.707, 0.0, -0.707),
+    vec3(-0.707, 0.0, -0.707),
+    vec3(0.0, 0.707, -0.707),
+    vec3(0.0, -0.707, -0.707),
+    vec3(0.577, 0.577, -0.577),
+);
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
