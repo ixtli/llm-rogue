@@ -396,6 +396,31 @@ fn trace_ray(origin: vec3<f32>, dir: vec3<f32>, max_dist: f32) -> bool {
     return false;
 }
 
+/// Sample ambient occlusion by casting short rays into the hemisphere
+/// around the surface normal. Returns a value in [0, 1] where 1 is
+/// fully open and 0 is fully occluded.
+fn trace_ao(origin: vec3<f32>, face: u32, step: vec3<i32>) -> f32 {
+    // Select the sample direction set based on face normal.
+    // Normal direction is -step on the hit face axis.
+    var dirs: array<vec3<f32>, 6>;
+    if face == 0u {
+        if step.x > 0 { dirs = AO_NEG_X; } else { dirs = AO_POS_X; }
+    } else if face == 1u {
+        if step.y > 0 { dirs = AO_NEG_Y; } else { dirs = AO_POS_Y; }
+    } else {
+        if step.z > 0 { dirs = AO_NEG_Z; } else { dirs = AO_POS_Z; }
+    }
+
+    var hits = 0u;
+    for (var i = 0u; i < AO_SAMPLES; i++) {
+        if trace_ray(origin, dirs[i], AO_DISTANCE) {
+            hits += 1u;
+        }
+    }
+
+    return 1.0 - f32(hits) / f32(AO_SAMPLES);
+}
+
 fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f32> {
     var normal = vec3<f32>(0.0);
     if face == 0u { normal.x = -f32(step.x); }
@@ -405,7 +430,8 @@ fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f3
     let base = palette[mat_id];
     let shadow_origin = hit_pos + normal * SHADOW_BIAS;
     let in_shadow = trace_ray(shadow_origin, SUN_DIR, camera.max_ray_distance);
+    let ao = trace_ao(shadow_origin, face, step);
     let diffuse = select(max(dot(normal, SUN_DIR), 0.0), 0.0, in_shadow);
-    let ambient = 0.1;
+    let ambient = 0.15 * ao;
     return vec4(base.rgb * (ambient + diffuse), 1.0);
 }
