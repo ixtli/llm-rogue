@@ -84,6 +84,19 @@ const EDGE_POSITION: Vec3 = Vec3::new(2.0, 45.0, 2.0);
 const EDGE_YAW: f32 = std::f32::consts::PI;
 const EDGE_PITCH: f32 = -0.3;
 
+/// Shadow view: low angle from the -X side, looking across terrain to see
+/// shadows cast by ridges on the far side from the sun direction.
+/// Sun comes from (+X, +Y, +Z); shadows fall on the -X side of ridges.
+const SHADOW_POSITION: Vec3 = Vec3::new(10.0, 30.0, GRID_EXTENT_Z * 0.5);
+const SHADOW_YAW: f32 = std::f32::consts::FRAC_PI_2; // looking toward +X
+const SHADOW_PITCH: f32 = -0.4;
+
+/// AO view: looking down into a valley between ridges where ambient occlusion
+/// should darken the terrain where surfaces meet at concave angles.
+const AO_POSITION: Vec3 = Vec3::new(GRID_EXTENT_X * 0.5, 50.0, GRID_EXTENT_Z * 0.3);
+const AO_YAW: f32 = std::f32::consts::PI;
+const AO_PITCH: f32 = -0.6;
+
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
@@ -322,4 +335,18 @@ fn regression_edge() {
     let renderer = HeadlessRenderer::new();
     let camera = test_camera(EDGE_POSITION, EDGE_YAW, EDGE_PITCH);
     regression_check(&renderer, "edge", &camera);
+}
+
+#[test]
+fn regression_shadow() {
+    let renderer = HeadlessRenderer::new();
+    let camera = test_camera(SHADOW_POSITION, SHADOW_YAW, SHADOW_PITCH);
+    regression_check(&renderer, "shadow", &camera);
+}
+
+#[test]
+fn regression_ao() {
+    let renderer = HeadlessRenderer::new();
+    let camera = test_camera(AO_POSITION, AO_YAW, AO_PITCH);
+    regression_check(&renderer, "ao", &camera);
 }
