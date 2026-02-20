@@ -37,61 +37,61 @@ const AO_SAMPLES: u32 = 6u;
 // AO sample directions for +X normal face
 const AO_POS_X: array<vec3<f32>, 6> = array(
     vec3(1.0, 0.0, 0.0),
-    vec3(0.707, 0.707, 0.0),
-    vec3(0.707, -0.707, 0.0),
-    vec3(0.707, 0.0, 0.707),
-    vec3(0.707, 0.0, -0.707),
-    vec3(0.577, 0.577, 0.577),
+    vec3(0.7071068, 0.7071068, 0.0),
+    vec3(0.7071068, -0.7071068, 0.0),
+    vec3(0.7071068, 0.0, 0.7071068),
+    vec3(0.7071068, 0.0, -0.7071068),
+    vec3(0.5773503, 0.5773503, 0.5773503),
 );
 
 // AO sample directions for -X normal face
 const AO_NEG_X: array<vec3<f32>, 6> = array(
     vec3(-1.0, 0.0, 0.0),
-    vec3(-0.707, 0.707, 0.0),
-    vec3(-0.707, -0.707, 0.0),
-    vec3(-0.707, 0.0, 0.707),
-    vec3(-0.707, 0.0, -0.707),
-    vec3(-0.577, 0.577, 0.577),
+    vec3(-0.7071068, 0.7071068, 0.0),
+    vec3(-0.7071068, -0.7071068, 0.0),
+    vec3(-0.7071068, 0.0, 0.7071068),
+    vec3(-0.7071068, 0.0, -0.7071068),
+    vec3(-0.5773503, 0.5773503, 0.5773503),
 );
 
 // AO sample directions for +Y normal face
 const AO_POS_Y: array<vec3<f32>, 6> = array(
     vec3(0.0, 1.0, 0.0),
-    vec3(0.707, 0.707, 0.0),
-    vec3(-0.707, 0.707, 0.0),
-    vec3(0.0, 0.707, 0.707),
-    vec3(0.0, 0.707, -0.707),
-    vec3(0.577, 0.577, 0.577),
+    vec3(0.7071068, 0.7071068, 0.0),
+    vec3(-0.7071068, 0.7071068, 0.0),
+    vec3(0.0, 0.7071068, 0.7071068),
+    vec3(0.0, 0.7071068, -0.7071068),
+    vec3(0.5773503, 0.5773503, 0.5773503),
 );
 
 // AO sample directions for -Y normal face
 const AO_NEG_Y: array<vec3<f32>, 6> = array(
     vec3(0.0, -1.0, 0.0),
-    vec3(0.707, -0.707, 0.0),
-    vec3(-0.707, -0.707, 0.0),
-    vec3(0.0, -0.707, 0.707),
-    vec3(0.0, -0.707, -0.707),
-    vec3(0.577, -0.577, 0.577),
+    vec3(0.7071068, -0.7071068, 0.0),
+    vec3(-0.7071068, -0.7071068, 0.0),
+    vec3(0.0, -0.7071068, 0.7071068),
+    vec3(0.0, -0.7071068, -0.7071068),
+    vec3(0.5773503, -0.5773503, 0.5773503),
 );
 
 // AO sample directions for +Z normal face
 const AO_POS_Z: array<vec3<f32>, 6> = array(
     vec3(0.0, 0.0, 1.0),
-    vec3(0.707, 0.0, 0.707),
-    vec3(-0.707, 0.0, 0.707),
-    vec3(0.0, 0.707, 0.707),
-    vec3(0.0, -0.707, 0.707),
-    vec3(0.577, 0.577, 0.577),
+    vec3(0.7071068, 0.0, 0.7071068),
+    vec3(-0.7071068, 0.0, 0.7071068),
+    vec3(0.0, 0.7071068, 0.7071068),
+    vec3(0.0, -0.7071068, 0.7071068),
+    vec3(0.5773503, 0.5773503, 0.5773503),
 );
 
 // AO sample directions for -Z normal face
 const AO_NEG_Z: array<vec3<f32>, 6> = array(
     vec3(0.0, 0.0, -1.0),
-    vec3(0.707, 0.0, -0.707),
-    vec3(-0.707, 0.0, -0.707),
-    vec3(0.0, 0.707, -0.707),
-    vec3(0.0, -0.707, -0.707),
-    vec3(0.577, 0.577, -0.577),
+    vec3(0.7071068, 0.0, -0.7071068),
+    vec3(-0.7071068, 0.0, -0.7071068),
+    vec3(0.0, 0.7071068, -0.7071068),
+    vec3(0.0, -0.7071068, -0.7071068),
+    vec3(0.5773503, 0.5773503, -0.5773503),
 );
 
 @compute @workgroup_size(8, 8)
@@ -209,11 +209,11 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
             continue;
         }
 
-        let ao = atlas_origin(u32(slot));
+        let slot_off = atlas_origin(u32(slot));
         let c_aabb = intersect_aabb(origin, dir, c_min, c_max);
         let ct = max(c_aabb.x, 0.0) + 0.001;
 
-        let result = dda_chunk(origin, dir, ct, c_min, ao, step);
+        let result = dda_chunk(origin, dir, ct, c_min, slot_off, step);
         if result.x >= 0.0 {
             // Hit — result encodes (material_id, face, t_hit, _)
             let mat_id = u32(result.x);
@@ -239,7 +239,7 @@ fn dda_chunk(
     origin: vec3<f32>, dir: vec3<f32>,
     t_start: f32,
     chunk_min: vec3<f32>,
-    ao: vec3<u32>,
+    slot_off: vec3<u32>,
     step: vec3<i32>,
 ) -> vec4<f32> {
     let local_pos = origin + dir * t_start - chunk_min;
@@ -262,7 +262,7 @@ fn dda_chunk(
             return vec4(-f32(face) - 1.0, 0.0, 0.0, 0.0);
         }
 
-        let texel = textureLoad(atlas, ao + vec3<u32>(map), 0);
+        let texel = textureLoad(atlas, slot_off + vec3<u32>(map), 0);
         if texel.r != 0u {
             // Compute t of entry into this voxel: side was already advanced past
             // the crossing, so subtract delta to get the crossing t (in local space).
@@ -295,7 +295,7 @@ fn trace_ray_chunk(
     origin: vec3<f32>, dir: vec3<f32>,
     t_start: f32,
     chunk_min: vec3<f32>,
-    ao: vec3<u32>,
+    slot_off: vec3<u32>,
     step: vec3<i32>,
     max_t: f32,
 ) -> bool {
@@ -323,7 +323,7 @@ fn trace_ray_chunk(
             return false;
         }
 
-        let texel = textureLoad(atlas, ao + vec3<u32>(map), 0);
+        let texel = textureLoad(atlas, slot_off + vec3<u32>(map), 0);
         if texel.r != 0u {
             return true;
         }
@@ -373,11 +373,11 @@ fn trace_ray(origin: vec3<f32>, dir: vec3<f32>, max_dist: f32) -> bool {
 
         let slot = lookup_chunk(chunk_coord);
         if slot >= 0 {
-            let ao = atlas_origin(u32(slot));
+            let slot_off = atlas_origin(u32(slot));
             let c_aabb = intersect_aabb(origin, dir, c_min, c_max);
             let ct = max(c_aabb.x, 0.0) + 0.001;
 
-            if trace_ray_chunk(origin, dir, ct, c_min, ao, step, max_t) {
+            if trace_ray_chunk(origin, dir, ct, c_min, slot_off, step, max_t) {
                 return true;
             }
         }
