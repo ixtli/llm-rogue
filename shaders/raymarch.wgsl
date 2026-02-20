@@ -152,10 +152,11 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
 
         let result = dda_chunk(origin, dir, ct, c_min, ao, step);
         if result.x >= 0.0 {
-            // Hit — result encodes (material_id_f32, face_f32, _, _)
+            // Hit — result encodes (material_id, face, t_hit, _)
             let mat_id = u32(result.x);
             let face = u32(result.y);
-            return shade(mat_id, face, step);
+            let hit_pos = origin + dir * result.z;
+            return shade(mat_id, face, step, hit_pos);
         }
 
         // Advance to next chunk along the exit face.
@@ -169,8 +170,8 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
 }
 
 /// DDA within a single chunk. Returns:
-///   hit:  vec4(material_id, face, 0, 0)  — material_id > 0
-///   miss: vec4(-(exit_face+1), 0, 0, 0)  — encodes which face the ray exited
+///   hit:  vec4(material_id, face, t_hit, 0)  — material_id > 0, t_hit is world-space parametric distance
+///   miss: vec4(-(exit_face+1), 0, 0, 0)      — encodes which face the ray exited
 fn dda_chunk(
     origin: vec3<f32>, dir: vec3<f32>,
     t_start: f32,
@@ -200,7 +201,17 @@ fn dda_chunk(
 
         let texel = textureLoad(atlas, ao + vec3<u32>(map), 0);
         if texel.r != 0u {
-            return vec4(f32(texel.r), f32(face), 0.0, 0.0);
+            // Compute t of entry into this voxel: side was already advanced past
+            // the crossing, so subtract delta to get the crossing t (in local space).
+            var t_voxel_entry: f32;
+            if face == 0u {
+                t_voxel_entry = side.x - delta.x;
+            } else if face == 1u {
+                t_voxel_entry = side.y - delta.y;
+            } else {
+                t_voxel_entry = side.z - delta.z;
+            }
+            return vec4(f32(texel.r), f32(face), t_start + t_voxel_entry, 0.0);
         }
 
         if side.x < side.y && side.x < side.z {
@@ -216,7 +227,7 @@ fn dda_chunk(
     return vec4(-f32(face) - 1.0, 0.0, 0.0, 0.0);
 }
 
-fn shade(mat_id: u32, face: u32, step: vec3<i32>) -> vec4<f32> {
+fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f32> {
     var normal = vec3<f32>(0.0);
     if face == 0u { normal.x = -f32(step.x); }
     else if face == 1u { normal.y = -f32(step.y); }
