@@ -30,6 +30,7 @@ const SKY: vec4<f32> = vec4<f32>(0.4, 0.6, 0.9, 1.0);
 const SUN_DIR: vec3<f32> = vec3<f32>(0.3713907, 0.7427814, 0.2228344);
 const MAX_VOXEL_STEPS: u32 = 128u;
 const MAX_CHUNK_STEPS: u32 = 32u;
+const SHADOW_BIAS: f32 = 0.01;
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -225,6 +226,112 @@ fn dda_chunk(
 
     // Exhausted steps without exiting — treat as miss through last face.
     return vec4(-f32(face) - 1.0, 0.0, 0.0, 0.0);
+}
+
+/// Boolean DDA within a single chunk. Returns true if any solid voxel is hit.
+fn trace_ray_chunk(
+    origin: vec3<f32>, dir: vec3<f32>,
+    t_start: f32,
+    chunk_min: vec3<f32>,
+    ao: vec3<u32>,
+    step: vec3<i32>,
+    max_t: f32,
+) -> bool {
+    let local_pos = origin + dir * t_start - chunk_min;
+    var map = vec3<i32>(floor(local_pos));
+    map = clamp(map, vec3(0), vec3(CHUNK_I - 1));
+
+    let delta = abs(1.0 / dir);
+    var side = (vec3(
+        select(f32(map.x) + 1.0, f32(map.x), dir.x < 0.0),
+        select(f32(map.y) + 1.0, f32(map.y), dir.y < 0.0),
+        select(f32(map.z) + 1.0, f32(map.z), dir.z < 0.0),
+    ) - local_pos) / dir;
+
+    for (var i = 0u; i < MAX_VOXEL_STEPS; i++) {
+        if map.x < 0 || map.x >= CHUNK_I ||
+           map.y < 0 || map.y >= CHUNK_I ||
+           map.z < 0 || map.z >= CHUNK_I {
+            return false;
+        }
+
+        // Distance check: use min(side) as approximation of current t.
+        let current_t = t_start + min(min(side.x, side.y), side.z);
+        if current_t > max_t {
+            return false;
+        }
+
+        let texel = textureLoad(atlas, ao + vec3<u32>(map), 0);
+        if texel.r != 0u {
+            return true;
+        }
+
+        if side.x < side.y && side.x < side.z {
+            side.x += delta.x; map.x += step.x;
+        } else if side.y < side.z {
+            side.y += delta.y; map.y += step.y;
+        } else {
+            side.z += delta.z; map.z += step.z;
+        }
+    }
+
+    return false;
+}
+
+/// Trace a ray through the grid. Returns true if any solid voxel is hit
+/// within max_dist. Used for shadow and AO rays.
+fn trace_ray(origin: vec3<f32>, dir: vec3<f32>, max_dist: f32) -> bool {
+    let grid_min = vec3<f32>(camera.grid_origin) * CHUNK;
+    let grid_max = grid_min + vec3<f32>(camera.grid_size) * CHUNK;
+
+    let aabb = intersect_aabb(origin, dir, grid_min, grid_max);
+    if aabb.x > aabb.y || aabb.y < 0.0 {
+        return false;
+    }
+
+    let t_enter = max(aabb.x, 0.0) + 0.001;
+    let max_t = min(aabb.y, max_dist);
+    var pos = origin + dir * t_enter;
+
+    var chunk_coord = vec3<i32>(floor(pos / CHUNK));
+    let grid_end = camera.grid_origin + vec3<i32>(camera.grid_size) - 1;
+    chunk_coord = clamp(chunk_coord, camera.grid_origin, grid_end);
+
+    let step = vec3<i32>(sign(dir));
+
+    for (var ci = 0u; ci < MAX_CHUNK_STEPS; ci++) {
+        let local = chunk_coord - camera.grid_origin;
+        let grid = vec3<i32>(camera.grid_size);
+        if any(local < vec3(0)) || any(local >= grid) {
+            return false;
+        }
+
+        let c_min = vec3<f32>(chunk_coord) * CHUNK;
+        let c_max = c_min + CHUNK;
+
+        let slot = lookup_chunk(chunk_coord);
+        if slot >= 0 {
+            let ao = atlas_origin(u32(slot));
+            let c_aabb = intersect_aabb(origin, dir, c_min, c_max);
+            let ct = max(c_aabb.x, 0.0) + 0.001;
+
+            if trace_ray_chunk(origin, dir, ct, c_min, ao, step, max_t) {
+                return true;
+            }
+        }
+
+        // Advance to next chunk.
+        chunk_coord = advance_chunk(origin, dir, c_min, c_max, step, chunk_coord);
+
+        // Distance check: if we've passed max_t, stop.
+        let next_min = vec3<f32>(chunk_coord) * CHUNK;
+        let next_aabb = intersect_aabb(origin, dir, next_min, next_min + CHUNK);
+        if next_aabb.x > max_t {
+            return false;
+        }
+    }
+
+    return false;
 }
 
 fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f32> {
