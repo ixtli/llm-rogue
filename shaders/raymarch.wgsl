@@ -341,6 +341,9 @@ fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f3
     else { normal.z = -f32(step.z); }
 
     let base = palette[mat_id];
-    let s = max(dot(normal, SUN_DIR), 0.1);
-    return vec4(base.rgb * s, 1.0);
+    let shadow_origin = hit_pos + normal * SHADOW_BIAS;
+    let in_shadow = trace_ray(shadow_origin, SUN_DIR, camera.max_ray_distance);
+    let diffuse = select(max(dot(normal, SUN_DIR), 0.0), 0.0, in_shadow);
+    let ambient = 0.1;
+    return vec4(base.rgb * (ambient + diffuse), 1.0);
 }
