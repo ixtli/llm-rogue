@@ -1,4 +1,5 @@
 use crate::voxel::CHUNK_SIZE;
+use glam::Vec3;
 
 /// 1-bit-per-voxel collision bitfield for a single chunk (4KB).
 /// Bit at index `z*32*32 + y*32 + x` is 1 if the voxel is solid.
@@ -23,6 +24,14 @@ impl CollisionMap {
             }
         }
         Self { bits }
+    }
+
+    /// Check if two world positions are in different voxels.
+    #[must_use]
+    pub fn crosses_voxel_boundary(old: Vec3, new: Vec3) -> bool {
+        let old_voxel = old.floor().as_ivec3();
+        let new_voxel = new.floor().as_ivec3();
+        old_voxel != new_voxel
     }
 
     /// Check if the voxel at local `(x, y, z)` is solid.
@@ -81,5 +90,32 @@ mod tests {
         let map = CollisionMap::from_voxels(&chunk.voxels);
         assert!(map.is_solid(16, 0, 16));
         assert!(!map.is_solid(16, 31, 16));
+    }
+
+    #[test]
+    fn same_voxel_no_boundary() {
+        use glam::Vec3;
+        assert!(!CollisionMap::crosses_voxel_boundary(
+            Vec3::new(5.1, 10.2, 20.3),
+            Vec3::new(5.9, 10.8, 20.7),
+        ));
+    }
+
+    #[test]
+    fn different_voxel_crosses_boundary() {
+        use glam::Vec3;
+        assert!(CollisionMap::crosses_voxel_boundary(
+            Vec3::new(5.9, 10.0, 20.0),
+            Vec3::new(6.1, 10.0, 20.0),
+        ));
+    }
+
+    #[test]
+    fn negative_coords_boundary() {
+        use glam::Vec3;
+        assert!(CollisionMap::crosses_voxel_boundary(
+            Vec3::new(-0.1, 0.0, 0.0),
+            Vec3::new(0.1, 0.0, 0.0),
+        ));
     }
 }

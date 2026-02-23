@@ -132,7 +132,7 @@ impl ChunkManager {
             Some(loaded) => loaded
                 .collision
                 .as_ref()
-                .map_or(false, |c| c.is_solid(local_x, local_y, local_z)),
+                .is_some_and(|c| c.is_solid(local_x, local_y, local_z)),
             None => false,
         }
     }
