@@ -10,6 +10,7 @@ use camera::{CameraIntent, EasingKind};
 
 pub mod camera;
 pub mod chunk_manager;
+pub mod collision;
 pub mod render;
 pub mod voxel;
 
