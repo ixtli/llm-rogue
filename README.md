@@ -8,12 +8,20 @@ Solid.js UI overlay. LLMs interact with the world in real time via MCP.
 
 ## Current State
 
-Phase 3 (render regression harness) is complete. The engine renders a 32x32x32
-Perlin noise terrain chunk using DDA ray marching in a WGSL compute shader.
-Camera controls: WASD move, QE yaw, RF pitch. Headless wgpu regression tests
-verify rendering from three camera angles against reference PNGs.
+Phase 5 (lighting) and Phase 4b (collision) are complete. The engine renders a
+4×2×4 multi-chunk terrain grid (128×64×128 voxels) with hard shadows and ambient
+occlusion, all computed inline in a single WGSL compute shader via secondary ray
+casting. Two-level DDA ray marching traverses chunks then voxels within each
+chunk, reading from a 3D texture atlas. Point collision prevents the camera from
+entering solid voxels.
 
-Next milestone: Phase 4 (multi-chunk streaming with game logic worker).
+Camera controls: WASD move, QE yaw, RF pitch, mouse/trackpad look, scroll zoom.
+A camera intent API supports instant placement, smooth animated transitions with
+easing, and view preloading. Seven headless wgpu regression tests verify
+rendering from known camera angles against reference PNGs.
+
+Next milestone: Phase 4b continued (chunk manager with dynamic load/unload)
+then Phase 6 (game and UI).
 
 ## Prerequisites
 
@@ -35,8 +43,9 @@ bun run dev
 ```
 
 Open the URL printed by Vite (usually `http://localhost:5173`). You should see
-a voxel terrain with grass, dirt, and stone layers. Use WASD to fly, QE to yaw,
-RF to pitch.
+a voxel terrain with grass, dirt, and stone layers, lit with directional shadows
+and ambient occlusion. Use WASD to fly, QE to yaw, RF to pitch, mouse/trackpad
+to look.
 
 ## Contributing
 
@@ -75,27 +84,34 @@ bun run check
 ```
 crates/engine/src/
   lib.rs              # WASM entry points (gated behind "wasm" feature)
-  camera.rs           # Camera state, CameraUniform (GPU layout), InputState, keyboard controls
+  camera.rs           # Camera state, CameraUniform (GPU layout), intent API, animation, look_at
+  chunk_manager.rs    # Visible set computation, chunk load/unload lifecycle
+  collision.rs        # CollisionMap bitfield (1 bit/voxel), is_solid, boundary crossing
   voxel.rs            # Voxel packing (4-byte format), Chunk struct, Perlin terrain generation
   render/
     mod.rs            # Renderer (WASM), palette, storage texture helpers
     gpu.rs            # GpuContext: device+queue, new() for WASM, new_headless() for native
+    chunk_atlas.rs    # 3D texture atlas, GPU index buffer, slot management
     raymarch_pass.rs  # Compute pipeline: DDA ray march through voxel chunk
     blit_pass.rs      # Fullscreen blit from storage texture to surface (WASM only)
 crates/engine/tests/
-  render_regression.rs  # Headless render regression tests (3 camera angles)
+  render_regression.rs  # Headless render regression tests (7 camera angles)
   fixtures/             # Reference PNGs for regression comparison
 
 shaders/
-  raymarch.wgsl       # Compute shader: camera rays, AABB intersection, DDA voxel traversal
+  raymarch.wgsl       # Compute shader: two-level DDA, shadows, AO, palette shading
   blit.wgsl           # Fragment shader: samples storage texture onto a fullscreen triangle
 
 src/
-  main.ts             # Solid.js app mount point
+  main.tsx            # Solid.js app mount point
+  engine-api.ts       # Typed wrapper over WASM exports (CameraPose, Vec3/IVec3)
+  vec.ts              # Shared spatial types: Vec3, IVec3, CameraPose
   messages.ts         # Shared message types for worker communication (single source of truth)
+  input.ts            # Input handling and keyboard state
   ui/App.tsx          # Solid.js component: canvas, keyboard forwarding, status overlay
   ui/gpu-check.ts     # WebGPU/OffscreenCanvas feature detection, browser guide URLs
   ui/App.test.tsx     # UI component tests (vitest + @solidjs/testing-library)
+  workers/game.worker.ts    # Game logic worker: input forwarding (simulation TODO)
   workers/render.worker.ts  # Render worker: WASM init, frame loop, input dispatch
 
 docs/plans/           # Architecture and design documents
