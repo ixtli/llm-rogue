@@ -20,6 +20,8 @@ use crate::camera::{
 #[cfg(feature = "wasm")]
 use crate::chunk_manager::ChunkManager;
 #[cfg(feature = "wasm")]
+use crate::collision::CollisionMap;
+#[cfg(feature = "wasm")]
 use crate::voxel::TEST_GRID_SEED;
 #[cfg(feature = "wasm")]
 use glam::{UVec3, Vec3};
@@ -149,7 +151,13 @@ impl Renderer {
                 self.animation_just_completed = true;
             }
         } else {
+            let old_pos = self.camera.position;
             self.camera.update(&self.input, dt);
+            if CollisionMap::crosses_voxel_boundary(old_pos, self.camera.position)
+                && self.chunk_manager.is_solid(self.camera.position)
+            {
+                self.camera.position = old_pos;
+            }
         }
 
         self.grid_info = self
@@ -211,13 +219,25 @@ impl Renderer {
     /// Handle a scroll (dolly) event. dy is pre-scaled world units.
     pub fn scroll(&mut self, dy: f32) {
         let m = self.sprint_multiplier();
+        let old_pos = self.camera.position;
         self.camera.apply_dolly(dy * m);
+        if CollisionMap::crosses_voxel_boundary(old_pos, self.camera.position)
+            && self.chunk_manager.is_solid(self.camera.position)
+        {
+            self.camera.position = old_pos;
+        }
     }
 
     /// Handle a pan (strafe) event. dx/dy are pre-scaled world units.
     pub fn pan(&mut self, dx: f32, dy: f32) {
         let m = self.sprint_multiplier();
+        let old_pos = self.camera.position;
         self.camera.apply_pan(dx * m, dy * m);
+        if CollisionMap::crosses_voxel_boundary(old_pos, self.camera.position)
+            && self.chunk_manager.is_solid(self.camera.position)
+        {
+            self.camera.position = old_pos;
+        }
     }
 
     fn sprint_multiplier(&self) -> f32 {
