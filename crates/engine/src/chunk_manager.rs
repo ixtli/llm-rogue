@@ -2,8 +2,15 @@ use std::collections::{HashMap, HashSet};
 
 use glam::{IVec3, UVec3, Vec3};
 
+use crate::collision::CollisionMap;
 use crate::render::chunk_atlas::{ChunkAtlas, world_to_slot};
-use crate::voxel::Chunk;
+use crate::voxel::{Chunk, CHUNK_SIZE};
+
+/// Per-chunk data retained after GPU upload: atlas slot + collision bitfield.
+struct LoadedChunk {
+    slot: u32,
+    collision: Option<CollisionMap>,
+}
 
 /// Manages dynamic chunk loading and unloading around the camera.
 ///
@@ -12,8 +19,8 @@ use crate::voxel::Chunk;
 /// chunks keep stable atlas positions as the camera moves.
 pub struct ChunkManager {
     atlas: ChunkAtlas,
-    /// Maps loaded world chunk coordinate to atlas slot index.
-    loaded: HashMap<IVec3, u32>,
+    /// Maps loaded world chunk coordinate to per-chunk data.
+    loaded: HashMap<IVec3, LoadedChunk>,
     seed: u32,
     view_distance: u32,
     atlas_slots: UVec3,
@@ -50,17 +57,27 @@ impl ChunkManager {
         let slot = world_to_slot(coord, self.atlas_slots);
         if chunk.is_empty() {
             // Track as loaded but don't upload — shader sees flags=0.
-            self.loaded.insert(coord, slot);
+            self.loaded.insert(
+                coord,
+                LoadedChunk {
+                    slot,
+                    collision: None,
+                },
+            );
             return;
         }
+        let collision = Some(CollisionMap::from_voxels(&chunk.voxels));
         self.atlas.upload_chunk(queue, slot, &chunk, coord);
-        self.loaded.insert(coord, slot);
+        self.loaded.insert(
+            coord,
+            LoadedChunk { slot, collision },
+        );
     }
 
     /// Unload a chunk: clear its atlas slot and stop tracking it.
     pub fn unload_chunk(&mut self, queue: &wgpu::Queue, coord: IVec3) {
-        if let Some(slot) = self.loaded.remove(&coord) {
-            self.atlas.clear_slot(queue, slot);
+        if let Some(loaded) = self.loaded.remove(&coord) {
+            self.atlas.clear_slot(queue, loaded.slot);
         }
     }
 
@@ -92,6 +109,32 @@ impl ChunkManager {
     #[must_use]
     pub fn view_distance(&self) -> u32 {
         self.view_distance
+    }
+
+    /// Check if the voxel at `world_pos` is solid. Returns `false` for
+    /// unloaded chunks or air.
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn is_solid(&self, world_pos: Vec3) -> bool {
+        let chunk_size = CHUNK_SIZE as i32;
+        let vx = world_pos.x.floor() as i32;
+        let vy = world_pos.y.floor() as i32;
+        let vz = world_pos.z.floor() as i32;
+        let chunk_coord = IVec3::new(
+            vx.div_euclid(chunk_size),
+            vy.div_euclid(chunk_size),
+            vz.div_euclid(chunk_size),
+        );
+        let local_x = vx.rem_euclid(chunk_size);
+        let local_y = vy.rem_euclid(chunk_size);
+        let local_z = vz.rem_euclid(chunk_size);
+        match self.loaded.get(&chunk_coord) {
+            Some(loaded) => loaded
+                .collision
+                .as_ref()
+                .map_or(false, |c| c.is_solid(local_x, local_y, local_z)),
+            None => false,
+        }
     }
 
     /// Compute the set of chunk coordinates visible from `camera_pos` with the
@@ -299,5 +342,28 @@ mod tests {
         let gpu = pollster::block_on(GpuContext::new_headless());
         // vd=3 needs at least 7 per axis; (8, 4, 8) is too small on Y
         let _mgr = ChunkManager::new(&gpu.device, 42, 3, UVec3::new(8, 4, 8));
+    }
+
+    #[test]
+    fn is_solid_below_terrain_surface() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
+        // y=0 at center of chunk (0,0,0) should be underground (solid)
+        assert!(mgr.is_solid(Vec3::new(16.0, 0.5, 16.0)));
+    }
+
+    #[test]
+    fn is_solid_above_terrain_surface() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
+        // y=60 should be well above any terrain (max terrain height ~40)
+        assert!(!mgr.is_solid(Vec3::new(16.0, 60.0, 16.0)));
+    }
+
+    #[test]
+    fn is_solid_unloaded_chunk_returns_false() {
+        let (_gpu, mgr) = make_manager(42, 1);
+        // No chunks loaded yet
+        assert!(!mgr.is_solid(Vec3::new(16.0, 0.5, 16.0)));
     }
 }
