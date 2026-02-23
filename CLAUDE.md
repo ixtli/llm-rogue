@@ -7,13 +7,24 @@ voxel octrees (SVOs) rendered via GPU ray marching in Rust/WASM (wgpu/WebGPU),
 with a Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md`
 for the full architecture.
 
-**Current state:** Phase 4a complete — multi-chunk rendering with 3D texture
-atlas. A 4×2×4 chunk grid (128×64×128 voxels) rendered via two-level DDA ray
-marching (chunk traversal + voxel traversal). Continuous Perlin terrain across
-chunk boundaries, directional shading, WASD+QERF camera with mouse/trackpad
-input. Five regression tests (front, corner, top-down, boundary, edge). Spatial
-types use glam (`Vec3`, `IVec3`, `UVec3`).
-Next: Phase 4b (game logic worker, chunk streaming, dynamic load/unload).
+**Current state:** Phase 5 (lighting) and Phase 4b (collision) are complete. The
+engine renders a 4×2×4 multi-chunk terrain grid (128×64×128 voxels) with hard
+shadows and ambient occlusion, all computed inline in a single WGSL compute
+shader via secondary ray casting. Two-level DDA ray marching traverses chunks
+then voxels within each chunk, reading from a 3D texture atlas. Point collision
+prevents the camera from entering solid voxels (flight with solid walls, no
+gravity). A 1-bit-per-voxel collision bitfield (4KB/chunk) provides lightweight
+`is_solid` queries with a boundary-crossing optimization that skips lookups when
+the camera stays within the same voxel.
+
+Camera controls: WASD move, QE yaw, RF pitch, mouse/trackpad look, scroll zoom.
+A camera intent API supports instant placement, smooth animated transitions with
+easing, and view preloading. Seven headless wgpu regression tests verify
+rendering from known camera angles against reference PNGs. Spatial types use
+glam (`Vec3`, `IVec3`, `UVec3`).
+
+Next milestone: Phase 4b continued (game logic worker, chunk streaming, dynamic
+load/unload) then Phase 6 (game and UI).
 
 ## Tech Stack
 
@@ -29,7 +40,8 @@ Next: Phase 4b (game logic worker, chunk streaming, dynamic load/unload).
 
 ## Architecture Rules
 
-- **Rust owns:** rendering, SVO construction, GPU pipeline, ray marching, lighting.
+- **Rust owns:** rendering, SVO construction, GPU pipeline, ray marching, lighting,
+  collision detection.
 - **TypeScript owns:** game logic, chunk lifecycle, networking, UI, input handling.
 - **Communication:** All cross-layer communication is via `postMessage`. No shared
   mutable state between workers.
@@ -117,7 +129,7 @@ Headless wgpu tests that render a deterministic 4×2×4 multi-chunk terrain grid
 from known camera angles and compare against reference PNGs. See
 `crates/engine/tests/render_regression.rs`.
 
-- **Reference images:** `crates/engine/tests/fixtures/{front,corner,top_down,boundary,edge}.png`
+- **Reference images:** `crates/engine/tests/fixtures/{front,corner,top_down,boundary,edge,shadow,ao}.png`
 - **Tolerance:** ±2 per channel (out of 255)
 - **Resolution:** 128x128
 - **Missing reference:** Test fails, saves actual to `<name>_actual.png` for
@@ -164,32 +176,41 @@ Reference: https://www.w3.org/TR/WGSL/#address-space-layout-constraints
 
 The frame loop (`Renderer::render` in `crates/engine/src/render/mod.rs`):
 
-1. Update camera from `InputState` (keyboard state accumulated from key events).
+1. Process camera animation or input-driven movement with collision gating.
 2. Upload `CameraUniform` to GPU uniform buffer.
 3. Dispatch `raymarch_pass` — compute shader writes to a storage texture.
 4. Encode `blit_pass` — fullscreen triangle samples storage texture onto surface.
 5. Submit and present.
 
+Collision gating (step 1): For input-driven movement (WASD, scroll, pan), the
+old camera position is saved, movement is applied, then a boundary-crossing
+check (`floor(old) != floor(new)`) gates an `is_solid` lookup. If the new
+position is inside a solid voxel, the position reverts. Scripted moves
+(`set_camera`, `animate_camera`) bypass collision intentionally.
+
 The ray marcher (`shaders/raymarch.wgsl`) uses two-level DDA: an outer loop
 steps through grid chunks, an inner loop steps through voxels within each chunk.
 Chunk data is read from a 3D texture atlas via slot-based coordinate lookup.
-Each non-air voxel hit is shaded with a hardcoded directional light and the
-material's palette color.
+Each non-air voxel hit is shaded with hard shadows (secondary shadow rays) and
+ambient occlusion (short-range occlusion samples), using the material's palette
+color.
 
 ## Key Modules
 
 | Module | Path | Purpose |
 |--------|------|---------|
-| `camera` | `crates/engine/src/camera.rs` | Camera state, GPU uniform struct, GridInfo, input state, keyboard mapping |
+| `camera` | `crates/engine/src/camera.rs` | Camera state, GPU uniform struct, GridInfo, intent API, animation, look_at |
+| `collision` | `crates/engine/src/collision.rs` | CollisionMap bitfield (1 bit/voxel), is_solid, crosses_voxel_boundary |
+| `chunk_manager` | `crates/engine/src/chunk_manager.rs` | Visible set computation, chunk load/unload, collision map lifecycle, is_solid query |
 | `voxel` | `crates/engine/src/voxel.rs` | Voxel pack/unpack, Chunk (32^3), Perlin terrain generation, test grid builder |
 | `chunk_atlas` | `crates/engine/src/render/chunk_atlas.rs` | 3D texture atlas for multi-chunk storage, GPU index buffer, slot management |
-| `render` | `crates/engine/src/render/mod.rs` | Renderer: owns GPU context, camera, atlas, passes |
+| `render` | `crates/engine/src/render/mod.rs` | Renderer: owns GPU context, camera, atlas, passes, collision gating |
 | `gpu` | `crates/engine/src/render/gpu.rs` | GpuContext (device+queue), `new()` for WASM, `new_headless()` for native |
 | `raymarch_pass` | `crates/engine/src/render/raymarch_pass.rs` | Compute pipeline + bind groups for ray march shader |
 | `blit_pass` | `crates/engine/src/render/blit_pass.rs` | Fullscreen blit from storage texture to surface (WASM only) |
-| `render_regression` | `crates/engine/tests/render_regression.rs` | Headless render regression tests (5 camera angles, ±2/255 tolerance) |
+| `render_regression` | `crates/engine/tests/render_regression.rs` | Headless render regression tests (7 camera angles, ±2/255 tolerance) |
 | `gpu-check` | `src/ui/gpu-check.ts` | WebGPU/OffscreenCanvas feature detection, browser guide URLs |
-| `messages` | `src/messages.ts` | Worker message types (init, key_down, key_up, ready) |
+| `messages` | `src/messages.ts` | Worker message types (single source of truth for worker API) |
 
 ## Skill Usage (mandatory)
 
