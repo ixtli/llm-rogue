@@ -4,7 +4,7 @@ use glam::{IVec3, UVec3, Vec3};
 
 use crate::collision::CollisionMap;
 use crate::render::chunk_atlas::{ChunkAtlas, world_to_slot};
-use crate::voxel::{Chunk, CHUNK_SIZE};
+use crate::voxel::{CHUNK_SIZE, Chunk};
 
 /// Per-chunk data retained after GPU upload: atlas slot + collision bitfield.
 struct LoadedChunk {
@@ -68,10 +68,7 @@ impl ChunkManager {
         }
         let collision = Some(CollisionMap::from_voxels(&chunk.voxels));
         self.atlas.upload_chunk(queue, slot, &chunk, coord);
-        self.loaded.insert(
-            coord,
-            LoadedChunk { slot, collision },
-        );
+        self.loaded.insert(coord, LoadedChunk { slot, collision });
     }
 
     /// Unload a chunk: clear its atlas slot and stop tracking it.
