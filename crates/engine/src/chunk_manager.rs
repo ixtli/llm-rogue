@@ -237,18 +237,81 @@ impl ChunkManager {
     /// Returns a [`GridInfo`](crate::camera::GridInfo) describing the bounding
     /// box of visible chunks.
     pub fn tick(&mut self, queue: &wgpu::Queue, camera_pos: Vec3) -> crate::camera::GridInfo {
+        self.tick_budgeted(queue, camera_pos, u32::MAX).grid_info
+    }
+
+    /// Advance chunk streaming with a per-tick budget.
+    ///
+    /// Loads up to `budget` new chunks per call, prioritized by distance from
+    /// camera (closest first). Stale chunks stay cached; eviction happens only
+    /// when a new chunk's modular slot is occupied.
+    #[allow(clippy::cast_precision_loss)]
+    pub fn tick_budgeted(
+        &mut self,
+        queue: &wgpu::Queue,
+        camera_pos: Vec3,
+        budget: u32,
+    ) -> TickResult {
         let visible = Self::compute_visible_set(camera_pos, self.view_distance);
         let visible_set: HashSet<IVec3> = visible.iter().copied().collect();
-
-        // Update visible set for grid_info computation.
         self.visible.clone_from(&visible_set);
 
-        // Load newly visible chunks.
-        for coord in &visible {
+        // Compute chunks that need loading (visible but not loaded).
+        let mut to_load: Vec<IVec3> = self
+            .visible
+            .iter()
+            .filter(|c| !self.loaded.contains_key(c))
+            .copied()
+            .collect();
+
+        // Sort by distance from camera chunk (closest first).
+        let chunk_size = CHUNK_SIZE as f32;
+        let cam_chunk = IVec3::new(
+            (camera_pos.x / chunk_size).floor() as i32,
+            (camera_pos.y / chunk_size).floor() as i32,
+            (camera_pos.z / chunk_size).floor() as i32,
+        );
+        to_load.sort_by_key(|c| {
+            let d = *c - cam_chunk;
+            d.x * d.x + d.y * d.y + d.z * d.z
+        });
+
+        // Load up to budget, tracking evictions.
+        let mut loaded_this_tick: u32 = 0;
+        let mut unloaded_this_tick: u32 = 0;
+        for coord in to_load.iter().take(budget as usize) {
+            // Check if loading this chunk will evict a cached chunk.
+            let slot = world_to_slot(*coord, self.atlas_slots);
+            let will_evict = self
+                .loaded
+                .iter()
+                .any(|(c, lc)| lc.slot == slot && *c != *coord);
             self.load_chunk(queue, *coord);
+            loaded_this_tick += 1;
+            if will_evict {
+                unloaded_this_tick += 1;
+            }
         }
 
-        self.compute_grid_info()
+        let pending_count = to_load.len().saturating_sub(budget as usize) as u32;
+        let total_loaded = self.loaded.len() as u32;
+        let total_visible = self.visible.len() as u32;
+        let cached_count = total_loaded.saturating_sub(total_visible);
+        let streaming_state = StreamingState::from_counts(pending_count, loaded_this_tick);
+
+        TickResult {
+            grid_info: self.compute_grid_info(),
+            stats: TickStats {
+                loaded_this_tick,
+                unloaded_this_tick,
+                pending_count,
+                total_loaded,
+                total_visible,
+                cached_count,
+                budget,
+                streaming_state,
+            },
+        }
     }
 
     /// Compute the [`GridInfo`](crate::camera::GridInfo) bounding box from
@@ -491,5 +554,53 @@ mod tests {
         // Move far — old chunks become cached.
         mgr.tick(&gpu.queue, Vec3::new(16.0 + 5.0 * 32.0, 16.0, 16.0));
         assert!(mgr.cached_count() > 0, "stale chunks should be cached");
+    }
+
+    #[test]
+    fn tick_respects_budget() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        // With budget=2, first tick should load at most 2 chunks.
+        let result = mgr.tick_budgeted(&gpu.queue, Vec3::new(16.0, 16.0, 16.0), 2);
+        assert_eq!(result.stats.loaded_this_tick, 2);
+        assert_eq!(result.stats.pending_count, 25); // 27 visible - 2 loaded
+        assert_eq!(result.stats.streaming_state, StreamingState::Loading);
+    }
+
+    #[test]
+    fn tick_loads_closest_first() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        // Budget=1: only the closest chunk to camera should load.
+        let cam_pos = Vec3::new(16.0, 16.0, 16.0);
+        let result = mgr.tick_budgeted(&gpu.queue, cam_pos, 1);
+        // Camera is at center of chunk (0,0,0), so (0,0,0) should load first.
+        assert!(mgr.is_loaded(IVec3::ZERO));
+        assert_eq!(result.stats.loaded_this_tick, 1);
+    }
+
+    #[test]
+    fn tick_budget_exhaustion_reaches_idle() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        let cam_pos = Vec3::new(16.0, 16.0, 16.0);
+        // 27 chunks visible. With budget=10, need 3 ticks.
+        let r1 = mgr.tick_budgeted(&gpu.queue, cam_pos, 10);
+        assert_eq!(r1.stats.loaded_this_tick, 10);
+        let r2 = mgr.tick_budgeted(&gpu.queue, cam_pos, 10);
+        assert_eq!(r2.stats.loaded_this_tick, 10);
+        let r3 = mgr.tick_budgeted(&gpu.queue, cam_pos, 10);
+        assert_eq!(r3.stats.loaded_this_tick, 7);
+        assert_eq!(r3.stats.streaming_state, StreamingState::Idle);
+        assert_eq!(r3.stats.pending_count, 0);
+    }
+
+    #[test]
+    fn tick_eviction_counted_in_stats() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        let cam_pos = Vec3::new(16.0, 16.0, 16.0);
+        // Fill with all visible chunks (no budget limit — use large budget).
+        mgr.tick_budgeted(&gpu.queue, cam_pos, 100);
+        // Now move camera so some new chunks collide with cached slots.
+        let result = mgr.tick_budgeted(&gpu.queue, Vec3::new(16.0 + 8.0 * 32.0, 16.0, 16.0), 100);
+        // Atlas is 8x8x8. Moving 8 chunks on x wraps modular slots. Some evictions.
+        assert!(result.stats.unloaded_this_tick > 0);
     }
 }

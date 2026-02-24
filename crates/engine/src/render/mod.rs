@@ -49,6 +49,10 @@ const ATLAS_SLOTS_Z: u32 = 8;
 #[cfg(feature = "wasm")]
 const VIEW_DISTANCE: u32 = 3;
 
+/// Maximum chunks loaded per frame. At 60fps, fills a 343-chunk view (~1.4s).
+#[cfg(feature = "wasm")]
+const CHUNK_BUDGET_PER_TICK: u32 = 4;
+
 #[cfg(feature = "wasm")]
 pub struct Renderer {
     gpu: GpuContext,
@@ -65,6 +69,7 @@ pub struct Renderer {
     animation: Option<CameraAnimation>,
     preload_position: Option<Vec3>,
     animation_just_completed: bool,
+    tick_stats: Option<crate::chunk_manager::TickStats>,
     width: u32,
     height: u32,
     last_time: f32,
@@ -121,6 +126,7 @@ impl Renderer {
             animation: None,
             preload_position: None,
             animation_just_completed: false,
+            tick_stats: None,
             width,
             height,
             last_time: 0.0,
@@ -163,9 +169,13 @@ impl Renderer {
             }
         }
 
-        self.grid_info = self
-            .chunk_manager
-            .tick(&self.gpu.queue, self.camera.position);
+        let tick_result = self.chunk_manager.tick_budgeted(
+            &self.gpu.queue,
+            self.camera.position,
+            CHUNK_BUDGET_PER_TICK,
+        );
+        self.grid_info = tick_result.grid_info;
+        self.tick_stats = Some(tick_result.stats);
 
         // Load chunks around preload position if set.
         if let Some(preload) = self.preload_position {
