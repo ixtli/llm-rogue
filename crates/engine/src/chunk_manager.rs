@@ -96,12 +96,28 @@ impl ChunkManager {
     }
 
     /// Generate terrain for `coord` and upload to the atlas.
+    ///
+    /// If another chunk already occupies the same modular slot, it is evicted
+    /// first (implicit LRU via slot collision).
     pub fn load_chunk(&mut self, queue: &wgpu::Queue, coord: IVec3) {
         if self.loaded.contains_key(&coord) {
             return;
         }
-        let chunk = Chunk::new_terrain_at(self.seed, coord);
+
         let slot = world_to_slot(coord, self.atlas_slots);
+
+        // Evict any chunk currently occupying this slot.
+        let occupant = self
+            .loaded
+            .iter()
+            .find(|(_, lc)| lc.slot == slot)
+            .map(|(c, _)| *c);
+        if let Some(old_coord) = occupant {
+            self.loaded.remove(&old_coord);
+            self.atlas.clear_slot(queue, slot);
+        }
+
+        let chunk = Chunk::new_terrain_at(self.seed, coord);
         if chunk.is_empty() {
             // Track as loaded but don't upload — shader sees flags=0.
             self.loaded.insert(
@@ -129,6 +145,18 @@ impl ChunkManager {
     #[must_use]
     pub fn loaded_count(&self) -> usize {
         self.loaded.len()
+    }
+
+    /// Number of visible chunks (in the current view box).
+    #[must_use]
+    pub fn visible_count(&self) -> usize {
+        self.visible.len()
+    }
+
+    /// Number of cached chunks (loaded but not in the current view box).
+    #[must_use]
+    pub fn cached_count(&self) -> usize {
+        self.loaded.len().saturating_sub(self.visible.len())
     }
 
     /// Whether a chunk at `coord` is currently loaded.
@@ -205,26 +233,15 @@ impl ChunkManager {
         set
     }
 
-    /// Advance chunk streaming: load visible chunks, unload stale chunks.
+    /// Advance chunk streaming: load visible chunks (stale chunks stay cached).
     /// Returns a [`GridInfo`](crate::camera::GridInfo) describing the bounding
-    /// box of loaded chunks.
+    /// box of visible chunks.
     pub fn tick(&mut self, queue: &wgpu::Queue, camera_pos: Vec3) -> crate::camera::GridInfo {
         let visible = Self::compute_visible_set(camera_pos, self.view_distance);
         let visible_set: HashSet<IVec3> = visible.iter().copied().collect();
 
         // Update visible set for grid_info computation.
         self.visible.clone_from(&visible_set);
-
-        // Unload chunks no longer visible.
-        let stale: Vec<IVec3> = self
-            .loaded
-            .keys()
-            .filter(|coord| !visible_set.contains(coord))
-            .copied()
-            .collect();
-        for coord in stale {
-            self.unload_chunk(queue, coord);
-        }
 
         // Load newly visible chunks.
         for coord in &visible {
@@ -365,15 +382,13 @@ mod tests {
     }
 
     #[test]
-    fn tick_unloads_when_camera_moves() {
+    fn tick_caches_stale_chunks_when_camera_moves() {
         let (gpu, mut mgr) = make_manager(42, 1);
-        // First tick at origin
         mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
-        // Move camera far enough that old chunks leave view
         mgr.tick(&gpu.queue, Vec3::new(16.0 + 5.0 * 32.0, 16.0, 16.0));
-        // Some old chunks should be unloaded, new ones loaded
         assert!(mgr.is_loaded(IVec3::new(5, 0, 0)));
-        assert!(!mgr.is_loaded(IVec3::new(-1, 0, 0)));
+        // Old chunk stays cached (not eagerly unloaded).
+        assert!(mgr.is_loaded(IVec3::new(-1, 0, 0)));
     }
 
     #[test]
@@ -440,5 +455,41 @@ mod tests {
         // Camera is in chunk (5,0,0), vd=1 → visible from (4,-1,-1) to (6,1,1)
         assert_eq!(result.origin, IVec3::new(4, -1, -1));
         assert_eq!(result.size, UVec3::new(3, 3, 3));
+    }
+
+    #[test]
+    fn stale_chunks_stay_cached() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
+        assert!(mgr.is_loaded(IVec3::ZERO));
+        // Move camera far away — chunk (0,0,0) should still be loaded (cached).
+        mgr.tick(&gpu.queue, Vec3::new(16.0 + 5.0 * 32.0, 16.0, 16.0));
+        assert!(mgr.is_loaded(IVec3::ZERO), "stale chunk should stay cached");
+    }
+
+    #[test]
+    fn slot_collision_evicts_occupant() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        // atlas_slots = 8x8x8. Chunks at x=0 and x=8 map to the same slot.
+        let coord_a = IVec3::new(0, 0, 0);
+        let coord_b = IVec3::new(8, 0, 0);
+        mgr.load_chunk(&gpu.queue, coord_a);
+        assert!(mgr.is_loaded(coord_a));
+        mgr.load_chunk(&gpu.queue, coord_b);
+        assert!(mgr.is_loaded(coord_b));
+        assert!(
+            !mgr.is_loaded(coord_a),
+            "coord_a should be evicted by slot collision"
+        );
+    }
+
+    #[test]
+    fn cached_count_reflects_stale_chunks() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
+        assert_eq!(mgr.cached_count(), 0);
+        // Move far — old chunks become cached.
+        mgr.tick(&gpu.queue, Vec3::new(16.0 + 5.0 * 32.0, 16.0, 16.0));
+        assert!(mgr.cached_count() > 0, "stale chunks should be cached");
     }
 }
