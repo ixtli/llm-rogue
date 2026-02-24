@@ -169,10 +169,11 @@ impl Renderer {
             }
         }
 
-        let tick_result = self.chunk_manager.tick_budgeted(
+        let tick_result = self.chunk_manager.tick_budgeted_with_prediction(
             &self.gpu.queue,
             self.camera.position,
             CHUNK_BUDGET_PER_TICK,
+            self.animation.as_ref(),
         );
         self.grid_info = tick_result.grid_info;
         self.tick_stats = Some(tick_result.stats);

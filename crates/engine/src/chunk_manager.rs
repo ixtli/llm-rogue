@@ -245,42 +245,79 @@ impl ChunkManager {
     /// Loads up to `budget` new chunks per call, prioritized by distance from
     /// camera (closest first). Stale chunks stay cached; eviction happens only
     /// when a new chunk's modular slot is occupied.
-    #[allow(clippy::cast_precision_loss)]
     pub fn tick_budgeted(
         &mut self,
         queue: &wgpu::Queue,
         camera_pos: Vec3,
         budget: u32,
     ) -> TickResult {
+        self.tick_budgeted_with_prediction(queue, camera_pos, budget, None)
+    }
+
+    /// Compute prediction chunks from a camera animation. Samples 4 future
+    /// points and includes a small box (vd=1) around each.
+    fn prediction_chunks(animation: &crate::camera::CameraAnimation) -> Vec<IVec3> {
+        let samples = [0.25, 0.5, 0.75, 1.0];
+        let mut seen = HashSet::new();
+        let mut result = Vec::new();
+        for &t in &samples {
+            let pos = animation.position_at(t);
+            for coord in Self::compute_visible_set(pos, 1) {
+                if seen.insert(coord) {
+                    result.push(coord);
+                }
+            }
+        }
+        result
+    }
+
+    /// Like `tick_budgeted` but also includes trajectory prediction chunks.
+    #[allow(clippy::cast_precision_loss)]
+    pub fn tick_budgeted_with_prediction(
+        &mut self,
+        queue: &wgpu::Queue,
+        camera_pos: Vec3,
+        budget: u32,
+        animation: Option<&crate::camera::CameraAnimation>,
+    ) -> TickResult {
         let visible = Self::compute_visible_set(camera_pos, self.view_distance);
         let visible_set: HashSet<IVec3> = visible.iter().copied().collect();
         self.visible.clone_from(&visible_set);
 
-        // Compute chunks that need loading (visible but not loaded).
-        let mut to_load: Vec<IVec3> = self
-            .visible
-            .iter()
-            .filter(|c| !self.loaded.contains_key(c))
-            .copied()
-            .collect();
-
-        // Sort by distance from camera chunk (closest first).
         let chunk_size = CHUNK_SIZE as f32;
         let cam_chunk = IVec3::new(
             (camera_pos.x / chunk_size).floor() as i32,
             (camera_pos.y / chunk_size).floor() as i32,
             (camera_pos.z / chunk_size).floor() as i32,
         );
+
+        // Current-view chunks: sorted by distance (highest priority).
+        let mut to_load: Vec<IVec3> = self
+            .visible
+            .iter()
+            .filter(|c| !self.loaded.contains_key(c))
+            .copied()
+            .collect();
         to_load.sort_by_key(|c| {
             let d = *c - cam_chunk;
             d.x * d.x + d.y * d.y + d.z * d.z
         });
 
-        // Load up to budget, tracking evictions.
+        let visible_pending = to_load.len() as u32;
+
+        // Prediction chunks: appended after current-view (lower priority).
+        if let Some(anim) = animation {
+            let prediction = Self::prediction_chunks(anim);
+            for coord in prediction {
+                if !self.loaded.contains_key(&coord) && !to_load.contains(&coord) {
+                    to_load.push(coord);
+                }
+            }
+        }
+
         let mut loaded_this_tick: u32 = 0;
         let mut unloaded_this_tick: u32 = 0;
         for coord in to_load.iter().take(budget as usize) {
-            // Check if loading this chunk will evict a cached chunk.
             let slot = world_to_slot(*coord, self.atlas_slots);
             let will_evict = self
                 .loaded
@@ -293,7 +330,7 @@ impl ChunkManager {
             }
         }
 
-        let pending_count = to_load.len().saturating_sub(budget as usize) as u32;
+        let pending_count = visible_pending.saturating_sub(loaded_this_tick);
         let total_loaded = self.loaded.len() as u32;
         let total_visible = self.visible.len() as u32;
         let cached_count = total_loaded.saturating_sub(total_visible);
@@ -590,6 +627,28 @@ mod tests {
         assert_eq!(r3.stats.loaded_this_tick, 7);
         assert_eq!(r3.stats.streaming_state, StreamingState::Idle);
         assert_eq!(r3.stats.pending_count, 0);
+    }
+
+    #[test]
+    fn tick_includes_prediction_chunks() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        let cam_pos = Vec3::new(16.0, 16.0, 16.0);
+        // Create animation from origin to far away.
+        let anim = crate::camera::CameraAnimation::new(
+            cam_pos,
+            0.0,
+            0.0,
+            Vec3::new(16.0 + 10.0 * 32.0, 16.0, 16.0), // chunk (10,0,0)
+            0.0,
+            0.0,
+            2.0,
+            crate::camera::EasingKind::Linear,
+        );
+        // Use large budget so all chunks load.
+        let result = mgr.tick_budgeted_with_prediction(&gpu.queue, cam_pos, 500, Some(&anim));
+        // Prediction should have loaded chunks near animation endpoint.
+        assert!(mgr.is_loaded(IVec3::new(10, 0, 0)));
+        assert!(result.stats.loaded_this_tick > 27); // More than just visible set.
     }
 
     #[test]
