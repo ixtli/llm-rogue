@@ -8,20 +8,23 @@ Solid.js UI overlay. LLMs interact with the world in real time via MCP.
 
 ## Current State
 
-Phase 5 (lighting) and Phase 4b (collision) are complete. The engine renders a
-4×2×4 multi-chunk terrain grid (128×64×128 voxels) with hard shadows and ambient
-occlusion, all computed inline in a single WGSL compute shader via secondary ray
-casting. Two-level DDA ray marching traverses chunks then voxels within each
-chunk, reading from a 3D texture atlas. Point collision prevents the camera from
-entering solid voxels.
+Phase 5 (lighting), Phase 4b (collision), and the visual diagnostics overlay are
+complete. The engine renders a 4×2×4 multi-chunk terrain grid (128×64×128 voxels)
+with hard shadows and ambient occlusion, all computed inline in a single WGSL
+compute shader via secondary ray casting. Two-level DDA ray marching traverses
+chunks then voxels within each chunk, reading from a 3D texture atlas. Point
+collision prevents the camera from entering solid voxels.
+
+A toggle-able diagnostics overlay (backtick key) shows FPS sparkline, frame time,
+chunk/atlas stats, camera position, and WASM memory usage.
 
 Camera controls: WASD move, QE yaw, RF pitch, mouse/trackpad look, scroll zoom.
 A camera intent API supports instant placement, smooth animated transitions with
 easing, and view preloading. Seven headless wgpu regression tests verify
 rendering from known camera angles against reference PNGs.
 
-Next milestone: Phase 4b continued (chunk manager with dynamic load/unload)
-then Phase 6 (game and UI).
+Next milestone: Phase 4b continued (chunk streaming, dynamic load/unload) then
+Phase 6 (game and UI).
 
 ## Prerequisites
 
@@ -111,8 +114,11 @@ src/
   ui/App.tsx          # Solid.js component: canvas, keyboard forwarding, status overlay
   ui/gpu-check.ts     # WebGPU/OffscreenCanvas feature detection, browser guide URLs
   ui/App.test.tsx     # UI component tests (vitest + @solidjs/testing-library)
-  workers/game.worker.ts    # Game logic worker: input forwarding (simulation TODO)
-  workers/render.worker.ts  # Render worker: WASM init, frame loop, input dispatch
+  stats.ts              # StatsAggregator ring buffer, DiagnosticsDigest type
+  ui/sparkline.ts       # Canvas sparkline (stats.js scroll-blit), fpsColor
+  ui/DiagnosticsOverlay.tsx  # Toggle-able diagnostics overlay (backtick key)
+  workers/game.worker.ts    # Game logic worker: input translation, stats aggregation (4Hz digest)
+  workers/render.worker.ts  # Render worker: WASM init, frame loop, per-frame stats emission
 
 docs/plans/           # Architecture and design documents
 assets/ui/            # Fonts, icons, images for the DOM layer
