@@ -7,15 +7,20 @@ voxel octrees (SVOs) rendered via GPU ray marching in Rust/WASM (wgpu/WebGPU),
 with a Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md`
 for the full architecture.
 
-**Current state:** Phase 5 (lighting) and Phase 4b (collision) are complete. The
-engine renders a 4×2×4 multi-chunk terrain grid (128×64×128 voxels) with hard
-shadows and ambient occlusion, all computed inline in a single WGSL compute
-shader via secondary ray casting. Two-level DDA ray marching traverses chunks
-then voxels within each chunk, reading from a 3D texture atlas. Point collision
-prevents the camera from entering solid voxels (flight with solid walls, no
-gravity). A 1-bit-per-voxel collision bitfield (4KB/chunk) provides lightweight
-`is_solid` queries with a boundary-crossing optimization that skips lookups when
-the camera stays within the same voxel.
+**Current state:** Phase 5 (lighting), Phase 4b (collision), and the visual
+diagnostics overlay are complete. The engine renders a 4×2×4 multi-chunk terrain
+grid (128×64×128 voxels) with hard shadows and ambient occlusion, all computed
+inline in a single WGSL compute shader via secondary ray casting. Two-level DDA
+ray marching traverses chunks then voxels within each chunk, reading from a 3D
+texture atlas. Point collision prevents the camera from entering solid voxels
+(flight with solid walls, no gravity). A 1-bit-per-voxel collision bitfield
+(4KB/chunk) provides lightweight `is_solid` queries with a boundary-crossing
+optimization that skips lookups when the camera stays within the same voxel.
+
+A toggle-able diagnostics overlay (backtick key) shows FPS sparkline, frame
+time, chunk/atlas stats, camera position, and WASM memory usage. The render
+worker emits per-frame stats via WASM getters; the game worker aggregates them
+in a ring buffer and emits 4Hz digests to the UI thread.
 
 Camera controls: WASD move, QE yaw, RF pitch, mouse/trackpad look, scroll zoom.
 A camera intent API supports instant placement, smooth animated transitions with
@@ -23,8 +28,8 @@ easing, and view preloading. Seven headless wgpu regression tests verify
 rendering from known camera angles against reference PNGs. Spatial types use
 glam (`Vec3`, `IVec3`, `UVec3`).
 
-Next milestone: Phase 4b continued (game logic worker, chunk streaming, dynamic
-load/unload) then Phase 6 (game and UI).
+Next milestone: Phase 4b continued (chunk streaming, dynamic load/unload) then
+Phase 6 (game and UI).
 
 ## Tech Stack
 
@@ -45,9 +50,10 @@ load/unload) then Phase 6 (game and UI).
 - **TypeScript owns:** game logic, chunk lifecycle, networking, UI, input handling.
 - **Communication:** All cross-layer communication is via `postMessage`. No shared
   mutable state between workers.
-- **Three threads (target):** UI thread (Solid.js + input), game logic worker
-  (TypeScript), render worker (Rust/WASM). Currently only UI thread and render
-  worker exist; input goes directly from UI to render worker.
+- **Three threads:** UI thread (Solid.js + input + diagnostics overlay), game
+  logic worker (TypeScript — input translation, stats aggregation), render worker
+  (Rust/WASM). Input flows UI → game worker → render worker. Stats flow render
+  worker → game worker (per-frame) → UI (4Hz digest).
 - **Chunk data flows one direction:** server → game logic worker → render worker.
 
 ## Build Commands
@@ -122,6 +128,11 @@ tests without pulling in web-sys.
 - WASM entry points in `lib.rs` are gated with `#[cfg(feature = "wasm")]`.
 - `Renderer` and `BlitPass` are WASM-only. `GpuContext`, `RaymarchPass`,
   `build_palette`, and `create_storage_texture` are always available.
+- **Important:** `cargo clippy --target wasm32-unknown-unknown` compiles without
+  `--features wasm`, so helper functions only used by wasm-gated or
+  native-only code must have matching `#[cfg]` guards. Otherwise they appear as
+  dead code. The `request_adapter`/`request_device` helpers in `gpu.rs` use
+  `#[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]` for this reason.
 
 ## Render Regression Tests
 
@@ -211,6 +222,9 @@ color.
 | `render_regression` | `crates/engine/tests/render_regression.rs` | Headless render regression tests (7 camera angles, ±2/255 tolerance) |
 | `gpu-check` | `src/ui/gpu-check.ts` | WebGPU/OffscreenCanvas feature detection, browser guide URLs |
 | `messages` | `src/messages.ts` | Worker message types (single source of truth for worker API) |
+| `stats` | `src/stats.ts` | StatsAggregator ring buffer, DiagnosticsDigest interface, EMPTY_DIGEST |
+| `sparkline` | `src/ui/sparkline.ts` | Canvas sparkline with stats.js scroll-blit trick, fpsColor |
+| `DiagnosticsOverlay` | `src/ui/DiagnosticsOverlay.tsx` | Toggle-able overlay: FPS sparkline, frame time, chunks, camera, WASM memory |
 
 ## Skill Usage (mandatory)
 

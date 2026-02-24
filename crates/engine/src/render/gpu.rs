@@ -63,6 +63,7 @@ impl GpuContext {
     }
 }
 
+#[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
 async fn request_adapter(
     instance: &wgpu::Instance,
     compatible_surface: Option<&wgpu::Surface<'_>>,
@@ -77,6 +78,7 @@ async fn request_adapter(
         .expect("Failed to find adapter")
 }
 
+#[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
 async fn request_device(adapter: &wgpu::Adapter, label: &str) -> (wgpu::Device, wgpu::Queue) {
     adapter
         .request_device(&wgpu::DeviceDescriptor {

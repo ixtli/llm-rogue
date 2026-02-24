@@ -1,6 +1,8 @@
 import { type Component, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { setupInputHandlers } from "../input";
 import type { GameToUIMessage, UIToGameMessage } from "../messages";
+import { EMPTY_DIGEST } from "../stats";
+import DiagnosticsOverlay from "./DiagnosticsOverlay";
 import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
@@ -17,6 +19,7 @@ const App: Component<AppProps> = (props) => {
   let canvasRef: HTMLCanvasElement | undefined;
   const [status, setStatus] = createSignal("loading engine...");
   const [error, setError] = createSignal<string | null>(null);
+  const [diagnostics, setDiagnostics] = createSignal(EMPTY_DIGEST);
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;
@@ -38,6 +41,8 @@ const App: Component<AppProps> = (props) => {
         setStatus("click to look | WASD move | scroll zoom");
       } else if (e.data.type === "error") {
         setError(`Engine failed to initialize: ${e.data.message}`);
+      } else if (e.data.type === "diagnostics") {
+        setDiagnostics(e.data);
       }
     };
 
@@ -140,6 +145,7 @@ const App: Component<AppProps> = (props) => {
       >
         {status()}
       </div>
+      <DiagnosticsOverlay data={diagnostics()} />
     </Show>
   );
 };

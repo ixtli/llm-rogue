@@ -50,11 +50,37 @@ export type RenderToGameMessage =
       yaw: number;
       pitch: number;
     }
-  | { type: "chunk_loaded"; id: number; loaded: boolean };
+  | { type: "chunk_loaded"; id: number; loaded: boolean }
+  | {
+      type: "stats";
+      frame_time_ms: number;
+      loaded_chunks: number;
+      atlas_total: number;
+      atlas_used: number;
+      camera_x: number;
+      camera_y: number;
+      camera_z: number;
+      wasm_memory_bytes: number;
+    };
 
 // --- Game Worker → UI ---
 
-export type GameToUIMessage = { type: "ready" } | { type: "error"; message: string };
+export type GameToUIMessage =
+  | { type: "ready" }
+  | { type: "error"; message: string }
+  | {
+      type: "diagnostics";
+      fps: number;
+      frame_time_ms: number;
+      loaded_chunks: number;
+      atlas_total: number;
+      atlas_used: number;
+      camera_x: number;
+      camera_y: number;
+      camera_z: number;
+      wasm_memory_bytes: number;
+      fps_history: number[];
+    };
 
 // --- Backward compatibility (used by old debug input path) ---
 

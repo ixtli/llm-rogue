@@ -6,6 +6,7 @@ import type {
   RenderToGameMessage,
   UIToGameMessage,
 } from "../messages";
+import { StatsAggregator } from "../stats";
 
 // --- Key-to-intent mapping ---
 
@@ -22,6 +23,8 @@ const KEY_TO_INTENT: Record<string, number> = {
 };
 
 let renderWorker: Worker | null = null;
+const statsAggregator = new StatsAggregator(120);
+let digestTimer: ReturnType<typeof setInterval> | null = null;
 
 function sendToRender(msg: GameToRenderMessage) {
   renderWorker?.postMessage(msg, msg.type === "init" ? [msg.canvas] : []);
@@ -39,6 +42,17 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
     sendToUI({ type: "ready" });
   } else if (msg.type === "error") {
     sendToUI({ type: "error", message: msg.message });
+  } else if (msg.type === "stats") {
+    statsAggregator.push(msg.frame_time_ms, {
+      frame_time_ms: msg.frame_time_ms,
+      loaded_chunks: msg.loaded_chunks,
+      atlas_total: msg.atlas_total,
+      atlas_used: msg.atlas_used,
+      camera_x: msg.camera_x,
+      camera_y: msg.camera_y,
+      camera_z: msg.camera_z,
+      wasm_memory_bytes: msg.wasm_memory_bytes,
+    });
   }
   // animation_complete, camera_position, chunk_loaded handled by game logic
   // (no-op for now, future game logic will use these)
@@ -58,6 +72,10 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       width: msg.width,
       height: msg.height,
     });
+    if (digestTimer) clearInterval(digestTimer);
+    digestTimer = setInterval(() => {
+      sendToUI({ type: "diagnostics", ...statsAggregator.digest() });
+    }, 250);
   } else if (msg.type === "key_down") {
     const intent = KEY_TO_INTENT[msg.key];
     if (intent !== undefined) {

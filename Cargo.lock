@@ -195,6 +195,7 @@ dependencies = [
  "console_error_panic_hook",
  "glam",
  "image",
+ "js-sys",
  "log",
  "noise",
  "pollster",

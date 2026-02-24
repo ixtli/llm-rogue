@@ -1,5 +1,7 @@
 import init, {
   animate_camera,
+  atlas_slot_count,
+  atlas_used_count,
   begin_intent,
   camera_pitch,
   camera_x,
@@ -7,6 +9,7 @@ import init, {
   camera_yaw,
   camera_z,
   end_intent,
+  frame_time_ms,
   handle_key_down,
   handle_key_up,
   handle_pan,
@@ -14,6 +17,7 @@ import init, {
   handle_scroll,
   init_renderer,
   is_chunk_loaded_at,
+  loaded_chunk_count,
   look_at,
   preload_view,
   render_frame,
@@ -21,6 +25,7 @@ import init, {
   set_dolly,
   set_look_delta,
   take_animation_completed,
+  wasm_memory_bytes,
 } from "../../crates/engine/pkg/engine";
 import type { GameToRenderMessage, MainToRenderMessage } from "../messages";
 
@@ -45,6 +50,17 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage | MainToRenderMessag
       if (take_animation_completed()) {
         (self as unknown as Worker).postMessage({ type: "animation_complete" });
       }
+      (self as unknown as Worker).postMessage({
+        type: "stats",
+        frame_time_ms: frame_time_ms(),
+        loaded_chunks: loaded_chunk_count(),
+        atlas_total: atlas_slot_count(),
+        atlas_used: atlas_used_count(),
+        camera_x: camera_x(),
+        camera_y: camera_y(),
+        camera_z: camera_z(),
+        wasm_memory_bytes: wasm_memory_bytes(),
+      });
       setTimeout(loop, 16);
     }
     loop();
