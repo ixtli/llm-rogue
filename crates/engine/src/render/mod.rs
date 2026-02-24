@@ -26,6 +26,29 @@ use crate::voxel::TEST_GRID_SEED;
 #[cfg(feature = "wasm")]
 use glam::{UVec3, Vec3};
 
+/// Layout indices for the `collect_stats()` return vector.
+/// Mirror these in TypeScript (`src/stats-layout.ts`).
+pub const STAT_FRAME_TIME_MS: usize = 0;
+pub const STAT_CAMERA_X: usize = 1;
+pub const STAT_CAMERA_Y: usize = 2;
+pub const STAT_CAMERA_Z: usize = 3;
+pub const STAT_CAMERA_YAW: usize = 4;
+pub const STAT_CAMERA_PITCH: usize = 5;
+pub const STAT_LOADED_CHUNKS: usize = 6;
+pub const STAT_ATLAS_TOTAL: usize = 7;
+pub const STAT_ATLAS_USED: usize = 8;
+pub const STAT_WASM_MEMORY_BYTES: usize = 9;
+pub const STAT_PENDING_CHUNKS: usize = 10;
+pub const STAT_STREAMING_STATE: usize = 11;
+pub const STAT_LOADED_THIS_TICK: usize = 12;
+pub const STAT_UNLOADED_THIS_TICK: usize = 13;
+pub const STAT_CHUNK_BUDGET: usize = 14;
+pub const STAT_CACHED_CHUNKS: usize = 15;
+pub const STAT_CAMERA_CHUNK_X: usize = 16;
+pub const STAT_CAMERA_CHUNK_Y: usize = 17;
+pub const STAT_CAMERA_CHUNK_Z: usize = 18;
+pub const STAT_VEC_LEN: usize = 19;
+
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
 pub fn build_palette() -> Vec<[f32; 4]> {
@@ -314,28 +337,6 @@ impl Renderer {
         completed
     }
 
-    // Camera state getters for query responses.
-    #[must_use]
-    pub fn camera_x(&self) -> f32 {
-        self.camera.position.x
-    }
-    #[must_use]
-    pub fn camera_y(&self) -> f32 {
-        self.camera.position.y
-    }
-    #[must_use]
-    pub fn camera_z(&self) -> f32 {
-        self.camera.position.z
-    }
-    #[must_use]
-    pub fn camera_yaw(&self) -> f32 {
-        self.camera.yaw
-    }
-    #[must_use]
-    pub fn camera_pitch(&self) -> f32 {
-        self.camera.pitch
-    }
-
     /// Begin a camera intent (track, truck, pan, tilt, sprint).
     pub fn begin_intent(&mut self, intent: CameraIntent) {
         self.input.begin_intent(intent);
@@ -357,28 +358,34 @@ impl Renderer {
         self.camera.look_at(glam::Vec3::new(x, y, z));
     }
 
-    /// Last frame's delta time in milliseconds.
+    /// Collect all per-frame stats into a fixed-layout float vector.
     #[must_use]
-    pub fn frame_time_ms(&self) -> f32 {
-        self.last_dt * 1000.0
-    }
-
-    /// Number of currently loaded chunks.
-    #[must_use]
-    pub fn loaded_chunk_count(&self) -> u32 {
-        self.chunk_manager.loaded_count() as u32
-    }
-
-    /// Total atlas slots.
-    #[must_use]
-    pub fn atlas_slot_count(&self) -> u32 {
-        self.chunk_manager.atlas().total_slots()
-    }
-
-    /// Used atlas slots.
-    #[must_use]
-    pub fn atlas_used_count(&self) -> u32 {
-        self.chunk_manager.atlas().used_count()
+    #[allow(clippy::cast_precision_loss)]
+    pub fn collect_stats(&self) -> Vec<f32> {
+        let mut v = vec![0.0f32; STAT_VEC_LEN];
+        v[STAT_FRAME_TIME_MS] = self.last_dt * 1000.0;
+        v[STAT_CAMERA_X] = self.camera.position.x;
+        v[STAT_CAMERA_Y] = self.camera.position.y;
+        v[STAT_CAMERA_Z] = self.camera.position.z;
+        v[STAT_CAMERA_YAW] = self.camera.yaw;
+        v[STAT_CAMERA_PITCH] = self.camera.pitch;
+        v[STAT_LOADED_CHUNKS] = self.chunk_manager.loaded_count() as f32;
+        v[STAT_ATLAS_TOTAL] = self.chunk_manager.atlas().total_slots() as f32;
+        v[STAT_ATLAS_USED] = self.chunk_manager.atlas().used_count() as f32;
+        v[STAT_WASM_MEMORY_BYTES] = 0.0; // filled by WASM wrapper
+        if let Some(ref stats) = self.tick_stats {
+            v[STAT_PENDING_CHUNKS] = stats.pending_count as f32;
+            v[STAT_STREAMING_STATE] = stats.streaming_state as u32 as f32;
+            v[STAT_LOADED_THIS_TICK] = stats.loaded_this_tick as f32;
+            v[STAT_UNLOADED_THIS_TICK] = stats.unloaded_this_tick as f32;
+            v[STAT_CHUNK_BUDGET] = stats.budget as f32;
+            v[STAT_CACHED_CHUNKS] = stats.cached_count as f32;
+        }
+        let chunk_size = crate::voxel::CHUNK_SIZE as f32;
+        v[STAT_CAMERA_CHUNK_X] = (self.camera.position.x / chunk_size).floor();
+        v[STAT_CAMERA_CHUNK_Y] = (self.camera.position.y / chunk_size).floor();
+        v[STAT_CAMERA_CHUNK_Z] = (self.camera.position.z / chunk_size).floor();
+        v
     }
 }
 
