@@ -12,6 +12,50 @@ struct LoadedChunk {
     collision: Option<CollisionMap>,
 }
 
+/// Streaming state derived from tick statistics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StreamingState {
+    /// No pending chunks — the view is fully loaded.
+    Idle = 0,
+    /// Chunks are pending and some were loaded this tick.
+    Loading = 1,
+    /// Chunks are pending but none were loaded (budget exhausted or stalled).
+    Stalled = 2,
+}
+
+impl StreamingState {
+    /// Compute state from pending chunk count and chunks loaded this tick.
+    #[must_use]
+    pub fn from_counts(pending: u32, loaded_this_tick: u32) -> Self {
+        if pending == 0 {
+            Self::Idle
+        } else if loaded_this_tick > 0 {
+            Self::Loading
+        } else {
+            Self::Stalled
+        }
+    }
+}
+
+/// Per-tick streaming statistics.
+#[derive(Clone, Debug)]
+pub struct TickStats {
+    pub loaded_this_tick: u32,
+    pub unloaded_this_tick: u32,
+    pub pending_count: u32,
+    pub total_loaded: u32,
+    pub total_visible: u32,
+    pub cached_count: u32,
+    pub budget: u32,
+    pub streaming_state: StreamingState,
+}
+
+/// Result of a `ChunkManager::tick()` call.
+pub struct TickResult {
+    pub grid_info: crate::camera::GridInfo,
+    pub stats: TickStats,
+}
+
 /// Manages dynamic chunk loading and unloading around the camera.
 ///
 /// Wraps a [`ChunkAtlas`] and tracks which world coordinates are loaded.
@@ -362,5 +406,20 @@ mod tests {
         let (_gpu, mgr) = make_manager(42, 1);
         // No chunks loaded yet
         assert!(!mgr.is_solid(Vec3::new(16.0, 0.5, 16.0)));
+    }
+
+    #[test]
+    fn streaming_state_from_counts_idle() {
+        assert_eq!(StreamingState::from_counts(0, 3), StreamingState::Idle);
+    }
+
+    #[test]
+    fn streaming_state_from_counts_loading() {
+        assert_eq!(StreamingState::from_counts(5, 2), StreamingState::Loading);
+    }
+
+    #[test]
+    fn streaming_state_from_counts_stalled() {
+        assert_eq!(StreamingState::from_counts(5, 0), StreamingState::Stalled);
     }
 }
