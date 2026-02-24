@@ -313,6 +313,6 @@ pub fn atlas_used_count() -> u32 {
 pub fn wasm_memory_bytes() -> u32 {
     wasm_bindgen::memory()
         .dyn_into::<js_sys::WebAssembly::Memory>()
-        .map(|m| m.buffer().byte_length())
+        .map(|m| js_sys::ArrayBuffer::from(m.buffer()).byte_length())
         .unwrap_or(0)
 }
