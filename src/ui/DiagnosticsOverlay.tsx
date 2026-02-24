@@ -27,9 +27,14 @@ const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
     onCleanup(() => window.removeEventListener("keydown", onKey));
   });
 
-  // Update sparkline when data changes and overlay is visible
+  // Update sparkline when data changes and overlay is visible.
+  // When Show destroys the canvas, ctx becomes stale — clear it so
+  // we re-acquire from the new canvas element on next show.
   createEffect(() => {
-    if (!visible()) return;
+    if (!visible()) {
+      ctx = null;
+      return;
+    }
     if (!canvasRef) return;
     if (!ctx) ctx = canvasRef.getContext("2d");
     if (ctx) updateSparkline(ctx, canvasRef, props.data.fps, MAX_FPS);
