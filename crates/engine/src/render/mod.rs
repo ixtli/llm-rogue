@@ -68,6 +68,7 @@ pub struct Renderer {
     width: u32,
     height: u32,
     last_time: f32,
+    last_dt: f32,
 }
 
 #[cfg(feature = "wasm")]
@@ -123,6 +124,7 @@ impl Renderer {
             width,
             height,
             last_time: 0.0,
+            last_dt: 1.0 / 60.0,
         }
     }
 
@@ -138,6 +140,7 @@ impl Renderer {
             1.0 / 60.0
         };
         self.last_time = time;
+        self.last_dt = dt;
 
         // Animation takes priority over manual input.
         if let Some(anim) = &mut self.animation {
@@ -341,6 +344,30 @@ impl Renderer {
     /// Orient the camera to look at the given world-space position.
     pub fn look_at(&mut self, x: f32, y: f32, z: f32) {
         self.camera.look_at(glam::Vec3::new(x, y, z));
+    }
+
+    /// Last frame's delta time in milliseconds.
+    #[must_use]
+    pub fn frame_time_ms(&self) -> f32 {
+        self.last_dt * 1000.0
+    }
+
+    /// Number of currently loaded chunks.
+    #[must_use]
+    pub fn loaded_chunk_count(&self) -> u32 {
+        self.chunk_manager.loaded_count() as u32
+    }
+
+    /// Total atlas slots.
+    #[must_use]
+    pub fn atlas_slot_count(&self) -> u32 {
+        self.chunk_manager.atlas().total_slots()
+    }
+
+    /// Used atlas slots.
+    #[must_use]
+    pub fn atlas_used_count(&self) -> u32 {
+        self.chunk_manager.atlas().used_count()
     }
 }
 

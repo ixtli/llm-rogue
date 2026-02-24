@@ -169,6 +169,18 @@ impl ChunkAtlas {
         self.slots_per_axis
     }
 
+    /// Number of atlas slots currently occupied (flags == 1).
+    #[must_use]
+    pub fn used_count(&self) -> u32 {
+        self.slots.iter().filter(|s| s.flags == 1).count() as u32
+    }
+
+    /// Total number of atlas slots.
+    #[must_use]
+    pub fn total_slots(&self) -> u32 {
+        self.slots.len() as u32
+    }
+
     fn create_atlas_texture(device: &wgpu::Device, slots_per_axis: UVec3) -> wgpu::Texture {
         let chunk_u32 = CHUNK_SIZE as u32;
         device.create_texture(&wgpu::TextureDescriptor {
@@ -247,6 +259,24 @@ mod tests {
         assert_eq!(world_to_slot(IVec3::new(-1, 0, 0), slots), 7);
         assert_eq!(world_to_slot(IVec3::new(-8, 0, 0), slots), 0);
         assert_eq!(world_to_slot(IVec3::new(-1, -1, -1), slots), 127);
+    }
+
+    #[test]
+    fn used_count_empty_atlas() {
+        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
+        assert_eq!(atlas.used_count(), 0);
+    }
+
+    #[test]
+    fn used_count_after_upload() {
+        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let mut atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
+        let grid = build_test_grid();
+        let (coord, chunk) = &grid[0];
+        atlas.upload_chunk(&gpu.queue, 0, chunk, *coord);
+        assert_eq!(atlas.used_count(), 1);
+        assert_eq!(atlas.total_slots(), 128);
     }
 
     #[test]

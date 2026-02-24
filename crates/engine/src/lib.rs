@@ -267,3 +267,52 @@ pub fn is_chunk_loaded_at(cx: i32, cy: i32, cz: i32) -> bool {
             .map_or(false, |renderer| renderer.is_chunk_loaded(cx, cy, cz))
     })
 }
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn frame_time_ms() -> f32 {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(0.0, |renderer| renderer.frame_time_ms())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn loaded_chunk_count() -> u32 {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(0, |renderer| renderer.loaded_chunk_count())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn atlas_slot_count() -> u32 {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(0, |renderer| renderer.atlas_slot_count())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn atlas_used_count() -> u32 {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map_or(0, |renderer| renderer.atlas_used_count())
+    })
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn wasm_memory_bytes() -> u32 {
+    wasm_bindgen::memory()
+        .dyn_into::<js_sys::WebAssembly::Memory>()
+        .map(|m| m.buffer().byte_length())
+        .unwrap_or(0)
+}
