@@ -22,6 +22,19 @@ export interface DiagnosticsDigest {
   fps_history: number[];
 }
 
+export const EMPTY_DIGEST: DiagnosticsDigest = {
+  fps: 0,
+  frame_time_ms: 0,
+  loaded_chunks: 0,
+  atlas_total: 0,
+  atlas_used: 0,
+  camera_x: 0,
+  camera_y: 0,
+  camera_z: 0,
+  wasm_memory_bytes: 0,
+  fps_history: [],
+};
+
 /**
  * Ring buffer that collects per-frame stats and produces a diagnostics digest.
  * The digest includes a rolling FPS average and an fps_history array for
