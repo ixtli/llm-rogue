@@ -10,6 +10,38 @@ const SPARKLINE_WIDTH = 120;
 const SPARKLINE_HEIGHT = 30;
 const MAX_FPS = 120;
 
+const streamingLabel = (state: number): string => {
+  switch (state) {
+    case 0:
+      return "Idle";
+    case 1:
+      return "Loading";
+    case 2:
+      return "Stalled";
+    default:
+      return "Unknown";
+  }
+};
+
+const streamingColor = (state: number): string => {
+  switch (state) {
+    case 0:
+      return "#4caf50"; // green
+    case 1:
+      return "#ffeb3b"; // yellow
+    case 2:
+      return "#f44336"; // red
+    default:
+      return "#e0e0e0";
+  }
+};
+
+const budgetBar = (loaded: number, budget: number): string => {
+  if (budget === 0) return "";
+  const filled = Math.min(loaded, budget);
+  return "\u25A0".repeat(filled) + "\u25A1".repeat(budget - filled);
+};
+
 const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
   const [visible, setVisible] = createSignal(false);
   let canvasRef: HTMLCanvasElement | undefined;
@@ -86,6 +118,25 @@ const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
           {formatPos(props.data.camera_z)})
         </div>
         <div>WASM: {formatMB(props.data.wasm_memory_bytes)} MB</div>
+        <div>
+          <span style={{ color: streamingColor(props.data.streaming_state) }}>
+            Stream: {streamingLabel(props.data.streaming_state)}
+          </span>
+          {props.data.chunk_budget > 0 && (
+            <>
+              {" "}
+              {budgetBar(props.data.loaded_this_tick, props.data.chunk_budget)}{" "}
+              {props.data.loaded_this_tick}/{props.data.chunk_budget}
+            </>
+          )}
+        </div>
+        <div>
+          Pending: {props.data.pending_chunks} Cached: {props.data.cached_chunks}
+        </div>
+        <div>
+          Chunk: ({props.data.camera_chunk_x}, {props.data.camera_chunk_y},{" "}
+          {props.data.camera_chunk_z})
+        </div>
       </div>
     </Show>
   );
