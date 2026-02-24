@@ -1,15 +1,8 @@
 import init, {
   animate_camera,
-  atlas_slot_count,
-  atlas_used_count,
   begin_intent,
-  camera_pitch,
-  camera_x,
-  camera_y,
-  camera_yaw,
-  camera_z,
+  collect_frame_stats,
   end_intent,
-  frame_time_ms,
   handle_key_down,
   handle_key_up,
   handle_pan,
@@ -17,7 +10,6 @@ import init, {
   handle_scroll,
   init_renderer,
   is_chunk_loaded_at,
-  loaded_chunk_count,
   look_at,
   preload_view,
   render_frame,
@@ -25,9 +17,29 @@ import init, {
   set_dolly,
   set_look_delta,
   take_animation_completed,
-  wasm_memory_bytes,
 } from "../../crates/engine/pkg/engine";
 import type { GameToRenderMessage, MainToRenderMessage } from "../messages";
+import {
+  STAT_ATLAS_TOTAL,
+  STAT_ATLAS_USED,
+  STAT_CACHED_CHUNKS,
+  STAT_CAMERA_CHUNK_X,
+  STAT_CAMERA_CHUNK_Y,
+  STAT_CAMERA_CHUNK_Z,
+  STAT_CAMERA_PITCH,
+  STAT_CAMERA_X,
+  STAT_CAMERA_Y,
+  STAT_CAMERA_YAW,
+  STAT_CAMERA_Z,
+  STAT_CHUNK_BUDGET,
+  STAT_FRAME_TIME_MS,
+  STAT_LOADED_CHUNKS,
+  STAT_LOADED_THIS_TICK,
+  STAT_PENDING_CHUNKS,
+  STAT_STREAMING_STATE,
+  STAT_UNLOADED_THIS_TICK,
+  STAT_WASM_MEMORY_BYTES,
+} from "../stats-layout";
 
 self.onmessage = async (e: MessageEvent<GameToRenderMessage | MainToRenderMessage>) => {
   const msg = e.data;
@@ -50,16 +62,26 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage | MainToRenderMessag
       if (take_animation_completed()) {
         (self as unknown as Worker).postMessage({ type: "animation_complete" });
       }
+      const s = collect_frame_stats();
       (self as unknown as Worker).postMessage({
         type: "stats",
-        frame_time_ms: frame_time_ms(),
-        loaded_chunks: loaded_chunk_count(),
-        atlas_total: atlas_slot_count(),
-        atlas_used: atlas_used_count(),
-        camera_x: camera_x(),
-        camera_y: camera_y(),
-        camera_z: camera_z(),
-        wasm_memory_bytes: wasm_memory_bytes(),
+        frame_time_ms: s[STAT_FRAME_TIME_MS],
+        loaded_chunks: s[STAT_LOADED_CHUNKS],
+        atlas_total: s[STAT_ATLAS_TOTAL],
+        atlas_used: s[STAT_ATLAS_USED],
+        camera_x: s[STAT_CAMERA_X],
+        camera_y: s[STAT_CAMERA_Y],
+        camera_z: s[STAT_CAMERA_Z],
+        wasm_memory_bytes: s[STAT_WASM_MEMORY_BYTES],
+        pending_chunks: s[STAT_PENDING_CHUNKS],
+        streaming_state: s[STAT_STREAMING_STATE],
+        loaded_this_tick: s[STAT_LOADED_THIS_TICK],
+        unloaded_this_tick: s[STAT_UNLOADED_THIS_TICK],
+        chunk_budget: s[STAT_CHUNK_BUDGET],
+        cached_chunks: s[STAT_CACHED_CHUNKS],
+        camera_chunk_x: s[STAT_CAMERA_CHUNK_X],
+        camera_chunk_y: s[STAT_CAMERA_CHUNK_Y],
+        camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
       });
       setTimeout(loop, 16);
     }
@@ -91,14 +113,15 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage | MainToRenderMessag
   } else if (msg.type === "preload_view") {
     preload_view(msg.x, msg.y, msg.z);
   } else if (msg.type === "query_camera_position") {
+    const s = collect_frame_stats();
     (self as unknown as Worker).postMessage({
       type: "camera_position",
       id: msg.id,
-      x: camera_x(),
-      y: camera_y(),
-      z: camera_z(),
-      yaw: camera_yaw(),
-      pitch: camera_pitch(),
+      x: s[STAT_CAMERA_X],
+      y: s[STAT_CAMERA_Y],
+      z: s[STAT_CAMERA_Z],
+      yaw: s[STAT_CAMERA_YAW],
+      pitch: s[STAT_CAMERA_PITCH],
     });
   } else if (msg.type === "query_chunk_loaded") {
     (self as unknown as Worker).postMessage({
