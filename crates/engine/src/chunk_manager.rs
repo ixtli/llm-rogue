@@ -65,6 +65,8 @@ pub struct ChunkManager {
     atlas: ChunkAtlas,
     /// Maps loaded world chunk coordinate to per-chunk data.
     loaded: HashMap<IVec3, LoadedChunk>,
+    /// The set of chunk coordinates currently visible from the camera.
+    visible: HashSet<IVec3>,
     seed: u32,
     view_distance: u32,
     atlas_slots: UVec3,
@@ -86,6 +88,7 @@ impl ChunkManager {
         Self {
             atlas: ChunkAtlas::new(device, atlas_slots),
             loaded: HashMap::new(),
+            visible: HashSet::new(),
             seed,
             view_distance,
             atlas_slots,
@@ -209,6 +212,9 @@ impl ChunkManager {
         let visible = Self::compute_visible_set(camera_pos, self.view_distance);
         let visible_set: HashSet<IVec3> = visible.iter().copied().collect();
 
+        // Update visible set for grid_info computation.
+        self.visible.clone_from(&visible_set);
+
         // Unload chunks no longer visible.
         let stale: Vec<IVec3> = self
             .loaded
@@ -229,10 +235,10 @@ impl ChunkManager {
     }
 
     /// Compute the [`GridInfo`](crate::camera::GridInfo) bounding box from
-    /// currently loaded chunks.
+    /// the currently visible chunk set.
     #[allow(clippy::cast_precision_loss)]
     fn compute_grid_info(&self) -> crate::camera::GridInfo {
-        if self.loaded.is_empty() {
+        if self.visible.is_empty() {
             return crate::camera::GridInfo {
                 origin: IVec3::ZERO,
                 size: UVec3::ZERO,
@@ -243,7 +249,7 @@ impl ChunkManager {
 
         let mut min_coord = IVec3::new(i32::MAX, i32::MAX, i32::MAX);
         let mut max_coord = IVec3::new(i32::MIN, i32::MIN, i32::MIN);
-        for coord in self.loaded.keys() {
+        for coord in &self.visible {
             min_coord = min_coord.min(*coord);
             max_coord = max_coord.max(*coord);
         }
@@ -421,5 +427,18 @@ mod tests {
     #[test]
     fn streaming_state_from_counts_stalled() {
         assert_eq!(StreamingState::from_counts(5, 0), StreamingState::Stalled);
+    }
+
+    #[test]
+    fn grid_info_uses_visible_set() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        // First tick loads 27 chunks at origin.
+        mgr.tick(&gpu.queue, Vec3::new(16.0, 16.0, 16.0));
+        // Move camera far away. Old chunks stay cached, new ones load.
+        // grid_info should reflect the NEW visible set, not the cached chunks.
+        let result = mgr.tick(&gpu.queue, Vec3::new(16.0 + 5.0 * 32.0, 16.0, 16.0));
+        // Camera is in chunk (5,0,0), vd=1 → visible from (4,-1,-1) to (6,1,1)
+        assert_eq!(result.origin, IVec3::new(4, -1, -1));
+        assert_eq!(result.size, UVec3::new(3, 3, 3));
     }
 }
