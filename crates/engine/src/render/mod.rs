@@ -236,16 +236,6 @@ impl Renderer {
         frame.present();
     }
 
-    /// Handle a key down event.
-    pub fn key_down(&mut self, key: &str) {
-        self.input.key_down(key);
-    }
-
-    /// Handle a key up event.
-    pub fn key_up(&mut self, key: &str) {
-        self.input.key_up(key);
-    }
-
     /// Handle a pointer move (look) event. dx/dy are pre-scaled radians.
     pub fn pointer_move(&mut self, dx: f32, dy: f32) {
         let m = self.sprint_multiplier();
