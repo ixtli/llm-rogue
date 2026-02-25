@@ -342,31 +342,6 @@ pub struct InputState {
 }
 
 impl InputState {
-    /// Handle a key down event. `key` is the JS `KeyboardEvent.key` value (lowercase).
-    pub fn key_down(&mut self, key: &str) {
-        self.set_key(key, true);
-    }
-
-    /// Handle a key up event.
-    pub fn key_up(&mut self, key: &str) {
-        self.set_key(key, false);
-    }
-
-    fn set_key(&mut self, key: &str, pressed: bool) {
-        match key {
-            "w" => self.forward = pressed,
-            "s" => self.backward = pressed,
-            "a" => self.left = pressed,
-            "d" => self.right = pressed,
-            "q" => self.yaw_left = pressed,
-            "e" => self.yaw_right = pressed,
-            "r" => self.pitch_up = pressed,
-            "f" => self.pitch_down = pressed,
-            "shift" => self.sprint = pressed,
-            _ => {}
-        }
-    }
-
     /// Activate a camera intent.
     pub fn begin_intent(&mut self, intent: CameraIntent) {
         self.set_intent(intent, true);
@@ -551,24 +526,6 @@ mod tests {
         cam.apply_pan(1.0, 0.0);
         // At yaw=0, right is [1, 0, 0]
         assert!((cam.position.x - (x_before + 1.0)).abs() < 1e-5);
-    }
-
-    #[test]
-    fn key_press_and_release() {
-        let mut input = InputState::default();
-        input.key_down("w");
-        assert!(input.forward);
-        input.key_up("w");
-        assert!(!input.forward);
-    }
-
-    #[test]
-    fn shift_maps_to_sprint() {
-        let mut input = InputState::default();
-        input.key_down("shift");
-        assert!(input.sprint);
-        input.key_up("shift");
-        assert!(!input.sprint);
     }
 
     #[test]

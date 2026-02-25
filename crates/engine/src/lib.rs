@@ -44,61 +44,6 @@ pub fn render_frame(time: f32) {
     });
 }
 
-/// Handle a key-down event. `key` is the JS `event.key` value, lowercased.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn handle_key_down(key: &str) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.key_down(key);
-        }
-    });
-}
-
-/// Handle a key-up event.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn handle_key_up(key: &str) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.key_up(key);
-        }
-    });
-}
-
-/// Handle a pointer move (look) event. dx/dy are pre-scaled radians.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn handle_pointer_move(dx: f32, dy: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.pointer_move(dx, dy);
-        }
-    });
-}
-
-/// Handle a scroll (dolly) event. dy is pre-scaled world units.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn handle_scroll(dy: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.scroll(dy);
-        }
-    });
-}
-
-/// Handle a pan (strafe) event. dx/dy are pre-scaled world units.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn handle_pan(dx: f32, dy: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.pan(dx, dy);
-        }
-    });
-}
-
 /// Orient the camera to look at the given world-space voxel coordinate.
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
@@ -228,6 +173,19 @@ pub fn is_chunk_loaded_at(cx: i32, cy: i32, cz: i32) -> bool {
         r.borrow()
             .as_ref()
             .is_some_and(|renderer| renderer.is_chunk_loaded(cx, cy, cz))
+    })
+}
+
+/// Whether the voxel at the given world-space position is solid.
+/// Returns `false` for unloaded chunks or air.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+#[must_use]
+pub fn is_solid(x: f32, y: f32, z: f32) -> bool {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .is_some_and(|renderer| renderer.is_solid(x, y, z))
     })
 }
 

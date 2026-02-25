@@ -236,16 +236,6 @@ impl Renderer {
         frame.present();
     }
 
-    /// Handle a key down event.
-    pub fn key_down(&mut self, key: &str) {
-        self.input.key_down(key);
-    }
-
-    /// Handle a key up event.
-    pub fn key_up(&mut self, key: &str) {
-        self.input.key_up(key);
-    }
-
     /// Handle a pointer move (look) event. dx/dy are pre-scaled radians.
     pub fn pointer_move(&mut self, dx: f32, dy: f32) {
         let m = self.sprint_multiplier();
@@ -350,6 +340,12 @@ impl Renderer {
     #[must_use]
     pub fn is_chunk_loaded(&self, cx: i32, cy: i32, cz: i32) -> bool {
         self.chunk_manager.is_loaded(glam::IVec3::new(cx, cy, cz))
+    }
+
+    /// Whether the voxel at the given world position is solid.
+    #[must_use]
+    pub fn is_solid(&self, x: f32, y: f32, z: f32) -> bool {
+        self.chunk_manager.is_solid(Vec3::new(x, y, z))
     }
 
     /// Orient the camera to look at the given world-space position.
