@@ -2,41 +2,27 @@
 
 ## Project Overview
 
-A roguelike with an LLM-generated infinite voxel world. The engine uses sparse
-voxel octrees (SVOs) rendered via GPU ray marching in Rust/WASM (wgpu/WebGPU),
-with a Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md`
-for the full architecture.
+A roguelike with an LLM-generated infinite voxel world. The engine renders via
+GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
+Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
+full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phase 5 (lighting), Phase 4b (collision), and the visual
-diagnostics overlay are complete. The engine renders a 4×2×4 multi-chunk terrain
-grid (128×64×128 voxels) with hard shadows and ambient occlusion, all computed
-inline in a single WGSL compute shader via secondary ray casting. Two-level DDA
-ray marching traverses chunks then voxels within each chunk, reading from a 3D
-texture atlas. Point collision prevents the camera from entering solid voxels
-(flight with solid walls, no gravity). A 1-bit-per-voxel collision bitfield
-(4KB/chunk) provides lightweight `is_solid` queries with a boundary-crossing
-optimization that skips lookups when the camera stays within the same voxel.
+**Current state:** Phases 1–4b and Phase 5 (stages A+B) are complete. The
+engine renders dynamically-loaded multi-chunk terrain with hard shadows and
+ambient occlusion via two-level DDA ray marching through a 3D texture atlas.
+Chunk loading is budgeted (4/frame), distance-prioritized, with trajectory
+prediction and implicit LRU caching. Collision gating prevents the camera from
+entering solid voxels. Three-thread architecture (UI → game worker → render
+worker) with intent-based camera control.
 
-A toggle-able diagnostics overlay (backtick key) shows FPS sparkline, frame
-time, chunk/atlas stats, camera position, and WASM memory usage. The render
-worker emits per-frame stats via WASM getters; the game worker aggregates them
-in a ring buffer and emits 4Hz digests to the UI thread.
-
-Camera controls: WASD move, QE yaw, RF pitch, mouse/trackpad look, scroll zoom.
-A camera intent API supports instant placement, smooth animated transitions with
-easing, and view preloading. Seven headless wgpu regression tests verify
-rendering from known camera angles against reference PNGs. Spatial types use
-glam (`Vec3`, `IVec3`, `UVec3`).
-
-Next milestone: Phase 4b continued (chunk streaming, dynamic load/unload) then
-Phase 6 (game and UI).
+Next milestone: Phase 6 (game logic loop, player state, UI).
 
 ## Tech Stack
 
 - **Render engine:** Rust, wgpu, WASM (compiled via wasm-pack)
 - **Shaders:** WGSL (compute shaders for ray marching)
 - **UI:** Solid.js, TypeScript, JSX
-- **Game logic:** TypeScript (Web Worker — not yet implemented)
+- **Game logic:** TypeScript (Web Worker — input routing + stats aggregation)
 - **Build:** Vite + vite-plugin-wasm + wasm-pack
 - **Package manager:** Bun (standard package.json, npm/pnpm as fallback)
 - **Testing (Rust):** `cargo test -p engine` (unit + regression)
@@ -45,16 +31,19 @@ Phase 6 (game and UI).
 
 ## Architecture Rules
 
-- **Rust owns:** rendering, SVO construction, GPU pipeline, ray marching, lighting,
-  collision detection.
-- **TypeScript owns:** game logic, chunk lifecycle, networking, UI, input handling.
+- **Rust owns:** rendering, chunk lifecycle, GPU pipeline, ray marching, lighting,
+  collision detection, 3D texture atlas management.
+- **TypeScript owns:** game logic (future), networking (future), UI, input
+  translation.
 - **Communication:** All cross-layer communication is via `postMessage`. No shared
   mutable state between workers.
 - **Three threads:** UI thread (Solid.js + input + diagnostics overlay), game
   logic worker (TypeScript — input translation, stats aggregation), render worker
   (Rust/WASM). Input flows UI → game worker → render worker. Stats flow render
   worker → game worker (per-frame) → UI (4Hz digest).
-- **Chunk data flows one direction:** server → game logic worker → render worker.
+- **Chunk lifecycle is in Rust.** The `ChunkManager` computes visible sets and
+  loads chunks autonomously based on camera position. No chunk commands flow
+  from TypeScript.
 
 ## Build Commands
 
