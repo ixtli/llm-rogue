@@ -223,7 +223,7 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
         let c_aabb = intersect_aabb(origin, dir, c_min, c_max);
         let ct = max(c_aabb.x, 0.0) + 0.001;
 
-        let result = dda_chunk(origin, dir, ct, c_min, slot_off, step);
+        let result = dda_chunk(origin, dir, ct, c_min, slot_off, step, u32(slot));
         if result.x >= 0.0 {
             // Hit — result encodes (material_id, face, t_hit, _)
             let mat_id = u32(result.x);
@@ -251,6 +251,7 @@ fn dda_chunk(
     chunk_min: vec3<f32>,
     slot_off: vec3<u32>,
     step: vec3<i32>,
+    slot: u32,
 ) -> vec4<f32> {
     let local_pos = origin + dir * t_start - chunk_min;
     var map = vec3<i32>(floor(local_pos));
@@ -270,6 +271,39 @@ fn dda_chunk(
            map.y < 0 || map.y >= CHUNK_I ||
            map.z < 0 || map.z >= CHUNK_I {
             return vec4(-f32(face) - 1.0, 0.0, 0.0, 0.0);
+        }
+
+        // Sub-region skip: check occupancy bitmask
+        let sr = vec3<i32>(map.x >> 3, map.y >> 3, map.z >> 3);
+        if !is_subregion_occupied(slot, sr) {
+            // Advance to exit of this 8-voxel sub-region
+            let sr_min = vec3<f32>(sr * 8);
+            let sr_max = sr_min + 8.0;
+            let inv = 1.0 / dir;
+            let t0 = (sr_min - local_pos) * inv;
+            let t1 = (sr_max - local_pos) * inv;
+            let t_exit = max(t0, t1);
+            let t_leave = min(min(t_exit.x, t_exit.y), t_exit.z) + 0.001;
+
+            // Advance map position and side distances
+            let new_local = local_pos + dir * t_leave;
+            map = vec3<i32>(floor(new_local));
+            map = clamp(map, vec3(0), vec3(CHUNK_I - 1));
+            side = (vec3(
+                select(f32(map.x) + 1.0, f32(map.x), dir.x < 0.0),
+                select(f32(map.y) + 1.0, f32(map.y), dir.y < 0.0),
+                select(f32(map.z) + 1.0, f32(map.z), dir.z < 0.0),
+            ) - local_pos) / dir;
+
+            // Determine exit face
+            if t_exit.x < t_exit.y && t_exit.x < t_exit.z {
+                face = 0u;
+            } else if t_exit.y < t_exit.z {
+                face = 1u;
+            } else {
+                face = 2u;
+            }
+            continue;
         }
 
         let texel = textureLoad(atlas, slot_off + vec3<u32>(map), 0);
@@ -308,6 +342,7 @@ fn trace_ray_chunk(
     slot_off: vec3<u32>,
     step: vec3<i32>,
     max_t: f32,
+    slot: u32,
 ) -> bool {
     let local_pos = origin + dir * t_start - chunk_min;
     var map = vec3<i32>(floor(local_pos));
@@ -331,6 +366,30 @@ fn trace_ray_chunk(
         let current_t = t_start + min(min(side.x, side.y), side.z);
         if current_t > max_t {
             return false;
+        }
+
+        // Sub-region skip: check occupancy bitmask
+        let sr = vec3<i32>(map.x >> 3, map.y >> 3, map.z >> 3);
+        if !is_subregion_occupied(slot, sr) {
+            // Advance to exit of this 8-voxel sub-region
+            let sr_min = vec3<f32>(sr * 8);
+            let sr_max = sr_min + 8.0;
+            let inv = 1.0 / dir;
+            let t0 = (sr_min - local_pos) * inv;
+            let t1 = (sr_max - local_pos) * inv;
+            let t_exit = max(t0, t1);
+            let t_leave = min(min(t_exit.x, t_exit.y), t_exit.z) + 0.001;
+
+            // Advance map position and side distances
+            let new_local = local_pos + dir * t_leave;
+            map = vec3<i32>(floor(new_local));
+            map = clamp(map, vec3(0), vec3(CHUNK_I - 1));
+            side = (vec3(
+                select(f32(map.x) + 1.0, f32(map.x), dir.x < 0.0),
+                select(f32(map.y) + 1.0, f32(map.y), dir.y < 0.0),
+                select(f32(map.z) + 1.0, f32(map.z), dir.z < 0.0),
+            ) - local_pos) / dir;
+            continue;
         }
 
         let texel = textureLoad(atlas, slot_off + vec3<u32>(map), 0);
@@ -387,7 +446,7 @@ fn trace_ray(origin: vec3<f32>, dir: vec3<f32>, max_dist: f32) -> bool {
             let c_aabb = intersect_aabb(origin, dir, c_min, c_max);
             let ct = max(c_aabb.x, 0.0) + 0.001;
 
-            if trace_ray_chunk(origin, dir, ct, c_min, slot_off, step, max_t) {
+            if trace_ray_chunk(origin, dir, ct, c_min, slot_off, step, max_t, u32(slot)) {
                 return true;
             }
         }
