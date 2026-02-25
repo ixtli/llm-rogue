@@ -54,6 +54,8 @@ impl RaymarchPass {
         queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(uniform));
     }
 
+    /// Rebuilds the bind group to reference a new storage texture view after
+    /// the window has been resized.
     pub fn rebuild_for_resize(
         &mut self,
         device: &wgpu::Device,

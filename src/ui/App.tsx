@@ -88,10 +88,16 @@ const App: Component<AppProps> = (props) => {
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     const RESIZE_DEBOUNCE_MS = 150;
 
+    let lastSentWidth = physicalWidth;
+    let lastSentHeight = physicalHeight;
+
     const sendResize = () => {
       const currentDpr = window.devicePixelRatio || 1;
       const w = Math.floor(window.innerWidth * currentDpr);
       const h = Math.floor(window.innerHeight * currentDpr);
+      if (w === lastSentWidth && h === lastSentHeight) return;
+      lastSentWidth = w;
+      lastSentHeight = h;
       worker.postMessage({ type: "resize", width: w, height: h } satisfies UIToGameMessage);
     };
 
