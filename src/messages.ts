@@ -35,6 +35,7 @@ export type GameToRenderMessage =
   | { type: "preload_view"; x: number; y: number; z: number }
   | { type: "query_camera_position"; id: number }
   | { type: "query_chunk_loaded"; id: number; cx: number; cy: number; cz: number }
+  | { type: "is_solid"; x: number; y: number; z: number; id: number }
   | { type: "resize"; width: number; height: number };
 
 // --- Render Worker → Game Worker ---
@@ -53,6 +54,7 @@ export type RenderToGameMessage =
       pitch: number;
     }
   | { type: "chunk_loaded"; id: number; loaded: boolean }
+  | { type: "is_solid_result"; id: number; solid: boolean }
   | {
       type: "stats";
       frame_time_ms: number;
@@ -101,16 +103,3 @@ export type GameToUIMessage =
       camera_chunk_y: number;
       camera_chunk_z: number;
     };
-
-// --- Backward compatibility (used by old debug input path) ---
-
-export type MainToRenderMessage =
-  | { type: "init"; canvas: OffscreenCanvas; width: number; height: number }
-  | { type: "key_down"; key: string }
-  | { type: "key_up"; key: string }
-  | { type: "pointer_move"; dx: number; dy: number }
-  | { type: "scroll"; dy: number }
-  | { type: "pan"; dx: number; dy: number }
-  | { type: "look_at"; x: number; y: number; z: number };
-
-export type RenderToMainMessage = { type: "ready" } | { type: "error"; message: string };

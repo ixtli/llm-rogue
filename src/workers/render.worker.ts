@@ -3,13 +3,9 @@ import init, {
   begin_intent,
   collect_frame_stats,
   end_intent,
-  handle_key_down,
-  handle_key_up,
-  handle_pan,
-  handle_pointer_move,
-  handle_scroll,
   init_renderer,
   is_chunk_loaded_at,
+  is_solid,
   look_at,
   preload_view,
   render_frame,
@@ -19,7 +15,7 @@ import init, {
   set_look_delta,
   take_animation_completed,
 } from "../../crates/engine/pkg/engine";
-import type { GameToRenderMessage, MainToRenderMessage } from "../messages";
+import type { GameToRenderMessage } from "../messages";
 import {
   STAT_ATLAS_TOTAL,
   STAT_ATLAS_USED,
@@ -42,7 +38,7 @@ import {
   STAT_WASM_MEMORY_BYTES,
 } from "../stats-layout";
 
-self.onmessage = async (e: MessageEvent<GameToRenderMessage | MainToRenderMessage>) => {
+self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   const msg = e.data;
 
   if (msg.type === "init") {
@@ -87,16 +83,6 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage | MainToRenderMessag
       setTimeout(loop, 16);
     }
     loop();
-  } else if (msg.type === "key_down") {
-    handle_key_down(msg.key);
-  } else if (msg.type === "key_up") {
-    handle_key_up(msg.key);
-  } else if (msg.type === "pointer_move") {
-    handle_pointer_move(msg.dx, msg.dy);
-  } else if (msg.type === "scroll") {
-    handle_scroll(msg.dy);
-  } else if (msg.type === "pan") {
-    handle_pan(msg.dx, msg.dy);
   } else if (msg.type === "look_at") {
     look_at(msg.x, msg.y, msg.z);
   } else if (msg.type === "begin_intent") {
@@ -129,6 +115,12 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage | MainToRenderMessag
       type: "chunk_loaded",
       id: msg.id,
       loaded: is_chunk_loaded_at(msg.cx, msg.cy, msg.cz),
+    });
+  } else if (msg.type === "is_solid") {
+    (self as unknown as Worker).postMessage({
+      type: "is_solid_result",
+      id: msg.id,
+      solid: is_solid(msg.x, msg.y, msg.z),
     });
   } else if (msg.type === "resize") {
     resize_renderer(msg.width, msg.height);
