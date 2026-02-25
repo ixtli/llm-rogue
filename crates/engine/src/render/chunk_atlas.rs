@@ -54,6 +54,8 @@ pub struct ChunkAtlas {
     atlas_texture: wgpu::Texture,
     atlas_view: wgpu::TextureView,
     index_buffer: wgpu::Buffer,
+    occupancy_buffer: wgpu::Buffer,
+    occupancy_masks: Vec<u64>,
     pub slots: Vec<ChunkSlotGpu>,
     slots_per_axis: UVec3,
 }
@@ -85,10 +87,19 @@ impl ChunkAtlas {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
+        let occupancy_masks = vec![0u64; total_slots];
+        let occupancy_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Chunk Occupancy"),
+            contents: bytemuck::cast_slice(&occupancy_masks),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
         Self {
             atlas_texture,
             atlas_view,
             index_buffer,
+            occupancy_buffer,
+            occupancy_masks,
             slots,
             slots_per_axis,
         }
@@ -139,15 +150,30 @@ impl ChunkAtlas {
             u64::from(slot) * size_of::<ChunkSlotGpu>() as u64,
             bytemuck::bytes_of(&self.slots[slot as usize]),
         );
+
+        let mask = chunk.occupancy_mask();
+        self.occupancy_masks[slot as usize] = mask;
+        queue.write_buffer(
+            &self.occupancy_buffer,
+            u64::from(slot) * size_of::<u64>() as u64,
+            bytemuck::bytes_of(&mask),
+        );
     }
 
-    /// Mark a slot as empty in the index buffer.
+    /// Mark a slot as empty in the index buffer and clear its occupancy mask.
     pub fn clear_slot(&mut self, queue: &wgpu::Queue, slot: u32) {
         self.slots[slot as usize].flags = 0;
         queue.write_buffer(
             &self.index_buffer,
             u64::from(slot) * size_of::<ChunkSlotGpu>() as u64,
             bytemuck::bytes_of(&self.slots[slot as usize]),
+        );
+
+        self.occupancy_masks[slot as usize] = 0;
+        queue.write_buffer(
+            &self.occupancy_buffer,
+            u64::from(slot) * size_of::<u64>() as u64,
+            bytemuck::bytes_of(&0u64),
         );
     }
 
@@ -161,6 +187,18 @@ impl ChunkAtlas {
     #[must_use]
     pub fn index_buffer(&self) -> &wgpu::Buffer {
         &self.index_buffer
+    }
+
+    /// Returns a reference to the occupancy bitmask GPU buffer.
+    #[must_use]
+    pub fn occupancy_buffer(&self) -> &wgpu::Buffer {
+        &self.occupancy_buffer
+    }
+
+    /// Returns the CPU-side occupancy masks (one `u64` per atlas slot).
+    #[must_use]
+    pub fn occupancy_masks(&self) -> &[u64] {
+        &self.occupancy_masks
     }
 
     /// Returns the slot dimensions of the atlas.
@@ -277,6 +315,35 @@ mod tests {
         atlas.upload_chunk(&gpu.queue, 0, chunk, *coord);
         assert_eq!(atlas.used_count(), 1);
         assert_eq!(atlas.total_slots(), 128);
+    }
+
+    #[test]
+    fn occupancy_buffer_exists() {
+        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
+        let _buf = atlas.occupancy_buffer();
+    }
+
+    #[test]
+    fn occupancy_updated_on_upload() {
+        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let mut atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
+        let grid = build_test_grid();
+        let (coord, chunk) = &grid[0];
+        let mask = chunk.occupancy_mask();
+        atlas.upload_chunk(&gpu.queue, 0, chunk, *coord);
+        assert_eq!(atlas.occupancy_masks()[0], mask);
+    }
+
+    #[test]
+    fn occupancy_cleared_on_clear_slot() {
+        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let mut atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
+        let grid = build_test_grid();
+        let (coord, chunk) = &grid[0];
+        atlas.upload_chunk(&gpu.queue, 0, chunk, *coord);
+        atlas.clear_slot(&gpu.queue, 0);
+        assert_eq!(atlas.occupancy_masks()[0], 0);
     }
 
     #[test]
