@@ -62,6 +62,26 @@ impl Chunk {
         self.voxels.iter().all(|&v| v == 0)
     }
 
+    /// Returns a 64-bit bitmask indicating which 8x8x8 sub-regions contain
+    /// at least one non-air voxel. The chunk is subdivided into a 4x4x4 grid
+    /// of sub-regions (64 total). Bit index: `(x/8) + (y/8)*4 + (z/8)*16`.
+    #[must_use]
+    pub fn occupancy_mask(&self) -> u64 {
+        let mut mask = 0u64;
+        for z in 0..CHUNK_SIZE {
+            for y in 0..CHUNK_SIZE {
+                for x in 0..CHUNK_SIZE {
+                    let v = self.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x];
+                    if material_id(v) != 0 {
+                        let bit = (x / 8) + (y / 8) * 4 + (z / 8) * 16;
+                        mask |= 1u64 << bit;
+                    }
+                }
+            }
+        }
+        mask
+    }
+
     #[must_use]
     #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
     pub fn new_terrain(seed: u32) -> Self {
@@ -294,6 +314,55 @@ mod tests {
         };
         chunk.voxels[0] = pack_voxel(MAT_STONE, 0, 0, 0);
         assert!(!chunk.is_empty());
+    }
+
+    #[test]
+    fn occupancy_mask_empty_chunk() {
+        let chunk = Chunk {
+            voxels: vec![0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE],
+        };
+        assert_eq!(chunk.occupancy_mask(), 0);
+    }
+
+    #[test]
+    fn occupancy_mask_single_voxel_bottom_corner() {
+        let mut chunk = Chunk {
+            voxels: vec![0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE],
+        };
+        chunk.voxels[0] = pack_voxel(MAT_STONE, 0, 0, 0);
+        assert_eq!(chunk.occupancy_mask(), 1);
+    }
+
+    #[test]
+    fn occupancy_mask_voxel_in_last_subregion() {
+        let mut chunk = Chunk {
+            voxels: vec![0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE],
+        };
+        let idx = 31 * CHUNK_SIZE * CHUNK_SIZE + 31 * CHUNK_SIZE + 31;
+        chunk.voxels[idx] = pack_voxel(MAT_STONE, 0, 0, 0);
+        assert_eq!(chunk.occupancy_mask(), 1u64 << 63);
+    }
+
+    #[test]
+    fn occupancy_mask_full_terrain_nonzero() {
+        let chunk = Chunk::new_terrain(42);
+        let mask = chunk.occupancy_mask();
+        assert_ne!(mask, 0, "terrain chunk should have occupied sub-regions");
+        assert_ne!(
+            mask,
+            u64::MAX,
+            "terrain chunk should have empty sub-regions"
+        );
+    }
+
+    #[test]
+    fn occupancy_mask_bit_index_formula() {
+        let mut chunk = Chunk {
+            voxels: vec![0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE],
+        };
+        let idx = 0 * CHUNK_SIZE * CHUNK_SIZE + 0 * CHUNK_SIZE + 8;
+        chunk.voxels[idx] = pack_voxel(MAT_DIRT, 0, 0, 0);
+        assert_eq!(chunk.occupancy_mask(), 1u64 << 1);
     }
 
     #[test]
