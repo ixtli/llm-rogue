@@ -184,3 +184,6 @@ crates/engine/pkg/
 
 ### Render regression test outputs ###
 crates/engine/tests/fixtures/*_actual.png
+
+### Git worktrees ###
+.worktrees/
