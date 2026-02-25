@@ -59,4 +59,41 @@ describe("DiagnosticsOverlay", () => {
     fireEvent.keyDown(window, { key: "`" });
     expect(screen.getByText(/4\.0/)).toBeTruthy();
   });
+
+  it("displays streaming state", () => {
+    const [data] = createSignal<DiagnosticsDigest>({
+      ...EMPTY_DIGEST,
+      streaming_state: 1, // Loading
+      loaded_this_tick: 2,
+      chunk_budget: 4,
+    });
+    render(() => <DiagnosticsOverlay data={data()} />);
+    fireEvent.keyDown(window, { key: "`" });
+    expect(screen.getByText(/Loading/)).toBeTruthy();
+    expect(screen.getByText(/2\/4/)).toBeTruthy();
+  });
+
+  it("displays pending and cached counts", () => {
+    const [data] = createSignal<DiagnosticsDigest>({
+      ...EMPTY_DIGEST,
+      pending_chunks: 12,
+      cached_chunks: 45,
+    });
+    render(() => <DiagnosticsOverlay data={data()} />);
+    fireEvent.keyDown(window, { key: "`" });
+    expect(screen.getByText(/12/)).toBeTruthy();
+    expect(screen.getByText(/45/)).toBeTruthy();
+  });
+
+  it("displays camera chunk coordinate", () => {
+    const [data] = createSignal<DiagnosticsDigest>({
+      ...EMPTY_DIGEST,
+      camera_chunk_x: 2,
+      camera_chunk_y: 0,
+      camera_chunk_z: -1,
+    });
+    render(() => <DiagnosticsOverlay data={data()} />);
+    fireEvent.keyDown(window, { key: "`" });
+    expect(screen.getByText(/2, 0, -1/)).toBeTruthy();
+  });
 });

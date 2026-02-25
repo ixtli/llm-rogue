@@ -61,6 +61,15 @@ export type RenderToGameMessage =
       camera_y: number;
       camera_z: number;
       wasm_memory_bytes: number;
+      pending_chunks: number;
+      streaming_state: number;
+      loaded_this_tick: number;
+      unloaded_this_tick: number;
+      chunk_budget: number;
+      cached_chunks: number;
+      camera_chunk_x: number;
+      camera_chunk_y: number;
+      camera_chunk_z: number;
     };
 
 // --- Game Worker → UI ---
@@ -80,6 +89,15 @@ export type GameToUIMessage =
       camera_z: number;
       wasm_memory_bytes: number;
       fps_history: number[];
+      pending_chunks: number;
+      streaming_state: number;
+      loaded_this_tick: number;
+      unloaded_this_tick: number;
+      chunk_budget: number;
+      cached_chunks: number;
+      camera_chunk_x: number;
+      camera_chunk_y: number;
+      camera_chunk_z: number;
     };
 
 // --- Backward compatibility (used by old debug input path) ---

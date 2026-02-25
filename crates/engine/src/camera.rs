@@ -102,6 +102,14 @@ impl CameraAnimation {
         self.elapsed >= self.duration
     }
 
+    /// Sample the animation's position at a normalized time `t` (0.0 to 1.0).
+    /// Used for trajectory prediction -- only position matters for chunk loading.
+    #[must_use]
+    pub fn position_at(&self, t: f32) -> Vec3 {
+        let eased = (self.easing)(t.clamp(0.0, 1.0));
+        self.from_position.lerp(self.to_position, eased)
+    }
+
     /// Interpolate position, yaw, and pitch at the current elapsed time.
     #[must_use]
     pub fn interpolate(&self) -> (Vec3, f32, f32) {
@@ -717,6 +725,22 @@ mod tests {
             input.end_intent(*intent);
             assert!(!check(&input), "end {intent:?} should clear field");
         }
+    }
+
+    #[test]
+    fn animation_position_at_samples_curve() {
+        let anim = CameraAnimation::new(
+            Vec3::ZERO,
+            0.0,
+            0.0,
+            Vec3::new(100.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            2.0,
+            EasingKind::Linear,
+        );
+        let pos = anim.position_at(0.5);
+        assert!((pos.x - 50.0).abs() < 1e-3);
     }
 
     #[test]

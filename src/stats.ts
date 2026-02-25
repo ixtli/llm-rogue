@@ -7,6 +7,15 @@ export interface StatsSample {
   camera_y: number;
   camera_z: number;
   wasm_memory_bytes: number;
+  pending_chunks: number;
+  streaming_state: number;
+  loaded_this_tick: number;
+  unloaded_this_tick: number;
+  chunk_budget: number;
+  cached_chunks: number;
+  camera_chunk_x: number;
+  camera_chunk_y: number;
+  camera_chunk_z: number;
 }
 
 export interface DiagnosticsDigest {
@@ -20,6 +29,15 @@ export interface DiagnosticsDigest {
   camera_z: number;
   wasm_memory_bytes: number;
   fps_history: number[];
+  pending_chunks: number;
+  streaming_state: number;
+  loaded_this_tick: number;
+  unloaded_this_tick: number;
+  chunk_budget: number;
+  cached_chunks: number;
+  camera_chunk_x: number;
+  camera_chunk_y: number;
+  camera_chunk_z: number;
 }
 
 export const EMPTY_DIGEST: DiagnosticsDigest = {
@@ -33,6 +51,15 @@ export const EMPTY_DIGEST: DiagnosticsDigest = {
   camera_z: 0,
   wasm_memory_bytes: 0,
   fps_history: [],
+  pending_chunks: 0,
+  streaming_state: 0,
+  loaded_this_tick: 0,
+  unloaded_this_tick: 0,
+  chunk_budget: 0,
+  cached_chunks: 0,
+  camera_chunk_x: 0,
+  camera_chunk_y: 0,
+  camera_chunk_z: 0,
 };
 
 /**
@@ -89,6 +116,15 @@ export class StatsAggregator {
       camera_z: s?.camera_z ?? 0,
       wasm_memory_bytes: s?.wasm_memory_bytes ?? 0,
       fps_history: history,
+      pending_chunks: s?.pending_chunks ?? 0,
+      streaming_state: s?.streaming_state ?? 0,
+      loaded_this_tick: s?.loaded_this_tick ?? 0,
+      unloaded_this_tick: s?.unloaded_this_tick ?? 0,
+      chunk_budget: s?.chunk_budget ?? 0,
+      cached_chunks: s?.cached_chunks ?? 0,
+      camera_chunk_x: s?.camera_chunk_x ?? 0,
+      camera_chunk_y: s?.camera_chunk_y ?? 0,
+      camera_chunk_z: s?.camera_chunk_z ?? 0,
     };
   }
 }

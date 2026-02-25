@@ -45,4 +45,37 @@ describe("StatsAggregator", () => {
     const digest = agg.digest();
     expect(digest.fps_history).toHaveLength(1);
   });
+
+  it("passes through streaming fields from latest sample", () => {
+    const agg = new StatsAggregator(60);
+    agg.push(16.67, {
+      frame_time_ms: 16.67,
+      loaded_chunks: 100,
+      atlas_total: 512,
+      atlas_used: 100,
+      camera_x: 1,
+      camera_y: 2,
+      camera_z: 3,
+      wasm_memory_bytes: 4194304,
+      pending_chunks: 12,
+      streaming_state: 1,
+      loaded_this_tick: 4,
+      unloaded_this_tick: 1,
+      chunk_budget: 4,
+      cached_chunks: 45,
+      camera_chunk_x: 2,
+      camera_chunk_y: 0,
+      camera_chunk_z: -1,
+    });
+    const digest = agg.digest();
+    expect(digest.pending_chunks).toBe(12);
+    expect(digest.streaming_state).toBe(1);
+    expect(digest.loaded_this_tick).toBe(4);
+    expect(digest.unloaded_this_tick).toBe(1);
+    expect(digest.chunk_budget).toBe(4);
+    expect(digest.cached_chunks).toBe(45);
+    expect(digest.camera_chunk_x).toBe(2);
+    expect(digest.camera_chunk_y).toBe(0);
+    expect(digest.camera_chunk_z).toBe(-1);
+  });
 });

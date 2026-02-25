@@ -190,127 +190,56 @@ pub fn set_dolly(amount: f32) {
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
-pub fn camera_x() -> f32 {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map_or(0.0, |renderer| renderer.camera_x())
-    })
-}
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn camera_y() -> f32 {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map_or(0.0, |renderer| renderer.camera_y())
-    })
-}
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn camera_z() -> f32 {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map_or(0.0, |renderer| renderer.camera_z())
-    })
-}
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn camera_yaw() -> f32 {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map_or(0.0, |renderer| renderer.camera_yaw())
-    })
-}
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn camera_pitch() -> f32 {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map_or(0.0, |renderer| renderer.camera_pitch())
-    })
-}
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
+#[must_use]
 pub fn is_animating() -> bool {
     RENDERER.with(|r| {
         r.borrow()
             .as_ref()
-            .map_or(false, |renderer| renderer.is_animating())
+            .is_some_and(render::Renderer::is_animating)
     })
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
+#[must_use]
 pub fn take_animation_completed() -> bool {
     RENDERER.with(|r| {
         r.borrow_mut()
             .as_mut()
-            .map_or(false, |renderer| renderer.take_animation_completed())
+            .is_some_and(render::Renderer::take_animation_completed)
     })
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
+#[must_use]
 pub fn is_chunk_loaded_at(cx: i32, cy: i32, cz: i32) -> bool {
     RENDERER.with(|r| {
         r.borrow()
             .as_ref()
-            .map_or(false, |renderer| renderer.is_chunk_loaded(cx, cy, cz))
+            .is_some_and(|renderer| renderer.is_chunk_loaded(cx, cy, cz))
     })
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
-pub fn frame_time_ms() -> f32 {
+#[must_use]
+#[allow(clippy::cast_precision_loss)]
+pub fn collect_frame_stats() -> Vec<f32> {
     RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map_or(0.0, |renderer| renderer.frame_time_ms())
+        r.borrow().as_ref().map_or_else(
+            || vec![0.0f32; render::STAT_VEC_LEN],
+            |renderer| {
+                let mut stats = renderer.collect_stats();
+                stats[render::STAT_WASM_MEMORY_BYTES] = wasm_memory_bytes() as f32;
+                stats
+            },
+        )
     })
 }
 
 #[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn loaded_chunk_count() -> u32 {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map_or(0, |renderer| renderer.loaded_chunk_count())
-    })
-}
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn atlas_slot_count() -> u32 {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map_or(0, |renderer| renderer.atlas_slot_count())
-    })
-}
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn atlas_used_count() -> u32 {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map_or(0, |renderer| renderer.atlas_used_count())
-    })
-}
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn wasm_memory_bytes() -> u32 {
+fn wasm_memory_bytes() -> u32 {
     wasm_bindgen::memory()
         .dyn_into::<js_sys::WebAssembly::Memory>()
         .map(|m| js_sys::ArrayBuffer::from(m.buffer()).byte_length())

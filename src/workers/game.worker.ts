@@ -52,6 +52,15 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
       camera_y: msg.camera_y,
       camera_z: msg.camera_z,
       wasm_memory_bytes: msg.wasm_memory_bytes,
+      pending_chunks: msg.pending_chunks,
+      streaming_state: msg.streaming_state,
+      loaded_this_tick: msg.loaded_this_tick,
+      unloaded_this_tick: msg.unloaded_this_tick,
+      chunk_budget: msg.chunk_budget,
+      cached_chunks: msg.cached_chunks,
+      camera_chunk_x: msg.camera_chunk_x,
+      camera_chunk_y: msg.camera_chunk_y,
+      camera_chunk_z: msg.camera_chunk_z,
     });
   }
   // animation_complete, camera_position, chunk_loaded handled by game logic
