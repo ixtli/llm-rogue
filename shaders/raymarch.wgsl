@@ -22,6 +22,7 @@ struct ChunkSlot {
 @group(0) @binding(2) var atlas: texture_3d<u32>;
 @group(0) @binding(3) var<storage, read> chunk_index: array<ChunkSlot>;
 @group(0) @binding(4) var<storage, read> palette: array<vec4<f32>>;
+@group(0) @binding(5) var<storage, read> occupancy: array<vec2<u32>>;
 
 const CHUNK: f32 = 32.0;
 const CHUNK_I: i32 = 32;

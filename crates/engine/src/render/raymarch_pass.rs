@@ -169,6 +169,8 @@ impl RaymarchPass {
                 read_only_storage(3),
                 // 4: material palette
                 read_only_storage(4),
+                // 5: occupancy bitmasks
+                read_only_storage(5),
             ],
         })
     }
@@ -204,6 +206,10 @@ impl RaymarchPass {
                 wgpu::BindGroupEntry {
                     binding: 4,
                     resource: palette_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: atlas.occupancy_buffer().as_entire_binding(),
                 },
             ],
         })
@@ -241,6 +247,39 @@ mod tests {
     use glam::{IVec3, UVec3};
 
     #[test]
+    fn raymarch_pass_accepts_occupancy_binding() {
+        let gpu = pollster::block_on(GpuContext::new_headless());
+        let slots = UVec3::new(4, 2, 4);
+        let atlas = ChunkAtlas::new(&gpu.device, slots);
+        let palette = build_palette();
+
+        let w: u32 = 128;
+        let h: u32 = 128;
+        let tex = create_storage_texture(&gpu.device, w, h);
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let grid_info = GridInfo {
+            origin: IVec3::ZERO,
+            size: UVec3::new(4, 2, 4),
+            atlas_slots: slots,
+            max_ray_distance: 256.0,
+        };
+        let camera = Camera::default();
+        let uniform = camera.to_uniform(w, h, &grid_info);
+
+        // This should not panic — the bind group layout includes occupancy at binding 5
+        let pass = RaymarchPass::new(&gpu.device, &view, &atlas, &palette, &uniform, w, h);
+
+        let mut encoder = gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Test"),
+            });
+        pass.encode(&mut encoder);
+        gpu.queue.submit(std::iter::once(encoder.finish()));
+    }
+
+    #[test]
     fn rebuild_for_resize_updates_dimensions() {
         let gpu = pollster::block_on(GpuContext::new_headless());
         let slots = UVec3::new(4, 2, 4);
@@ -261,9 +300,7 @@ mod tests {
         let camera = Camera::default();
         let uniform = camera.to_uniform(w1, h1, &grid_info);
 
-        let mut pass = RaymarchPass::new(
-            &gpu.device, &view1, &atlas, &palette, &uniform, w1, h1,
-        );
+        let mut pass = RaymarchPass::new(&gpu.device, &view1, &atlas, &palette, &uniform, w1, h1);
 
         // Resize to different dimensions.
         let w2: u32 = 256;
@@ -274,9 +311,11 @@ mod tests {
         pass.rebuild_for_resize(&gpu.device, &view2, &atlas, w2, h2);
 
         // Verify it can encode without panicking at the new size.
-        let mut encoder = gpu.device.create_command_encoder(
-            &wgpu::CommandEncoderDescriptor { label: Some("Test") },
-        );
+        let mut encoder = gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Test"),
+            });
         pass.encode(&mut encoder);
         gpu.queue.submit(std::iter::once(encoder.finish()));
     }
