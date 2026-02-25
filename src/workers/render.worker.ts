@@ -13,6 +13,7 @@ import init, {
   look_at,
   preload_view,
   render_frame,
+  resize_renderer,
   set_camera,
   set_dolly,
   set_look_delta,
@@ -129,5 +130,7 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage | MainToRenderMessag
       id: msg.id,
       loaded: is_chunk_loaded_at(msg.cx, msg.cy, msg.cz),
     });
+  } else if (msg.type === "resize") {
+    resize_renderer(msg.width, msg.height);
   }
 };

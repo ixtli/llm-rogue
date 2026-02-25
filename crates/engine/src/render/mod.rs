@@ -80,7 +80,6 @@ const CHUNK_BUDGET_PER_TICK: u32 = 4;
 pub struct Renderer {
     gpu: GpuContext,
     surface: wgpu::Surface<'static>,
-    #[allow(dead_code)]
     surface_config: wgpu::SurfaceConfiguration,
     raymarch_pass: RaymarchPass,
     blit_pass: BlitPass,
@@ -356,6 +355,37 @@ impl Renderer {
     /// Orient the camera to look at the given world-space position.
     pub fn look_at(&mut self, x: f32, y: f32, z: f32) {
         self.camera.look_at(glam::Vec3::new(x, y, z));
+    }
+
+    /// Resizes the renderer to new pixel dimensions.
+    ///
+    /// Reconfigures the wgpu surface, recreates the storage texture, and
+    /// rebuilds bind groups for both passes.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if width == 0 || height == 0 {
+            return;
+        }
+
+        self.surface_config.width = width;
+        self.surface_config.height = height;
+        self.surface.configure(&self.gpu.device, &self.surface_config);
+
+        let storage_texture = create_storage_texture(&self.gpu.device, width, height);
+        let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        self.raymarch_pass.rebuild_for_resize(
+            &self.gpu.device,
+            &storage_view,
+            self.chunk_manager.atlas(),
+            width,
+            height,
+        );
+        self.blit_pass
+            .rebuild_for_resize(&self.gpu.device, &storage_view);
+
+        self._storage_texture = storage_texture;
+        self.width = width;
+        self.height = height;
     }
 
     /// Collect all per-frame stats into a fixed-layout float vector.

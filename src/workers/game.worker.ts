@@ -102,5 +102,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
   } else if (msg.type === "pan") {
     // Pan is currently not mapped to a stage direction.
     // Could be added as a set_pan_delta if needed.
+  } else if (msg.type === "resize") {
+    sendToRender({ type: "resize", width: msg.width, height: msg.height });
   }
 };

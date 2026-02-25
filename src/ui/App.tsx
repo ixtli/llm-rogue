@@ -46,12 +46,16 @@ const App: Component<AppProps> = (props) => {
       }
     };
 
+    const dpr = window.devicePixelRatio || 1;
+    const physicalWidth = Math.floor(window.innerWidth * dpr);
+    const physicalHeight = Math.floor(window.innerHeight * dpr);
+
     worker.postMessage(
       {
         type: "init",
         canvas: offscreen,
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width: physicalWidth,
+        height: physicalHeight,
       } satisfies UIToGameMessage,
       [offscreen],
     );
@@ -80,9 +84,48 @@ const App: Component<AppProps> = (props) => {
       },
     });
 
+    // Debounced resize handler
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const RESIZE_DEBOUNCE_MS = 150;
+
+    let lastSentWidth = physicalWidth;
+    let lastSentHeight = physicalHeight;
+
+    const sendResize = () => {
+      const currentDpr = window.devicePixelRatio || 1;
+      const w = Math.floor(window.innerWidth * currentDpr);
+      const h = Math.floor(window.innerHeight * currentDpr);
+      if (w === lastSentWidth && h === lastSentHeight) return;
+      lastSentWidth = w;
+      lastSentHeight = h;
+      worker.postMessage({ type: "resize", width: w, height: h } satisfies UIToGameMessage);
+    };
+
+    const onResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(sendResize, RESIZE_DEBOUNCE_MS);
+    };
+    window.addEventListener("resize", onResize);
+
+    // DPI change watcher (fires when dragging between monitors with different scaling)
+    let dprMediaQuery: MediaQueryList | null = null;
+    const onDprChange = () => {
+      watchDpr();
+      onResize();
+    };
+    const watchDpr = () => {
+      dprMediaQuery?.removeEventListener("change", onDprChange);
+      dprMediaQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      dprMediaQuery.addEventListener("change", onDprChange);
+    };
+    watchDpr();
+
     onCleanup(() => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("resize", onResize);
+      clearTimeout(resizeTimer);
+      dprMediaQuery?.removeEventListener("change", onDprChange);
       cleanupInput();
     });
   });
@@ -132,7 +175,11 @@ const App: Component<AppProps> = (props) => {
         </div>
       }
     >
-      <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight} />
+      <canvas
+        ref={canvasRef}
+        width={Math.floor(window.innerWidth * (window.devicePixelRatio || 1))}
+        height={Math.floor(window.innerHeight * (window.devicePixelRatio || 1))}
+      />
       <div
         style={{
           position: "absolute",
