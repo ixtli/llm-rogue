@@ -6,8 +6,10 @@ use crate::camera::CameraUniform;
 /// A compute pass that ray-marches a multi-chunk voxel atlas.
 pub struct RaymarchPass {
     pipeline: wgpu::ComputePipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     camera_buffer: wgpu::Buffer,
+    palette_buffer: wgpu::Buffer,
     width: u32,
     height: u32,
 }
@@ -39,8 +41,10 @@ impl RaymarchPass {
 
         Self {
             pipeline,
+            bind_group_layout: layout,
             bind_group,
             camera_buffer,
+            palette_buffer,
             width,
             height,
         }
@@ -48,6 +52,26 @@ impl RaymarchPass {
 
     pub fn update_camera(&self, queue: &wgpu::Queue, uniform: &CameraUniform) {
         queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(uniform));
+    }
+
+    pub fn rebuild_for_resize(
+        &mut self,
+        device: &wgpu::Device,
+        storage_view: &wgpu::TextureView,
+        atlas: &ChunkAtlas,
+        width: u32,
+        height: u32,
+    ) {
+        self.bind_group = Self::create_bind_group(
+            device,
+            &self.bind_group_layout,
+            storage_view,
+            &self.camera_buffer,
+            atlas,
+            &self.palette_buffer,
+        );
+        self.width = width;
+        self.height = height;
     }
 
     pub fn encode(&self, encoder: &mut wgpu::CommandEncoder) {
@@ -202,5 +226,56 @@ impl RaymarchPass {
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::camera::{Camera, GridInfo};
+    use crate::render::chunk_atlas::ChunkAtlas;
+    use crate::render::gpu::GpuContext;
+    use crate::render::{build_palette, create_storage_texture};
+    use glam::{IVec3, UVec3};
+
+    #[test]
+    fn rebuild_for_resize_updates_dimensions() {
+        let gpu = pollster::block_on(GpuContext::new_headless());
+        let slots = UVec3::new(4, 2, 4);
+        let atlas = ChunkAtlas::new(&gpu.device, slots);
+        let palette = build_palette();
+
+        let w1: u32 = 128;
+        let h1: u32 = 128;
+        let tex1 = create_storage_texture(&gpu.device, w1, h1);
+        let view1 = tex1.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let grid_info = GridInfo {
+            origin: IVec3::ZERO,
+            size: UVec3::new(4, 2, 4),
+            atlas_slots: slots,
+            max_ray_distance: 256.0,
+        };
+        let camera = Camera::default();
+        let uniform = camera.to_uniform(w1, h1, &grid_info);
+
+        let mut pass = RaymarchPass::new(
+            &gpu.device, &view1, &atlas, &palette, &uniform, w1, h1,
+        );
+
+        // Resize to different dimensions.
+        let w2: u32 = 256;
+        let h2: u32 = 192;
+        let tex2 = create_storage_texture(&gpu.device, w2, h2);
+        let view2 = tex2.create_view(&wgpu::TextureViewDescriptor::default());
+
+        pass.rebuild_for_resize(&gpu.device, &view2, &atlas, w2, h2);
+
+        // Verify it can encode without panicking at the new size.
+        let mut encoder = gpu.device.create_command_encoder(
+            &wgpu::CommandEncoderDescriptor { label: Some("Test") },
+        );
+        pass.encode(&mut encoder);
+        gpu.queue.submit(std::iter::once(encoder.finish()));
     }
 }
