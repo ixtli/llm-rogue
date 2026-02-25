@@ -1,7 +1,9 @@
 /// A render pass that blits a texture to the surface via a fullscreen triangle.
 pub struct BlitPass {
     pipeline: wgpu::RenderPipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
+    sampler: wgpu::Sampler,
 }
 
 impl BlitPass {
@@ -22,8 +24,25 @@ impl BlitPass {
 
         Self {
             pipeline,
+            bind_group_layout,
             bind_group,
+            sampler,
         }
+    }
+
+    /// Rebuilds the bind group to reference a new storage texture view after
+    /// the window has been resized.
+    pub fn rebuild_for_resize(
+        &mut self,
+        device: &wgpu::Device,
+        storage_view: &wgpu::TextureView,
+    ) {
+        self.bind_group = Self::create_bind_group(
+            device,
+            &self.bind_group_layout,
+            storage_view,
+            &self.sampler,
+        );
     }
 
     /// Records the blit render pass into the given command encoder, drawing
