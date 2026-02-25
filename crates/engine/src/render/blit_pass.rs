@@ -32,17 +32,9 @@ impl BlitPass {
 
     /// Rebuilds the bind group to reference a new storage texture view after
     /// the window has been resized.
-    pub fn rebuild_for_resize(
-        &mut self,
-        device: &wgpu::Device,
-        storage_view: &wgpu::TextureView,
-    ) {
-        self.bind_group = Self::create_bind_group(
-            device,
-            &self.bind_group_layout,
-            storage_view,
-            &self.sampler,
-        );
+    pub fn rebuild_for_resize(&mut self, device: &wgpu::Device, storage_view: &wgpu::TextureView) {
+        self.bind_group =
+            Self::create_bind_group(device, &self.bind_group_layout, storage_view, &self.sampler);
     }
 
     /// Records the blit render pass into the given command encoder, drawing

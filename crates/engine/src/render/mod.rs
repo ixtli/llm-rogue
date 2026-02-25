@@ -364,7 +364,8 @@ impl Renderer {
 
         self.surface_config.width = width;
         self.surface_config.height = height;
-        self.surface.configure(&self.gpu.device, &self.surface_config);
+        self.surface
+            .configure(&self.gpu.device, &self.surface_config);
 
         let storage_texture = create_storage_texture(&self.gpu.device, width, height);
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
