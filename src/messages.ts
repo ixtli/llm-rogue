@@ -10,7 +10,8 @@ export type UIToGameMessage =
   | { type: "key_up"; key: string }
   | { type: "pointer_move"; dx: number; dy: number }
   | { type: "scroll"; dy: number }
-  | { type: "pan"; dx: number; dy: number };
+  | { type: "pan"; dx: number; dy: number }
+  | { type: "resize"; width: number; height: number };
 
 // --- Game Worker → Render Worker ---
 
@@ -33,7 +34,8 @@ export type GameToRenderMessage =
     }
   | { type: "preload_view"; x: number; y: number; z: number }
   | { type: "query_camera_position"; id: number }
-  | { type: "query_chunk_loaded"; id: number; cx: number; cy: number; cz: number };
+  | { type: "query_chunk_loaded"; id: number; cx: number; cy: number; cz: number }
+  | { type: "resize"; width: number; height: number };
 
 // --- Render Worker → Game Worker ---
 
