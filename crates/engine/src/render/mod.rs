@@ -342,6 +342,12 @@ impl Renderer {
         self.chunk_manager.is_loaded(glam::IVec3::new(cx, cy, cz))
     }
 
+    /// Whether the voxel at the given world position is solid.
+    #[must_use]
+    pub fn is_solid(&self, x: f32, y: f32, z: f32) -> bool {
+        self.chunk_manager.is_solid(Vec3::new(x, y, z))
+    }
+
     /// Orient the camera to look at the given world-space position.
     pub fn look_at(&mut self, x: f32, y: f32, z: f32) {
         self.camera.look_at(glam::Vec3::new(x, y, z));

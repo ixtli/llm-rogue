@@ -176,6 +176,19 @@ pub fn is_chunk_loaded_at(cx: i32, cy: i32, cz: i32) -> bool {
     })
 }
 
+/// Whether the voxel at the given world-space position is solid.
+/// Returns `false` for unloaded chunks or air.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+#[must_use]
+pub fn is_solid(x: f32, y: f32, z: f32) -> bool {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .is_some_and(|renderer| renderer.is_solid(x, y, z))
+    })
+}
+
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 #[must_use]
