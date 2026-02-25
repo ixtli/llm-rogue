@@ -7,13 +7,14 @@ GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
 Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phases 1–4b and Phase 5 (stages A+B) are complete. The
-engine renders dynamically-loaded multi-chunk terrain with hard shadows and
-ambient occlusion via two-level DDA ray marching through a 3D texture atlas.
-Chunk loading is budgeted (4/frame), distance-prioritized, with trajectory
-prediction and implicit LRU caching. Collision gating prevents the camera from
-entering solid voxels. Three-thread architecture (UI → game worker → render
-worker) with intent-based camera control.
+**Current state:** Phases 1–4b, Phase 5 (stages A+B), and Phase 5c (occupancy
+bitmask) are complete. The engine renders dynamically-loaded multi-chunk terrain
+with hard shadows and ambient occlusion via three-level DDA ray marching through
+a 3D texture atlas. Per-chunk 64-bit occupancy bitmasks let the shader skip
+empty 8x8x8 sub-regions. Chunk loading is budgeted (4/frame),
+distance-prioritized, with trajectory prediction and implicit LRU caching.
+Collision gating prevents the camera from entering solid voxels. Three-thread
+architecture (UI → game worker → render worker) with intent-based camera control.
 
 Next milestone: Phase 6 (game logic loop, player state, UI).
 
@@ -200,12 +201,13 @@ check (`floor(old) != floor(new)`) gates an `is_solid` lookup. If the new
 position is inside a solid voxel, the position reverts. Scripted moves
 (`set_camera`, `animate_camera`) bypass collision intentionally.
 
-The ray marcher (`shaders/raymarch.wgsl`) uses two-level DDA: an outer loop
-steps through grid chunks, an inner loop steps through voxels within each chunk.
-Chunk data is read from a 3D texture atlas via slot-based coordinate lookup.
-Each non-air voxel hit is shaded with hard shadows (secondary shadow rays) and
-ambient occlusion (short-range occlusion samples), using the material's palette
-color.
+The ray marcher (`shaders/raymarch.wgsl`) uses three-level DDA: an outer loop
+steps through grid chunks, a mid loop steps through 8x8x8 sub-regions (skipping
+empty ones via per-chunk 64-bit occupancy bitmasks), and an inner loop steps
+through voxels within each occupied sub-region. Chunk data is read from a 3D
+texture atlas via slot-based coordinate lookup. Each non-air voxel hit is shaded
+with hard shadows (secondary shadow rays) and ambient occlusion (short-range
+occlusion samples), using the material's palette color.
 
 ## Key Modules
 
@@ -215,7 +217,7 @@ color.
 | `collision` | `crates/engine/src/collision.rs` | CollisionMap bitfield (1 bit/voxel), is_solid, crosses_voxel_boundary |
 | `chunk_manager` | `crates/engine/src/chunk_manager.rs` | Visible set computation, chunk load/unload, collision map lifecycle, is_solid query |
 | `voxel` | `crates/engine/src/voxel.rs` | Voxel pack/unpack, Chunk (32^3), Perlin terrain generation, test grid builder |
-| `chunk_atlas` | `crates/engine/src/render/chunk_atlas.rs` | 3D texture atlas for multi-chunk storage, GPU index buffer, slot management |
+| `chunk_atlas` | `crates/engine/src/render/chunk_atlas.rs` | 3D texture atlas for multi-chunk storage, GPU index buffer, occupancy buffer, slot management |
 | `render` | `crates/engine/src/render/mod.rs` | Renderer: owns GPU context, camera, atlas, passes, collision gating |
 | `gpu` | `crates/engine/src/render/gpu.rs` | GpuContext (device+queue), `new()` for WASM, `new_headless()` for native |
 | `raymarch_pass` | `crates/engine/src/render/raymarch_pass.rs` | Compute pipeline + bind groups for ray march shader |

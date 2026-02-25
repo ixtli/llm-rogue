@@ -99,17 +99,25 @@ texels per axis. Each chunk maps to an atlas slot via modular coordinate mapping
 (`world_coord % atlas_slots`). Stale chunks stay cached in the atlas via
 implicit LRU — evicted only when their slot is needed by a new chunk.
 
-There are no SVOs or octrees. The flat texture layout enables direct 3D texture
-sampling in the shader without pointer chasing.
+Each chunk also has a 64-bit **occupancy bitmask** stored in an `occupancy`
+storage buffer (one `u32x2` per atlas slot). The bitmask subdivides the 32^3
+chunk into a 4x4x4 grid of 8x8x8 sub-regions; a set bit means the sub-region
+contains at least one non-air voxel. The shader tests this bitmask before
+entering the inner voxel DDA, skipping entirely-empty sub-regions.
+
+There are no SVOs or octrees. The flat texture layout plus occupancy bitmask
+enables efficient traversal without pointer chasing.
 
 ### GPU Ray Marching
 
 A compute shader dispatches one thread per pixel. Each thread marches a ray
-using two-level DDA:
+using three-level DDA:
 
 1. **Outer loop** steps through grid chunks using the chunk grid.
-2. **Inner loop** steps through voxels within the hit chunk, reading from the
-   3D texture atlas via slot-based coordinate transformation.
+2. **Mid loop** steps through 8x8x8 sub-regions within the hit chunk, skipping
+   empty sub-regions via the per-chunk 64-bit occupancy bitmask.
+3. **Inner loop** steps through voxels within the occupied sub-region, reading
+   from the 3D texture atlas via slot-based coordinate transformation.
 
 On voxel hit, the material ID is looked up in a 256-entry color palette and
 shaded with lighting.
@@ -291,7 +299,7 @@ llm-rogue/
 │   ├── input.ts                     # Keyboard/pointer/scroll/touch handlers
 │   └── index.tsx                    # Entry — Solid.js render
 ├── shaders/
-│   └── raymarch.wgsl                # Compute shader: two-level DDA, shadows, AO
+│   └── raymarch.wgsl                # Compute shader: three-level DDA, shadows, AO
 ├── assets/
 │   ├── ui/                          # UI assets (served by Vite)
 │   └── engine/                      # Engine assets (loaded by WASM)
