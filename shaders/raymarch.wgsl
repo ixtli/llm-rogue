@@ -140,6 +140,15 @@ fn atlas_origin(slot: u32) -> vec3<u32> {
     );
 }
 
+/// Check if a sub-region within a chunk is occupied.
+/// sub_region is a vec3<i32> in [0,3] identifying the 8x8x8 block.
+fn is_subregion_occupied(slot: u32, sub_region: vec3<i32>) -> bool {
+    let bit_idx = u32(sub_region.x + sub_region.y * 4 + sub_region.z * 16);
+    let pair = occupancy[slot];
+    let word = select(pair.x, pair.y, bit_idx >= 32u);
+    return (word & (1u << (bit_idx & 31u))) != 0u;
+}
+
 /// Look up the atlas slot for a world chunk coordinate.
 /// Returns the flat slot index, or -1 if the slot is empty.
 /// Caller must ensure `world` is within grid bounds before calling.
