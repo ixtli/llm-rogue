@@ -155,6 +155,18 @@ from known camera angles and compare against reference PNGs. See
 - Per-voxel data is 4 bytes: material_id (u8), param0 (u8), param1 (u8), flags (u8).
   Do not change this layout without updating the design doc.
 
+## Plan Documentation
+
+- **Design doc:** `docs/plans/2026-02-07-voxel-engine-design.md` is the living
+  architecture reference. Update it when the architecture changes.
+- **Summary:** `docs/plans/SUMMARY.md` is a compact index of completed and
+  pending work. Update it when a phase or feature is completed. This file is
+  the primary context source for new sessions — keep it accurate.
+- **Active plans:** New design and implementation plans go in `docs/plans/`.
+  When a plan is fully implemented, move it to `docs/plans/archive/`.
+- **Archive:** `docs/plans/archive/` holds completed plan documents. These are
+  preserved for reference but not read during routine planning.
+
 ## GPU Uniform Buffer Layout
 
 When adding or modifying `#[repr(C)]` structs that map to WGSL uniform buffers,
