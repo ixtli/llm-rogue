@@ -94,6 +94,13 @@ impl RaymarchPass {
         &self.depth_view
     }
 
+    /// Returns a reference to the camera uniform buffer for use by other passes
+    /// (e.g. the sprite pass needs it for billboard projection).
+    #[must_use]
+    pub fn camera_buffer(&self) -> &wgpu::Buffer {
+        &self.camera_buffer
+    }
+
     pub fn encode(&self, encoder: &mut wgpu::CommandEncoder) {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Raymarch"),

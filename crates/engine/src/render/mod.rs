@@ -12,6 +12,8 @@ use gpu::GpuContext;
 #[cfg(feature = "wasm")]
 use raymarch_pass::RaymarchPass;
 #[cfg(feature = "wasm")]
+use sprite_pass::SpritePass;
+#[cfg(feature = "wasm")]
 use web_sys::OffscreenCanvas;
 
 #[cfg(feature = "wasm")]
@@ -84,6 +86,7 @@ pub struct Renderer {
     surface_config: wgpu::SurfaceConfiguration,
     raymarch_pass: RaymarchPass,
     blit_pass: BlitPass,
+    sprite_pass: SpritePass,
     _storage_texture: wgpu::Texture,
     chunk_manager: ChunkManager,
     camera: Camera,
@@ -142,12 +145,20 @@ impl Renderer {
             height,
         );
 
+        let sprite_pass = SpritePass::new(
+            &gpu.device,
+            &gpu.queue,
+            raymarch_pass.camera_buffer(),
+            surface_config.format,
+        );
+
         Self {
             gpu,
             surface,
             surface_config,
             raymarch_pass,
             blit_pass,
+            sprite_pass,
             _storage_texture: storage_texture,
             chunk_manager,
             camera,
@@ -239,6 +250,8 @@ impl Renderer {
 
         self.raymarch_pass.encode(&mut encoder);
         self.blit_pass.encode(&mut encoder, &view);
+        self.sprite_pass
+            .encode(&mut encoder, &view, self.blit_pass.depth_stencil_view());
 
         self.gpu.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
@@ -367,6 +380,14 @@ impl Renderer {
     /// Orient the camera to look at the given world-space position.
     pub fn look_at(&mut self, x: f32, y: f32, z: f32) {
         self.camera.look_at(glam::Vec3::new(x, y, z));
+    }
+
+    /// Updates sprite instances from a flat f32 slice (12 floats per sprite,
+    /// matching the 48-byte `SpriteInstance` layout). Called from the WASM
+    /// boundary where typed arrays arrive as raw float slices.
+    pub fn update_sprites_from_flat(&mut self, data: &[f32]) {
+        let sprites: &[sprite_pass::SpriteInstance] = bytemuck::cast_slice(data);
+        self.sprite_pass.update_sprites(&self.gpu.queue, sprites);
     }
 
     /// Resizes the renderer to new pixel dimensions.
