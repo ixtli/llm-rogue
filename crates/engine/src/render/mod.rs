@@ -3,6 +3,7 @@ mod blit_pass;
 pub mod chunk_atlas;
 pub mod gpu;
 pub mod raymarch_pass;
+pub mod sprite_pass;
 
 #[cfg(feature = "wasm")]
 use blit_pass::BlitPass;
