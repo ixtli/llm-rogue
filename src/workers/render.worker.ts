@@ -3,6 +3,7 @@ import init, {
   begin_intent,
   collect_frame_stats,
   end_intent,
+  get_terrain_grid,
   init_renderer,
   is_chunk_loaded_at,
   is_solid,
@@ -55,6 +56,9 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
 
     (self as unknown as Worker).postMessage({ type: "ready" });
 
+    const VIEW_DIST = 3;
+    const emittedTerrainChunks = new Set<string>();
+
     function loop() {
       render_frame(performance.now() / 1000.0);
       if (take_animation_completed()) {
@@ -81,6 +85,40 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
         camera_chunk_y: s[STAT_CAMERA_CHUNK_Y],
         camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
       });
+
+      // Emit terrain grids for newly loaded chunks
+      if (s[STAT_LOADED_THIS_TICK] > 0) {
+        const camCX = s[STAT_CAMERA_CHUNK_X];
+        const camCY = s[STAT_CAMERA_CHUNK_Y];
+        const camCZ = s[STAT_CAMERA_CHUNK_Z];
+        for (let dz = -VIEW_DIST; dz <= VIEW_DIST; dz++) {
+          for (let dy = -VIEW_DIST; dy <= VIEW_DIST; dy++) {
+            for (let dx = -VIEW_DIST; dx <= VIEW_DIST; dx++) {
+              const cx = camCX + dx;
+              const cy = camCY + dy;
+              const cz = camCZ + dz;
+              const key = `${cx},${cy},${cz}`;
+              if (!emittedTerrainChunks.has(key) && is_chunk_loaded_at(cx, cy, cz)) {
+                const data = get_terrain_grid(cx, cy, cz);
+                if (data) {
+                  (self as unknown as Worker).postMessage(
+                    {
+                      type: "chunk_terrain",
+                      cx,
+                      cy,
+                      cz,
+                      data: data.buffer,
+                    },
+                    [data.buffer],
+                  );
+                  emittedTerrainChunks.add(key);
+                }
+              }
+            }
+          }
+        }
+      }
+
       setTimeout(loop, 16);
     }
     loop();
