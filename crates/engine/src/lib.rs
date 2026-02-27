@@ -190,6 +190,19 @@ pub fn is_solid(x: f32, y: f32, z: f32) -> bool {
     })
 }
 
+/// Returns the serialized terrain grid for the chunk at the given coordinate,
+/// or `None` if the chunk is not loaded.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+#[must_use]
+pub fn get_terrain_grid(cx: i32, cy: i32, cz: i32) -> Option<Vec<u8>> {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .and_then(|renderer| renderer.terrain_grid_bytes(cx, cy, cz))
+    })
+}
+
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 #[must_use]

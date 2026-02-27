@@ -24,7 +24,7 @@ use crate::collision::CollisionMap;
 #[cfg(feature = "wasm")]
 use crate::voxel::TEST_GRID_SEED;
 #[cfg(feature = "wasm")]
-use glam::{UVec3, Vec3};
+use glam::{IVec3, UVec3, Vec3};
 
 /// Layout indices for the `collect_stats()` return vector.
 /// Mirror these in TypeScript (`src/stats-layout.ts`).
@@ -346,6 +346,14 @@ impl Renderer {
     #[must_use]
     pub fn is_solid(&self, x: f32, y: f32, z: f32) -> bool {
         self.chunk_manager.is_solid(Vec3::new(x, y, z))
+    }
+
+    /// Returns the serialized terrain grid for the chunk at the given coordinate,
+    /// or `None` if the chunk is not loaded.
+    #[must_use]
+    pub fn terrain_grid_bytes(&self, cx: i32, cy: i32, cz: i32) -> Option<Vec<u8>> {
+        let coord = IVec3::new(cx, cy, cz);
+        self.chunk_manager.terrain_grid(coord).map(|g| g.to_bytes())
     }
 
     /// Orient the camera to look at the given world-space position.
