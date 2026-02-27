@@ -74,7 +74,15 @@ export type RenderToGameMessage =
       camera_chunk_x: number;
       camera_chunk_y: number;
       camera_chunk_z: number;
-    };
+    }
+  | {
+      type: "chunk_terrain";
+      cx: number;
+      cy: number;
+      cz: number;
+      data: ArrayBuffer;
+    }
+  | { type: "chunk_terrain_unload"; cx: number; cy: number; cz: number };
 
 // --- Game Worker → UI ---
 
