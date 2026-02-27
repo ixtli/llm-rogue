@@ -203,6 +203,18 @@ pub fn get_terrain_grid(cx: i32, cy: i32, cz: i32) -> Option<Vec<u8>> {
     })
 }
 
+/// Updates the sprite instance buffer from a flat array of f32.
+/// Each sprite is 12 consecutive f32 values (48 bytes = `SpriteInstance` layout).
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn update_sprites(data: &[f32]) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.update_sprites_from_flat(data);
+        }
+    });
+}
+
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 #[must_use]

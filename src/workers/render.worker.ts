@@ -14,6 +14,7 @@ import init, {
   set_dolly,
   set_look_delta,
   take_animation_completed,
+  update_sprites,
 } from "../../crates/engine/pkg/engine";
 import type { GameToRenderMessage } from "../messages";
 import {
@@ -124,5 +125,28 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     });
   } else if (msg.type === "resize") {
     resize_renderer(msg.width, msg.height);
+  } else if (msg.type === "sprite_update") {
+    // Convert sprite data to flat Float32Array for WASM.
+    // Each SpriteInstance is 12 floats: position(3), sprite_id(1), size(2), uv_offset(2), uv_size(2), padding(2)
+    const floats = new Float32Array(msg.sprites.length * 12);
+    for (let i = 0; i < msg.sprites.length; i++) {
+      const s = msg.sprites[i];
+      const o = i * 12;
+      floats[o + 0] = s.x;
+      floats[o + 1] = s.y;
+      floats[o + 2] = s.z;
+      // sprite_id is u32, reinterpret as f32 bits
+      const idView = new DataView(floats.buffer);
+      idView.setUint32((o + 3) * 4, s.spriteId, true);
+      floats[o + 4] = 1.0; // width
+      floats[o + 5] = 1.0; // height
+      floats[o + 6] = 0.0; // uv_offset.x
+      floats[o + 7] = 0.0; // uv_offset.y
+      floats[o + 8] = 1.0; // uv_size.x
+      floats[o + 9] = 1.0; // uv_size.y
+      floats[o + 10] = 0.0; // padding
+      floats[o + 11] = 0.0; // padding
+    }
+    update_sprites(floats);
   }
 };
