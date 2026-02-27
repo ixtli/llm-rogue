@@ -132,7 +132,14 @@ impl Renderer {
             height,
         );
 
-        let blit_pass = BlitPass::new(&gpu.device, &storage_view, surface_config.format);
+        let blit_pass = BlitPass::new(
+            &gpu.device,
+            &storage_view,
+            raymarch_pass.depth_view(),
+            surface_config.format,
+            width,
+            height,
+        );
 
         Self {
             gpu,
@@ -385,8 +392,13 @@ impl Renderer {
             width,
             height,
         );
-        self.blit_pass
-            .rebuild_for_resize(&self.gpu.device, &storage_view);
+        self.blit_pass.rebuild_for_resize(
+            &self.gpu.device,
+            &storage_view,
+            self.raymarch_pass.depth_view(),
+            width,
+            height,
+        );
 
         self._storage_texture = storage_texture;
         self.width = width;
