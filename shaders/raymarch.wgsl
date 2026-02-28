@@ -38,6 +38,7 @@ const SUN_DIR: vec3<f32> = vec3<f32>(0.3713907, 0.7427814, 0.2228344);
 const MAX_VOXEL_STEPS: u32 = 128u;
 const MAX_CHUNK_STEPS: u32 = 32u;
 const SHADOW_BIAS: f32 = 0.01;
+const SHADOW_MAX_DIST: f32 = 64.0;
 const AO_DISTANCE: f32 = 6.0;
 const AO_SAMPLES: u32 = 6u;
 
@@ -508,7 +509,7 @@ fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f3
 
     let base = palette[mat_id];
     let shadow_origin = hit_pos + normal * SHADOW_BIAS;
-    let in_shadow = trace_ray(shadow_origin, SUN_DIR, camera.max_ray_distance);
+    let in_shadow = trace_ray(shadow_origin, SUN_DIR, SHADOW_MAX_DIST);
     let ao = trace_ao(shadow_origin, face, step);
     let diffuse = select(max(dot(normal, SUN_DIR), 0.0), 0.0, in_shadow);
     let ambient = 0.15 * ao;

@@ -100,6 +100,7 @@ pub struct Renderer {
     height: u32,
     last_time: f32,
     last_dt: f32,
+    last_wall_dt: f32,
 }
 
 #[cfg(feature = "wasm")]
@@ -172,6 +173,7 @@ impl Renderer {
             height,
             last_time: 0.0,
             last_dt: 1.0 / 60.0,
+            last_wall_dt: 1.0 / 60.0,
         }
     }
 
@@ -181,13 +183,15 @@ impl Renderer {
     ///
     /// Panics if the surface texture cannot be acquired.
     pub fn render(&mut self, time: f32) {
-        let dt = if self.last_time > 0.0 {
-            (time - self.last_time).min(0.1) // cap dt to avoid huge jumps
+        let wall_dt = if self.last_time > 0.0 {
+            time - self.last_time
         } else {
             1.0 / 60.0
         };
+        let dt = wall_dt.min(0.1); // cap dt for camera movement to avoid huge jumps
         self.last_time = time;
         self.last_dt = dt;
+        self.last_wall_dt = wall_dt;
 
         // Animation takes priority over manual input.
         if let Some(anim) = &mut self.animation {
@@ -432,7 +436,7 @@ impl Renderer {
     #[allow(clippy::cast_precision_loss)]
     pub fn collect_stats(&self) -> Vec<f32> {
         let mut v = vec![0.0f32; STAT_VEC_LEN];
-        v[STAT_FRAME_TIME_MS] = self.last_dt * 1000.0;
+        v[STAT_FRAME_TIME_MS] = self.last_wall_dt * 1000.0;
         v[STAT_CAMERA_X] = self.camera.position.x;
         v[STAT_CAMERA_Y] = self.camera.position.y;
         v[STAT_CAMERA_Z] = self.camera.position.z;

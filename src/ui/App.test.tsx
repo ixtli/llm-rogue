@@ -108,7 +108,7 @@ describe("App resize handling", () => {
     vi.restoreAllMocks();
   });
 
-  it("sends DPI-scaled dimensions in init message", () => {
+  it("sends CSS-pixel dimensions in init message (1x, not DPR-scaled)", () => {
     Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
 
@@ -118,8 +118,8 @@ describe("App resize handling", () => {
       (call: unknown[]) => (call[0] as { type: string }).type === "init",
     );
     expect(initMsg).toBeDefined();
-    expect(initMsg?.[0].width).toBe(1600); // 800 * 2
-    expect(initMsg?.[0].height).toBe(1200); // 600 * 2
+    expect(initMsg?.[0].width).toBe(800);
+    expect(initMsg?.[0].height).toBe(600);
   });
 
   it("sends debounced resize message on window resize", () => {
@@ -147,7 +147,7 @@ describe("App resize handling", () => {
       (call: unknown[]) => (call[0] as { type: string }).type === "resize",
     );
     expect(resizeAfter).toHaveLength(1);
-    expect(resizeAfter[0][0].width).toBe(2048); // 1024 * 2
-    expect(resizeAfter[0][0].height).toBe(1536); // 768 * 2
+    expect(resizeAfter[0][0].width).toBe(1024);
+    expect(resizeAfter[0][0].height).toBe(768);
   });
 });
