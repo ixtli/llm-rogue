@@ -23,6 +23,12 @@ struct ChunkSlot {
 @group(0) @binding(3) var<storage, read> chunk_index: array<ChunkSlot>;
 @group(0) @binding(4) var<storage, read> palette: array<vec4<f32>>;
 @group(0) @binding(5) var<storage, read> occupancy: array<vec2<u32>>;
+@group(0) @binding(6) var depth_output: texture_storage_2d<r32float, write>;
+
+struct RayResult {
+    color: vec4<f32>,
+    depth: f32,
+};
 
 const CHUNK: f32 = 32.0;
 const CHUNK_I: i32 = 32;
@@ -32,6 +38,7 @@ const SUN_DIR: vec3<f32> = vec3<f32>(0.3713907, 0.7427814, 0.2228344);
 const MAX_VOXEL_STEPS: u32 = 128u;
 const MAX_CHUNK_STEPS: u32 = 32u;
 const SHADOW_BIAS: f32 = 0.01;
+const SHADOW_MAX_DIST: f32 = 64.0;
 const AO_DISTANCE: f32 = 6.0;
 const AO_SAMPLES: u32 = 6u;
 
@@ -111,7 +118,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         + camera.up * ndc_y * half_fov_tan
     );
 
-    textureStore(output, id.xy, ray_march(camera.position, ray_dir));
+    let result = ray_march(camera.position, ray_dir);
+    textureStore(output, id.xy, result.color);
+    textureStore(depth_output, id.xy, vec4<f32>(result.depth, 0.0, 0.0, 0.0));
 }
 
 /// Intersect ray with an axis-aligned bounding box.
@@ -182,13 +191,13 @@ fn advance_chunk(origin: vec3<f32>, dir: vec3<f32>, c_min: vec3<f32>,
     return out;
 }
 
-fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
+fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> RayResult {
     let grid_min = vec3<f32>(camera.grid_origin) * CHUNK;
     let grid_max = grid_min + vec3<f32>(camera.grid_size) * CHUNK;
 
     let aabb = intersect_aabb(origin, dir, grid_min, grid_max);
     if aabb.x > aabb.y || aabb.y < 0.0 {
-        return SKY;
+        return RayResult(SKY, 1.0);
     }
 
     let t_enter = max(aabb.x, 0.0) + 0.001;
@@ -206,7 +215,7 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
         let local = chunk_coord - camera.grid_origin;
         let grid = vec3<i32>(camera.grid_size);
         if any(local < vec3(0)) || any(local >= grid) {
-            return SKY;
+            return RayResult(SKY, 1.0);
         }
 
         let c_min = vec3<f32>(chunk_coord) * CHUNK;
@@ -228,8 +237,10 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
             // Hit — result encodes (material_id, face, t_hit, _)
             let mat_id = u32(result.x);
             let face = u32(result.y);
-            let hit_pos = origin + dir * result.z;
-            return shade(mat_id, face, step, hit_pos);
+            let t_hit = result.z;
+            let hit_pos = origin + dir * t_hit;
+            let depth = clamp(t_hit / camera.max_ray_distance, 0.0, 1.0);
+            return RayResult(shade(mat_id, face, step, hit_pos), depth);
         }
 
         // Advance to next chunk along the exit face.
@@ -239,7 +250,7 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
         else { chunk_coord.z += step.z; }
     }
 
-    return SKY;
+    return RayResult(SKY, 1.0);
 }
 
 /// DDA within a single chunk. Returns:
@@ -498,7 +509,7 @@ fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f3
 
     let base = palette[mat_id];
     let shadow_origin = hit_pos + normal * SHADOW_BIAS;
-    let in_shadow = trace_ray(shadow_origin, SUN_DIR, camera.max_ray_distance);
+    let in_shadow = trace_ray(shadow_origin, SUN_DIR, SHADOW_MAX_DIST);
     let ao = trace_ao(shadow_origin, face, step);
     let diffuse = select(max(dot(normal, SUN_DIR), 0.0), 0.0, in_shadow);
     let ambient = 0.15 * ao;

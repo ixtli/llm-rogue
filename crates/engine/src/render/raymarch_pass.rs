@@ -10,6 +10,8 @@ pub struct RaymarchPass {
     bind_group: wgpu::BindGroup,
     camera_buffer: wgpu::Buffer,
     palette_buffer: wgpu::Buffer,
+    depth_texture: wgpu::Texture,
+    depth_view: wgpu::TextureView,
     width: u32,
     height: u32,
 }
@@ -27,6 +29,8 @@ impl RaymarchPass {
     ) -> Self {
         let camera_buffer = Self::create_camera_buffer(device, camera_uniform);
         let palette_buffer = Self::create_storage_buffer(device, "Material Palette", palette_data);
+        let depth_texture = Self::create_depth_texture(device, width, height);
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let shader = Self::load_shader(device);
         let layout = Self::create_bind_group_layout(device);
         let bind_group = Self::create_bind_group(
@@ -36,6 +40,7 @@ impl RaymarchPass {
             &camera_buffer,
             atlas,
             &palette_buffer,
+            &depth_view,
         );
         let pipeline = Self::create_pipeline(device, &layout, &shader);
 
@@ -45,6 +50,8 @@ impl RaymarchPass {
             bind_group,
             camera_buffer,
             palette_buffer,
+            depth_texture,
+            depth_view,
             width,
             height,
         }
@@ -64,6 +71,10 @@ impl RaymarchPass {
         width: u32,
         height: u32,
     ) {
+        self.depth_texture = Self::create_depth_texture(device, width, height);
+        self.depth_view = self
+            .depth_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
         self.bind_group = Self::create_bind_group(
             device,
             &self.bind_group_layout,
@@ -71,9 +82,23 @@ impl RaymarchPass {
             &self.camera_buffer,
             atlas,
             &self.palette_buffer,
+            &self.depth_view,
         );
         self.width = width;
         self.height = height;
+    }
+
+    /// Returns a reference to the depth texture view for use by other passes.
+    #[must_use]
+    pub fn depth_view(&self) -> &wgpu::TextureView {
+        &self.depth_view
+    }
+
+    /// Returns a reference to the camera uniform buffer for use by other passes
+    /// (e.g. the sprite pass needs it for billboard projection).
+    #[must_use]
+    pub fn camera_buffer(&self) -> &wgpu::Buffer {
+        &self.camera_buffer
     }
 
     pub fn encode(&self, encoder: &mut wgpu::CommandEncoder) {
@@ -103,6 +128,23 @@ impl RaymarchPass {
             label: Some(label),
             contents: bytemuck::cast_slice(data),
             usage: wgpu::BufferUsages::STORAGE,
+        })
+    }
+
+    fn create_depth_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Depth Output"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R32Float,
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         })
     }
 
@@ -171,6 +213,17 @@ impl RaymarchPass {
                 read_only_storage(4),
                 // 5: occupancy bitmasks
                 read_only_storage(5),
+                // 6: depth output storage texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: compute,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::R32Float,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
+                    count: None,
+                },
             ],
         })
     }
@@ -182,6 +235,7 @@ impl RaymarchPass {
         camera_buffer: &wgpu::Buffer,
         atlas: &ChunkAtlas,
         palette_buffer: &wgpu::Buffer,
+        depth_view: &wgpu::TextureView,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Raymarch BG"),
@@ -210,6 +264,10 @@ impl RaymarchPass {
                 wgpu::BindGroupEntry {
                     binding: 5,
                     resource: atlas.occupancy_buffer().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(depth_view),
                 },
             ],
         })

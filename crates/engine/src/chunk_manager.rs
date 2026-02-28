@@ -4,12 +4,14 @@ use glam::{IVec3, UVec3, Vec3};
 
 use crate::collision::CollisionMap;
 use crate::render::chunk_atlas::{ChunkAtlas, world_to_slot};
+use crate::terrain_grid::TerrainGrid;
 use crate::voxel::{CHUNK_SIZE, Chunk};
 
-/// Per-chunk data retained after GPU upload: atlas slot + collision bitfield.
+/// Per-chunk data retained after GPU upload: atlas slot + collision bitfield + terrain grid.
 struct LoadedChunk {
     slot: u32,
     collision: Option<CollisionMap>,
+    terrain: Option<TerrainGrid>,
 }
 
 /// Streaming state derived from tick statistics.
@@ -125,13 +127,22 @@ impl ChunkManager {
                 LoadedChunk {
                     slot,
                     collision: None,
+                    terrain: None,
                 },
             );
             return;
         }
         let collision = Some(CollisionMap::from_voxels(&chunk.voxels));
+        let terrain = Some(TerrainGrid::from_chunk(&chunk));
         self.atlas.upload_chunk(queue, slot, &chunk, coord);
-        self.loaded.insert(coord, LoadedChunk { slot, collision });
+        self.loaded.insert(
+            coord,
+            LoadedChunk {
+                slot,
+                collision,
+                terrain,
+            },
+        );
     }
 
     /// Unload a chunk: clear its atlas slot and stop tracking it.
@@ -207,6 +218,13 @@ impl ChunkManager {
                 .is_some_and(|c| c.is_solid(local_x, local_y, local_z)),
             None => false,
         }
+    }
+
+    /// Returns the [`TerrainGrid`] for a loaded chunk, or `None` if the chunk
+    /// is not loaded or was empty (all air).
+    #[must_use]
+    pub fn terrain_grid(&self, coord: IVec3) -> Option<&TerrainGrid> {
+        self.loaded.get(&coord).and_then(|lc| lc.terrain.as_ref())
     }
 
     /// Compute the set of chunk coordinates visible from `camera_pos` with the
@@ -661,5 +679,20 @@ mod tests {
         let result = mgr.tick_budgeted(&gpu.queue, Vec3::new(16.0 + 8.0 * 32.0, 16.0, 16.0), 100);
         // Atlas is 8x8x8. Moving 8 chunks on x wraps modular slots. Some evictions.
         assert!(result.stats.unloaded_this_tick > 0);
+    }
+
+    #[test]
+    fn loaded_chunk_has_terrain_grid() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        mgr.load_chunk(&gpu.queue, IVec3::ZERO);
+        let grid = mgr.terrain_grid(IVec3::ZERO);
+        assert!(grid.is_some(), "loaded chunk should have a terrain grid");
+        assert!(grid.unwrap().surface_count() > 0);
+    }
+
+    #[test]
+    fn unloaded_chunk_has_no_terrain_grid() {
+        let (_gpu, mgr) = make_manager(42, 1);
+        assert!(mgr.terrain_grid(IVec3::ZERO).is_none());
     }
 }

@@ -46,9 +46,10 @@ const App: Component<AppProps> = (props) => {
       }
     };
 
-    const dpr = window.devicePixelRatio || 1;
-    const physicalWidth = Math.floor(window.innerWidth * dpr);
-    const physicalHeight = Math.floor(window.innerHeight * dpr);
+    // Render at 1x CSS pixels. The ray-march shader (shadows + AO) is too
+    // expensive at native Retina resolution (~5M pixels × 8 rays each).
+    const physicalWidth = Math.floor(window.innerWidth);
+    const physicalHeight = Math.floor(window.innerHeight);
 
     worker.postMessage(
       {
@@ -92,9 +93,8 @@ const App: Component<AppProps> = (props) => {
     let lastSentHeight = physicalHeight;
 
     const sendResize = () => {
-      const currentDpr = window.devicePixelRatio || 1;
-      const w = Math.floor(window.innerWidth * currentDpr);
-      const h = Math.floor(window.innerHeight * currentDpr);
+      const w = Math.floor(window.innerWidth);
+      const h = Math.floor(window.innerHeight);
       if (w === lastSentWidth && h === lastSentHeight) return;
       lastSentWidth = w;
       lastSentHeight = h;
@@ -107,7 +107,8 @@ const App: Component<AppProps> = (props) => {
     };
     window.addEventListener("resize", onResize);
 
-    // DPI change watcher (fires when dragging between monitors with different scaling)
+    // DPI change watcher — currently rendering at 1x CSS pixels, so DPR
+    // changes only trigger a resize (different monitor may have different CSS size).
     let dprMediaQuery: MediaQueryList | null = null;
     const onDprChange = () => {
       watchDpr();
@@ -177,8 +178,8 @@ const App: Component<AppProps> = (props) => {
     >
       <canvas
         ref={canvasRef}
-        width={Math.floor(window.innerWidth * (window.devicePixelRatio || 1))}
-        height={Math.floor(window.innerHeight * (window.devicePixelRatio || 1))}
+        width={Math.floor(window.innerWidth)}
+        height={Math.floor(window.innerHeight)}
       />
       <div
         style={{

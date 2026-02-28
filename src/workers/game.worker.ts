@@ -1,5 +1,6 @@
 // CameraIntent is exported from Rust via #[wasm_bindgen] — single source of truth.
 import { CameraIntent } from "../../crates/engine/pkg/engine";
+import { deserializeTerrainGrid } from "../game/terrain";
 import type {
   GameToRenderMessage,
   GameToUIMessage,
@@ -62,6 +63,42 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
       camera_chunk_y: msg.camera_chunk_y,
       camera_chunk_z: msg.camera_chunk_z,
     });
+  } else if (msg.type === "chunk_terrain") {
+    // Temporary test: place 3 sprites on chunk (0,0,0) terrain
+    if (msg.cx === 0 && msg.cy === 0 && msg.cz === 0) {
+      const grid = deserializeTerrainGrid(msg.cx, msg.cy, msg.cz, msg.data);
+      const sprites: {
+        id: number;
+        x: number;
+        y: number;
+        z: number;
+        spriteId: number;
+        facing: number;
+      }[] = [];
+      const testPositions = [
+        [5, 5],
+        [10, 10],
+        [16, 8],
+      ];
+      for (let i = 0; i < testPositions.length; i++) {
+        const [lx, lz] = testPositions[i];
+        const col = grid.columns[lz * 32 + lx];
+        if (col.length > 0) {
+          const surface = col[col.length - 1]; // topmost surface
+          sprites.push({
+            id: i,
+            x: lx + 0.5,
+            y: surface.y + 1,
+            z: lz + 0.5,
+            spriteId: 0,
+            facing: 0,
+          });
+        }
+      }
+      if (sprites.length > 0) {
+        sendToRender({ type: "sprite_update", sprites });
+      }
+    }
   }
   // animation_complete, camera_position, chunk_loaded handled by game logic
   // (no-op for now, future game logic will use these)

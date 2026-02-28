@@ -12,6 +12,7 @@ pub mod camera;
 pub mod chunk_manager;
 pub mod collision;
 pub mod render;
+pub mod terrain_grid;
 pub mod voxel;
 
 #[cfg(feature = "wasm")]
@@ -187,6 +188,31 @@ pub fn is_solid(x: f32, y: f32, z: f32) -> bool {
             .as_ref()
             .is_some_and(|renderer| renderer.is_solid(x, y, z))
     })
+}
+
+/// Returns the serialized terrain grid for the chunk at the given coordinate,
+/// or `None` if the chunk is not loaded.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+#[must_use]
+pub fn get_terrain_grid(cx: i32, cy: i32, cz: i32) -> Option<Vec<u8>> {
+    RENDERER.with(|r| {
+        r.borrow()
+            .as_ref()
+            .and_then(|renderer| renderer.terrain_grid_bytes(cx, cy, cz))
+    })
+}
+
+/// Updates the sprite instance buffer from a flat array of f32.
+/// Each sprite is 12 consecutive f32 values (48 bytes = `SpriteInstance` layout).
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn update_sprites(data: &[f32]) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.update_sprites_from_flat(data);
+        }
+    });
 }
 
 #[cfg(feature = "wasm")]

@@ -3,6 +3,7 @@ import init, {
   begin_intent,
   collect_frame_stats,
   end_intent,
+  get_terrain_grid,
   init_renderer,
   is_chunk_loaded_at,
   is_solid,
@@ -14,6 +15,7 @@ import init, {
   set_dolly,
   set_look_delta,
   take_animation_completed,
+  update_sprites,
 } from "../../crates/engine/pkg/engine";
 import type { GameToRenderMessage } from "../messages";
 import {
@@ -54,6 +56,9 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
 
     (self as unknown as Worker).postMessage({ type: "ready" });
 
+    const VIEW_DIST = 3;
+    const emittedTerrainChunks = new Set<string>();
+
     function loop() {
       render_frame(performance.now() / 1000.0);
       if (take_animation_completed()) {
@@ -80,6 +85,40 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
         camera_chunk_y: s[STAT_CAMERA_CHUNK_Y],
         camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
       });
+
+      // Emit terrain grids for newly loaded chunks
+      if (s[STAT_LOADED_THIS_TICK] > 0) {
+        const camCX = s[STAT_CAMERA_CHUNK_X];
+        const camCY = s[STAT_CAMERA_CHUNK_Y];
+        const camCZ = s[STAT_CAMERA_CHUNK_Z];
+        for (let dz = -VIEW_DIST; dz <= VIEW_DIST; dz++) {
+          for (let dy = -VIEW_DIST; dy <= VIEW_DIST; dy++) {
+            for (let dx = -VIEW_DIST; dx <= VIEW_DIST; dx++) {
+              const cx = camCX + dx;
+              const cy = camCY + dy;
+              const cz = camCZ + dz;
+              const key = `${cx},${cy},${cz}`;
+              if (!emittedTerrainChunks.has(key) && is_chunk_loaded_at(cx, cy, cz)) {
+                const data = get_terrain_grid(cx, cy, cz);
+                if (data) {
+                  (self as unknown as Worker).postMessage(
+                    {
+                      type: "chunk_terrain",
+                      cx,
+                      cy,
+                      cz,
+                      data: data.buffer,
+                    },
+                    [data.buffer],
+                  );
+                  emittedTerrainChunks.add(key);
+                }
+              }
+            }
+          }
+        }
+      }
+
       setTimeout(loop, 16);
     }
     loop();
@@ -124,5 +163,28 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     });
   } else if (msg.type === "resize") {
     resize_renderer(msg.width, msg.height);
+  } else if (msg.type === "sprite_update") {
+    // Convert sprite data to flat Float32Array for WASM.
+    // Each SpriteInstance is 12 floats: position(3), sprite_id(1), size(2), uv_offset(2), uv_size(2), padding(2)
+    const floats = new Float32Array(msg.sprites.length * 12);
+    for (let i = 0; i < msg.sprites.length; i++) {
+      const s = msg.sprites[i];
+      const o = i * 12;
+      floats[o + 0] = s.x;
+      floats[o + 1] = s.y;
+      floats[o + 2] = s.z;
+      // sprite_id is u32, reinterpret as f32 bits
+      const idView = new DataView(floats.buffer);
+      idView.setUint32((o + 3) * 4, s.spriteId, true);
+      floats[o + 4] = 1.0; // width
+      floats[o + 5] = 1.0; // height
+      floats[o + 6] = 0.0; // uv_offset.x
+      floats[o + 7] = 0.0; // uv_offset.y
+      floats[o + 8] = 1.0; // uv_size.x
+      floats[o + 9] = 1.0; // uv_size.y
+      floats[o + 10] = 0.0; // padding
+      floats[o + 11] = 0.0; // padding
+    }
+    update_sprites(floats);
   }
 };

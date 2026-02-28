@@ -3,6 +3,7 @@ mod blit_pass;
 pub mod chunk_atlas;
 pub mod gpu;
 pub mod raymarch_pass;
+pub mod sprite_pass;
 
 #[cfg(feature = "wasm")]
 use blit_pass::BlitPass;
@@ -10,6 +11,8 @@ use blit_pass::BlitPass;
 use gpu::GpuContext;
 #[cfg(feature = "wasm")]
 use raymarch_pass::RaymarchPass;
+#[cfg(feature = "wasm")]
+use sprite_pass::SpritePass;
 #[cfg(feature = "wasm")]
 use web_sys::OffscreenCanvas;
 
@@ -24,7 +27,7 @@ use crate::collision::CollisionMap;
 #[cfg(feature = "wasm")]
 use crate::voxel::TEST_GRID_SEED;
 #[cfg(feature = "wasm")]
-use glam::{UVec3, Vec3};
+use glam::{IVec3, UVec3, Vec3};
 
 /// Layout indices for the `collect_stats()` return vector.
 /// Mirror these in TypeScript (`src/stats-layout.ts`).
@@ -83,6 +86,7 @@ pub struct Renderer {
     surface_config: wgpu::SurfaceConfiguration,
     raymarch_pass: RaymarchPass,
     blit_pass: BlitPass,
+    sprite_pass: SpritePass,
     _storage_texture: wgpu::Texture,
     chunk_manager: ChunkManager,
     camera: Camera,
@@ -96,6 +100,7 @@ pub struct Renderer {
     height: u32,
     last_time: f32,
     last_dt: f32,
+    last_wall_dt: f32,
 }
 
 #[cfg(feature = "wasm")]
@@ -132,7 +137,21 @@ impl Renderer {
             height,
         );
 
-        let blit_pass = BlitPass::new(&gpu.device, &storage_view, surface_config.format);
+        let blit_pass = BlitPass::new(
+            &gpu.device,
+            &storage_view,
+            raymarch_pass.depth_view(),
+            surface_config.format,
+            width,
+            height,
+        );
+
+        let sprite_pass = SpritePass::new(
+            &gpu.device,
+            &gpu.queue,
+            raymarch_pass.camera_buffer(),
+            surface_config.format,
+        );
 
         Self {
             gpu,
@@ -140,6 +159,7 @@ impl Renderer {
             surface_config,
             raymarch_pass,
             blit_pass,
+            sprite_pass,
             _storage_texture: storage_texture,
             chunk_manager,
             camera,
@@ -153,6 +173,7 @@ impl Renderer {
             height,
             last_time: 0.0,
             last_dt: 1.0 / 60.0,
+            last_wall_dt: 1.0 / 60.0,
         }
     }
 
@@ -162,13 +183,15 @@ impl Renderer {
     ///
     /// Panics if the surface texture cannot be acquired.
     pub fn render(&mut self, time: f32) {
-        let dt = if self.last_time > 0.0 {
-            (time - self.last_time).min(0.1) // cap dt to avoid huge jumps
+        let wall_dt = if self.last_time > 0.0 {
+            time - self.last_time
         } else {
             1.0 / 60.0
         };
+        let dt = wall_dt.min(0.1); // cap dt for camera movement to avoid huge jumps
         self.last_time = time;
         self.last_dt = dt;
+        self.last_wall_dt = wall_dt;
 
         // Animation takes priority over manual input.
         if let Some(anim) = &mut self.animation {
@@ -231,6 +254,8 @@ impl Renderer {
 
         self.raymarch_pass.encode(&mut encoder);
         self.blit_pass.encode(&mut encoder, &view);
+        self.sprite_pass
+            .encode(&mut encoder, &view, self.blit_pass.depth_stencil_view());
 
         self.gpu.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
@@ -348,9 +373,25 @@ impl Renderer {
         self.chunk_manager.is_solid(Vec3::new(x, y, z))
     }
 
+    /// Returns the serialized terrain grid for the chunk at the given coordinate,
+    /// or `None` if the chunk is not loaded.
+    #[must_use]
+    pub fn terrain_grid_bytes(&self, cx: i32, cy: i32, cz: i32) -> Option<Vec<u8>> {
+        let coord = IVec3::new(cx, cy, cz);
+        self.chunk_manager.terrain_grid(coord).map(|g| g.to_bytes())
+    }
+
     /// Orient the camera to look at the given world-space position.
     pub fn look_at(&mut self, x: f32, y: f32, z: f32) {
         self.camera.look_at(glam::Vec3::new(x, y, z));
+    }
+
+    /// Updates sprite instances from a flat f32 slice (12 floats per sprite,
+    /// matching the 48-byte `SpriteInstance` layout). Called from the WASM
+    /// boundary where typed arrays arrive as raw float slices.
+    pub fn update_sprites_from_flat(&mut self, data: &[f32]) {
+        let sprites: &[sprite_pass::SpriteInstance] = bytemuck::cast_slice(data);
+        self.sprite_pass.update_sprites(&self.gpu.queue, sprites);
     }
 
     /// Resizes the renderer to new pixel dimensions.
@@ -377,8 +418,13 @@ impl Renderer {
             width,
             height,
         );
-        self.blit_pass
-            .rebuild_for_resize(&self.gpu.device, &storage_view);
+        self.blit_pass.rebuild_for_resize(
+            &self.gpu.device,
+            &storage_view,
+            self.raymarch_pass.depth_view(),
+            width,
+            height,
+        );
 
         self._storage_texture = storage_texture;
         self.width = width;
@@ -390,7 +436,7 @@ impl Renderer {
     #[allow(clippy::cast_precision_loss)]
     pub fn collect_stats(&self) -> Vec<f32> {
         let mut v = vec![0.0f32; STAT_VEC_LEN];
-        v[STAT_FRAME_TIME_MS] = self.last_dt * 1000.0;
+        v[STAT_FRAME_TIME_MS] = self.last_wall_dt * 1000.0;
         v[STAT_CAMERA_X] = self.camera.position.x;
         v[STAT_CAMERA_Y] = self.camera.position.y;
         v[STAT_CAMERA_Z] = self.camera.position.z;
