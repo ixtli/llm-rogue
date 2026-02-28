@@ -1,5 +1,5 @@
-#[cfg(feature = "wasm")]
-mod blit_pass;
+#[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
+pub mod blit_pass;
 pub mod chunk_atlas;
 pub mod gpu;
 pub mod raymarch_pass;

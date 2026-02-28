@@ -18,13 +18,13 @@ pub const MAX_SPRITES: usize = 1024;
 // WASM-only SpritePass pipeline
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "wasm")]
+#[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
 use wgpu::util::DeviceExt;
 
 /// GPU render pipeline for billboard sprites, composited on top of the
 /// ray-marched scene. Uses the blit pass depth-stencil buffer for read-only
 /// depth testing so sprites are occluded by voxel geometry.
-#[cfg(feature = "wasm")]
+#[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
 #[allow(dead_code)] // fields held to keep GPU resources alive
 pub struct SpritePass {
     pipeline: wgpu::RenderPipeline,
@@ -37,7 +37,7 @@ pub struct SpritePass {
     placeholder_view: wgpu::TextureView,
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
 impl SpritePass {
     /// Creates a new sprite pass with a placeholder 1x1 white atlas texture.
     #[must_use]
