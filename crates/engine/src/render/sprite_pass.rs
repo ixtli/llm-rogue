@@ -25,6 +25,7 @@ use wgpu::util::DeviceExt;
 /// ray-marched scene. Uses the blit pass depth-stencil buffer for read-only
 /// depth testing so sprites are occluded by voxel geometry.
 #[cfg(feature = "wasm")]
+#[allow(dead_code)] // fields held to keep GPU resources alive
 pub struct SpritePass {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
@@ -32,8 +33,6 @@ pub struct SpritePass {
     instance_buffer: wgpu::Buffer,
     instance_count: u32,
     sampler: wgpu::Sampler,
-    // placeholder 1x1 white texture used until a real sprite atlas is provided
-    #[allow(dead_code)]
     placeholder_texture: wgpu::Texture,
     placeholder_view: wgpu::TextureView,
 }
