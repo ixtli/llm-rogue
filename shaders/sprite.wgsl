@@ -73,14 +73,22 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let x = dot(view_pos, camera.right);
     let y = dot(view_pos, camera.up);
 
+    // Cull vertices behind the camera to avoid NaN/Inf from division by z <= 0
+    if (z <= 0.001) {
+        var out: VertexOutput;
+        out.clip_position = vec4<f32>(0.0, 0.0, -1.0, 1.0);
+        out.uv = vec2<f32>(0.0, 0.0);
+        return out;
+    }
+
     // Perspective projection matching the raymarch camera model
     let aspect = f32(camera.width) / f32(camera.height);
     let half_fov = camera.fov * 0.5;
     let proj_x = x / (z * tan(half_fov) * aspect);
     let proj_y = y / (z * tan(half_fov));
 
-    // Depth normalized to [0, 1] matching raymarch depth output
-    let depth = clamp(z / camera.max_ray_distance, 0.0, 1.0);
+    // Depth uses Euclidean distance matching the raymarch shader's t_hit
+    let depth = clamp(length(view_pos) / camera.max_ray_distance, 0.0, 1.0);
 
     var out: VertexOutput;
     out.clip_position = vec4<f32>(proj_x, proj_y, depth, 1.0);
