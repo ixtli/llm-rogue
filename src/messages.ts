@@ -16,7 +16,8 @@ export type UIToGameMessage =
       type: "player_action";
       action: "move_n" | "move_s" | "move_e" | "move_w" | "attack" | "pickup" | "wait";
       targetId?: number;
-    };
+    }
+  | { type: "toggle_free_look" };
 
 // --- Game Worker → Render Worker ---
 
@@ -158,4 +159,5 @@ export type GameToUIMessage =
       camera_chunk_x: number;
       camera_chunk_y: number;
       camera_chunk_z: number;
-    };
+    }
+  | { type: "camera_mode"; mode: "follow" | "free_look" };
