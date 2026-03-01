@@ -137,12 +137,81 @@ impl MapFeature for FlattenNearOrigin {
     }
 }
 
-/// Placeholder feature: will place walls around the map boundary.
+/// Height of wall columns in voxels.
+const WALL_HEIGHT: i32 = 3;
+
+/// World y of the bottom wall voxel (one above the flattened surface).
+const WALL_BASE_Y: i32 = FLATTEN_HEIGHT + 1;
+
+/// World y of the top wall voxel (inclusive).
+const WALL_TOP_Y: i32 = WALL_BASE_Y + WALL_HEIGHT - 1;
+
+/// An axis-aligned box of stone voxels in world coordinates (inclusive).
+struct WallSegment {
+    min: IVec3,
+    max: IVec3,
+}
+
+/// Returns the hard-coded wall segments for the playtest map.
+fn wall_segments() -> Vec<WallSegment> {
+    vec![
+        // L-wall vertical arm: x=8, z=8..12
+        WallSegment {
+            min: IVec3::new(8, WALL_BASE_Y, 8),
+            max: IVec3::new(8, WALL_TOP_Y, 12),
+        },
+        // L-wall horizontal arm: x=8..12, z=12
+        WallSegment {
+            min: IVec3::new(8, WALL_BASE_Y, 12),
+            max: IVec3::new(12, WALL_TOP_Y, 12),
+        },
+        // Straight wall: x=20, z=6..14
+        WallSegment {
+            min: IVec3::new(20, WALL_BASE_Y, 6),
+            max: IVec3::new(20, WALL_TOP_Y, 14),
+        },
+    ]
+}
+
+/// Places hard-coded stone wall segments above the flattened terrain surface.
 pub struct PlaceWalls;
 
 impl MapFeature for PlaceWalls {
-    fn apply(&self, _chunk: &mut Chunk, _chunk_coord: IVec3) {
-        // No-op placeholder
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+    fn apply(&self, chunk: &mut Chunk, chunk_coord: IVec3) {
+        let cs = CHUNK_SIZE as i32;
+        let chunk_min = chunk_coord * cs;
+        let chunk_max = chunk_min + IVec3::splat(cs - 1);
+
+        for seg in &wall_segments() {
+            // AABB overlap test — skip if no intersection
+            if seg.max.x < chunk_min.x
+                || seg.min.x > chunk_max.x
+                || seg.max.y < chunk_min.y
+                || seg.min.y > chunk_max.y
+                || seg.max.z < chunk_min.z
+                || seg.min.z > chunk_max.z
+            {
+                continue;
+            }
+
+            // Clamp segment to chunk bounds (world coords)
+            let lo = seg.min.max(chunk_min);
+            let hi = seg.max.min(chunk_max);
+
+            // Convert to local chunk coordinates and write stone voxels
+            for wz in lo.z..=hi.z {
+                for wy in lo.y..=hi.y {
+                    for wx in lo.x..=hi.x {
+                        let lx = (wx - chunk_min.x) as usize;
+                        let ly = (wy - chunk_min.y) as usize;
+                        let lz = (wz - chunk_min.z) as usize;
+                        let idx = lz * CHUNK_SIZE * CHUNK_SIZE + ly * CHUNK_SIZE + lx;
+                        chunk.voxels[idx] = pack_voxel(MAT_STONE, 0, 0, 0);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -262,6 +331,42 @@ mod tests {
         assert!(
             any_differs_from_flat,
             "blend zone should not be perfectly flat"
+        );
+    }
+
+    #[test]
+    fn place_walls_adds_stone_above_surface() {
+        let config = MapConfig {
+            features: vec![Box::new(FlattenNearOrigin), Box::new(PlaceWalls)],
+            ..MapConfig::default()
+        };
+        // Chunk (0,0,0) contains world (8,25,8) — the start of the L-wall vertical arm
+        let chunk = config.generate_chunk(IVec3::ZERO);
+        let (x, y, z) = (8_usize, 25_usize, 8_usize);
+        let idx = z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x;
+        assert_eq!(
+            material_id(chunk.voxels[idx]),
+            MAT_STONE,
+            "wall voxel at world (8,25,8) should be MAT_STONE"
+        );
+    }
+
+    #[test]
+    fn place_walls_does_not_affect_distant_chunks() {
+        let far_coord = IVec3::new(3, 0, 3);
+        let with_walls = MapConfig {
+            features: vec![Box::new(PlaceWalls)],
+            ..MapConfig::default()
+        };
+        let without_walls = MapConfig {
+            features: vec![],
+            ..MapConfig::default()
+        };
+        let chunk_with = with_walls.generate_chunk(far_coord);
+        let chunk_without = without_walls.generate_chunk(far_coord);
+        assert_eq!(
+            chunk_with.voxels, chunk_without.voxels,
+            "PlaceWalls should not modify chunks far from origin"
         );
     }
 }
