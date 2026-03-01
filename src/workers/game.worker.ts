@@ -1,6 +1,11 @@
 // CameraIntent is exported from Rust via #[wasm_bindgen] — single source of truth.
 import { CameraIntent } from "../../crates/engine/pkg/engine";
+import type { Actor, Entity } from "../game/entity";
+import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import { deserializeTerrainGrid } from "../game/terrain";
+import type { PlayerAction } from "../game/turn-loop";
+import { TurnLoop } from "../game/turn-loop";
+import { GameWorld } from "../game/world";
 import type {
   GameToRenderMessage,
   GameToUIMessage,
@@ -12,10 +17,6 @@ import { StatsAggregator } from "../stats";
 // --- Key-to-intent mapping ---
 
 const KEY_TO_INTENT: Record<string, number> = {
-  w: CameraIntent.TrackForward,
-  s: CameraIntent.TrackBackward,
-  a: CameraIntent.TruckLeft,
-  d: CameraIntent.TruckRight,
   q: CameraIntent.PanLeft,
   e: CameraIntent.PanRight,
   r: CameraIntent.TiltUp,
@@ -23,9 +24,32 @@ const KEY_TO_INTENT: Record<string, number> = {
   shift: CameraIntent.Sprint,
 };
 
+// --- Direction-to-action mapping for WASD/arrow keys ---
+
+const KEY_TO_DIRECTION: Record<string, PlayerAction> = {
+  w: { type: "move", dx: 0, dz: -1 },
+  arrowup: { type: "move", dx: 0, dz: -1 },
+  s: { type: "move", dx: 0, dz: 1 },
+  arrowdown: { type: "move", dx: 0, dz: 1 },
+  a: { type: "move", dx: -1, dz: 0 },
+  arrowleft: { type: "move", dx: -1, dz: 0 },
+  d: { type: "move", dx: 1, dz: 0 },
+  arrowright: { type: "move", dx: 1, dz: 0 },
+  " ": { type: "wait" },
+};
+
 let renderWorker: Worker | null = null;
 const statsAggregator = new StatsAggregator(120);
 let digestTimer: ReturnType<typeof setInterval> | null = null;
+
+// --- Game state ---
+
+const world = new GameWorld();
+let turnLoop: TurnLoop | null = null;
+let turnNumber = 0;
+let gameInitialized = false;
+
+const FACING_MAP: Record<string, number> = { s: 0, e: 1, n: 2, w: 3 };
 
 function sendToRender(msg: GameToRenderMessage) {
   renderWorker?.postMessage(msg, msg.type === "init" ? [msg.canvas] : []);
@@ -33,6 +57,107 @@ function sendToRender(msg: GameToRenderMessage) {
 
 function sendToUI(msg: GameToUIMessage) {
   (self as unknown as Worker).postMessage(msg);
+}
+
+function sendSpriteUpdate(): void {
+  const sprites: {
+    id: number;
+    x: number;
+    y: number;
+    z: number;
+    spriteId: number;
+    facing: number;
+  }[] = [];
+
+  for (const entity of [...world.actors(), ...world.items()] as Entity[]) {
+    sprites.push({
+      id: entity.id,
+      x: entity.position.x + 0.5,
+      y: entity.position.y + 1,
+      z: entity.position.z + 0.5,
+      spriteId: entity.type === "player" ? 0 : entity.type === "npc" ? 1 : 2,
+      facing: FACING_MAP[entity.facing] ?? 0,
+    });
+  }
+  sendToRender({ type: "sprite_update", sprites });
+}
+
+function sendGameState(): void {
+  const player = turnLoop
+    ? (world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined)
+    : undefined;
+  if (!player) return;
+
+  const entities: {
+    id: number;
+    x: number;
+    y: number;
+    z: number;
+    type: string;
+    spriteId: number;
+  }[] = [];
+  for (const entity of [...world.actors(), ...world.items()] as Entity[]) {
+    entities.push({
+      id: entity.id,
+      x: entity.position.x,
+      y: entity.position.y,
+      z: entity.position.z,
+      type: entity.type,
+      spriteId: entity.type === "player" ? 0 : entity.type === "npc" ? 1 : 2,
+    });
+  }
+
+  sendToUI({
+    type: "game_state",
+    player: {
+      x: player.position.x,
+      y: player.position.y,
+      z: player.position.z,
+      health: player.health,
+      maxHealth: player.maxHealth,
+    },
+    entities,
+    turnNumber,
+  });
+}
+
+function initializeGame(): void {
+  if (gameInitialized) return;
+
+  const player = createPlayer({ x: 5, y: 5, z: 5 });
+  world.addEntity(player);
+
+  // Spawn test NPCs
+  const npc1 = createNpc({ x: 10, y: 5, z: 10 }, "hostile");
+  const npc2 = createNpc({ x: 16, y: 5, z: 8 }, "neutral");
+  world.addEntity(npc1);
+  world.addEntity(npc2);
+
+  // Spawn a test item
+  const item = createItemEntity(
+    { x: 7, y: 5, z: 5 },
+    {
+      id: "potion",
+      name: "Health Potion",
+      type: "consumable",
+      stackable: true,
+      maxStack: 10,
+    },
+  );
+  world.addEntity(item);
+
+  turnLoop = new TurnLoop(world, player.id);
+  gameInitialized = true;
+}
+
+function handlePlayerAction(action: PlayerAction): void {
+  if (!turnLoop) return;
+  const result = turnLoop.submitAction(action);
+  if (result.resolved) {
+    turnNumber++;
+    sendSpriteUpdate();
+    sendGameState();
+  }
 }
 
 // --- Handle messages from render worker ---
@@ -64,44 +189,18 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
       camera_chunk_z: msg.camera_chunk_z,
     });
   } else if (msg.type === "chunk_terrain") {
-    // Temporary test: place 3 sprites on chunk (0,0,0) terrain
+    const grid = deserializeTerrainGrid(msg.cx, msg.cy, msg.cz, msg.data);
+    world.loadTerrain(grid);
+
+    // Initialize game entities once we have the origin chunk
     if (msg.cx === 0 && msg.cy === 0 && msg.cz === 0) {
-      const grid = deserializeTerrainGrid(msg.cx, msg.cy, msg.cz, msg.data);
-      const sprites: {
-        id: number;
-        x: number;
-        y: number;
-        z: number;
-        spriteId: number;
-        facing: number;
-      }[] = [];
-      const testPositions = [
-        [5, 5],
-        [10, 10],
-        [16, 8],
-      ];
-      for (let i = 0; i < testPositions.length; i++) {
-        const [lx, lz] = testPositions[i];
-        const col = grid.columns[lz * 32 + lx];
-        if (col.length > 0) {
-          const surface = col[col.length - 1]; // topmost surface
-          sprites.push({
-            id: i,
-            x: lx + 0.5,
-            y: surface.y + 1,
-            z: lz + 0.5,
-            spriteId: 0,
-            facing: 0,
-          });
-        }
-      }
-      if (sprites.length > 0) {
-        sendToRender({ type: "sprite_update", sprites });
-      }
+      initializeGame();
+      sendSpriteUpdate();
+      sendGameState();
     }
+  } else if (msg.type === "chunk_terrain_unload") {
+    world.unloadTerrain(msg.cx, msg.cy, msg.cz);
   }
-  // animation_complete, camera_position, chunk_loaded handled by game logic
-  // (no-op for now, future game logic will use these)
 }
 
 // --- Handle messages from UI thread ---
@@ -110,7 +209,9 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
   const msg = e.data;
 
   if (msg.type === "init") {
-    renderWorker = new Worker(new URL("./render.worker.ts", import.meta.url), { type: "module" });
+    renderWorker = new Worker(new URL("./render.worker.ts", import.meta.url), {
+      type: "module",
+    });
     renderWorker.onmessage = onRenderMessage;
     sendToRender({
       type: "init",
@@ -123,6 +224,13 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       sendToUI({ type: "diagnostics", ...statsAggregator.digest() });
     }, 250);
   } else if (msg.type === "key_down") {
+    // Check for game action keys first
+    const action = KEY_TO_DIRECTION[msg.key];
+    if (action) {
+      handlePlayerAction(action);
+      return;
+    }
+    // Fall through to camera intents
     const intent = KEY_TO_INTENT[msg.key];
     if (intent !== undefined) {
       sendToRender({ type: "begin_intent", intent });
@@ -132,13 +240,39 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     if (intent !== undefined) {
       sendToRender({ type: "end_intent", intent });
     }
+  } else if (msg.type === "player_action") {
+    // Explicit player action from UI
+    let action: PlayerAction;
+    switch (msg.action) {
+      case "move_n":
+        action = { type: "move", dx: 0, dz: -1 };
+        break;
+      case "move_s":
+        action = { type: "move", dx: 0, dz: 1 };
+        break;
+      case "move_e":
+        action = { type: "move", dx: 1, dz: 0 };
+        break;
+      case "move_w":
+        action = { type: "move", dx: -1, dz: 0 };
+        break;
+      case "attack":
+        action = { type: "attack", targetId: msg.targetId ?? 0 };
+        break;
+      case "pickup":
+        action = { type: "pickup" };
+        break;
+      case "wait":
+        action = { type: "wait" };
+        break;
+    }
+    handlePlayerAction(action);
   } else if (msg.type === "pointer_move") {
     sendToRender({ type: "set_look_delta", dyaw: msg.dx, dpitch: msg.dy });
   } else if (msg.type === "scroll") {
     sendToRender({ type: "set_dolly", amount: msg.dy });
   } else if (msg.type === "pan") {
     // Pan is currently not mapped to a stage direction.
-    // Could be added as a set_pan_delta if needed.
   } else if (msg.type === "resize") {
     sendToRender({ type: "resize", width: msg.width, height: msg.height });
   }

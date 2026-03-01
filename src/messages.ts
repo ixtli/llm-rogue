@@ -11,7 +11,12 @@ export type UIToGameMessage =
   | { type: "pointer_move"; dx: number; dy: number }
   | { type: "scroll"; dy: number }
   | { type: "pan"; dx: number; dy: number }
-  | { type: "resize"; width: number; height: number };
+  | { type: "resize"; width: number; height: number }
+  | {
+      type: "player_action";
+      action: "move_n" | "move_s" | "move_e" | "move_w" | "attack" | "pickup" | "wait";
+      targetId?: number;
+    };
 
 // --- Game Worker → Render Worker ---
 
@@ -21,7 +26,14 @@ export type GameToRenderMessage =
   | { type: "end_intent"; intent: number }
   | { type: "set_look_delta"; dyaw: number; dpitch: number }
   | { type: "set_dolly"; amount: number }
-  | { type: "set_camera"; x: number; y: number; z: number; yaw: number; pitch: number }
+  | {
+      type: "set_camera";
+      x: number;
+      y: number;
+      z: number;
+      yaw: number;
+      pitch: number;
+    }
   | {
       type: "animate_camera";
       x: number;
@@ -34,7 +46,13 @@ export type GameToRenderMessage =
     }
   | { type: "preload_view"; x: number; y: number; z: number }
   | { type: "query_camera_position"; id: number }
-  | { type: "query_chunk_loaded"; id: number; cx: number; cy: number; cz: number }
+  | {
+      type: "query_chunk_loaded";
+      id: number;
+      cx: number;
+      cy: number;
+      cz: number;
+    }
   | { type: "is_solid"; x: number; y: number; z: number; id: number }
   | { type: "resize"; width: number; height: number }
   | {
@@ -100,6 +118,25 @@ export type RenderToGameMessage =
 export type GameToUIMessage =
   | { type: "ready" }
   | { type: "error"; message: string }
+  | {
+      type: "game_state";
+      player: {
+        x: number;
+        y: number;
+        z: number;
+        health: number;
+        maxHealth: number;
+      };
+      entities: {
+        id: number;
+        x: number;
+        y: number;
+        z: number;
+        type: string;
+        spriteId: number;
+      }[];
+      turnNumber: number;
+    }
   | {
       type: "diagnostics";
       fps: number;
