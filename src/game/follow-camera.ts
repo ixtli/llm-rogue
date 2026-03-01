@@ -11,7 +11,7 @@ export interface CameraTarget {
   pitch: number;
 }
 
-const BASE_OFFSET: Vec3 = { x: -13, y: 31, z: -13 };
+const BASE_OFFSET: Vec3 = { x: -24, y: 31, z: -24 };
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 2.0;
 

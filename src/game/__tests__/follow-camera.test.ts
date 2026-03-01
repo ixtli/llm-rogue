@@ -5,9 +5,9 @@ describe("FollowCamera", () => {
   it("computes camera position from player position and offset", () => {
     const cam = new FollowCamera();
     const { position, lookAt } = cam.compute({ x: 5, y: 24, z: 5 });
-    expect(position.x).toBeCloseTo(-8, 0);
+    expect(position.x).toBeCloseTo(-19, 0);
     expect(position.y).toBeCloseTo(55, 0);
-    expect(position.z).toBeCloseTo(-8, 0);
+    expect(position.z).toBeCloseTo(-19, 0);
     expect(lookAt).toEqual({ x: 5, y: 24, z: 5 });
   });
 
@@ -15,18 +15,18 @@ describe("FollowCamera", () => {
     const cam = new FollowCamera();
     cam.orbit(1);
     const { position } = cam.compute({ x: 0, y: 0, z: 0 });
-    expect(position.x).toBeCloseTo(-13, 0);
+    expect(position.x).toBeCloseTo(-24, 0);
     expect(position.y).toBeCloseTo(31, 0);
-    expect(position.z).toBeCloseTo(13, 0);
+    expect(position.z).toBeCloseTo(24, 0);
   });
 
   it("orbits 90 degrees CCW", () => {
     const cam = new FollowCamera();
     cam.orbit(-1);
     const { position } = cam.compute({ x: 0, y: 0, z: 0 });
-    expect(position.x).toBeCloseTo(13, 0);
+    expect(position.x).toBeCloseTo(24, 0);
     expect(position.y).toBeCloseTo(31, 0);
-    expect(position.z).toBeCloseTo(-13, 0);
+    expect(position.z).toBeCloseTo(-24, 0);
   });
 
   it("wraps orbit index modulo 4", () => {
@@ -36,8 +36,8 @@ describe("FollowCamera", () => {
     cam.orbit(1);
     cam.orbit(1);
     const { position } = cam.compute({ x: 0, y: 0, z: 0 });
-    expect(position.x).toBeCloseTo(-13, 0);
-    expect(position.z).toBeCloseTo(-13, 0);
+    expect(position.x).toBeCloseTo(-24, 0);
+    expect(position.z).toBeCloseTo(-24, 0);
   });
 
   it("zoom adjusts offset magnitude", () => {
