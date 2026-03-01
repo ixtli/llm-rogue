@@ -11,17 +11,24 @@ export interface CameraTarget {
   pitch: number;
 }
 
+export interface OrbitArc {
+  fromAngle: number;
+  toAngle: number;
+}
+
 const BASE_OFFSET: Vec3 = { x: -24, y: 31, z: -24 };
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 2.0;
 
 export class FollowCamera {
-  private orbitIndex = 0;
+  private orbitAngle = 0;
   private zoomFactor = 1.0;
   mode: "follow" | "free_look" = "follow";
 
-  orbit(direction: 1 | -1): void {
-    this.orbitIndex = (((this.orbitIndex + direction) % 4) + 4) % 4;
+  orbit(direction: 1 | -1): OrbitArc {
+    const fromAngle = this.orbitAngle;
+    this.orbitAngle -= direction * (Math.PI / 2);
+    return { fromAngle, toAngle: this.orbitAngle };
   }
 
   adjustZoom(delta: number): void {
@@ -32,8 +39,7 @@ export class FollowCamera {
     this.mode = this.mode === "follow" ? "free_look" : "follow";
   }
 
-  compute(playerPos: Vec3): CameraTarget {
-    const angle = (-this.orbitIndex * Math.PI) / 2;
+  computeAtAngle(playerPos: Vec3, angle: number): CameraTarget {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const rx = BASE_OFFSET.x * cos - BASE_OFFSET.z * sin;
@@ -54,5 +60,9 @@ export class FollowCamera {
     const pitch = Math.atan2(dy, horizontalDist);
 
     return { position, lookAt: { ...playerPos }, yaw, pitch };
+  }
+
+  compute(playerPos: Vec3): CameraTarget {
+    return this.computeAtAngle(playerPos, this.orbitAngle);
   }
 }

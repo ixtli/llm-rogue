@@ -2,6 +2,7 @@
 import { CameraIntent } from "../../crates/engine/pkg/engine";
 import type { Actor, Entity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
+import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
 import { FollowCamera } from "../game/follow-camera";
 import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
@@ -125,6 +126,50 @@ function sendGameState(): void {
 
 let lastSentYaw = Number.NaN;
 
+// --- Orbit animation (arc interpolation in TypeScript) ---
+
+let orbitTimer: ReturnType<typeof setTimeout> | null = null;
+
+function cubicInOut(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+function cancelOrbitAnimation(): void {
+  if (orbitTimer !== null) {
+    clearTimeout(orbitTimer);
+    orbitTimer = null;
+  }
+}
+
+function startOrbitAnimation(playerPos: CamVec3, arc: OrbitArc, duration: number): void {
+  cancelOrbitAnimation();
+  const startTime = performance.now();
+
+  function tick() {
+    const elapsed = (performance.now() - startTime) / 1000;
+    const t = Math.min(elapsed / duration, 1);
+    const angle = arc.fromAngle + (arc.toAngle - arc.fromAngle) * cubicInOut(t);
+    const target = followCamera.computeAtAngle(playerPos, angle);
+
+    lastSentYaw = target.yaw;
+    sendToRender({
+      type: "set_camera",
+      x: target.position.x,
+      y: target.position.y,
+      z: target.position.z,
+      yaw: target.yaw,
+      pitch: target.pitch,
+    });
+
+    if (t < 1) {
+      orbitTimer = setTimeout(tick, 16);
+    } else {
+      orbitTimer = null;
+    }
+  }
+  tick();
+}
+
 function sendFollowCamera(
   playerPos: { x: number; y: number; z: number },
   animate: boolean,
@@ -202,6 +247,7 @@ function initializeGame(): void {
 function handlePlayerAction(action: PlayerAction): void {
   if (!turnLoop) return;
   if (followCamera.mode !== "follow") return;
+  cancelOrbitAnimation();
   const result = turnLoop.submitAction(action);
   if (result.resolved) {
     turnNumber++;
@@ -280,6 +326,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
 
     // Tab toggles camera mode
     if (key === "tab") {
+      cancelOrbitAnimation();
       followCamera.toggleMode();
       sendToUI({ type: "camera_mode", mode: followCamera.mode });
       if (followCamera.mode === "follow" && turnLoop) {
@@ -297,10 +344,10 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
         return;
       }
       if (key === "q" || key === "e") {
-        followCamera.orbit(key === "q" ? -1 : 1);
+        const arc = followCamera.orbit(key === "q" ? -1 : 1);
         if (turnLoop) {
           const player = world.getEntity(turnLoop.turnOrder()[0]);
-          if (player) sendFollowCamera(player.position, true, 0.4);
+          if (player) startOrbitAnimation(player.position, arc, 0.4);
         }
         return;
       }

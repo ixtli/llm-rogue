@@ -29,7 +29,7 @@ describe("FollowCamera", () => {
     expect(position.z).toBeCloseTo(-24, 0);
   });
 
-  it("wraps orbit index modulo 4", () => {
+  it("four CW orbits return to start", () => {
     const cam = new FollowCamera();
     cam.orbit(1);
     cam.orbit(1);
@@ -38,6 +38,27 @@ describe("FollowCamera", () => {
     const { position } = cam.compute({ x: 0, y: 0, z: 0 });
     expect(position.x).toBeCloseTo(-24, 0);
     expect(position.z).toBeCloseTo(-24, 0);
+  });
+
+  it("orbit returns arc angles for animation", () => {
+    const cam = new FollowCamera();
+    const arc = cam.orbit(1);
+    expect(arc.fromAngle).toBe(0);
+    expect(arc.toAngle).toBeCloseTo(-Math.PI / 2, 10);
+  });
+
+  it("computeAtAngle produces intermediate positions on the arc", () => {
+    const cam = new FollowCamera();
+    const origin = { x: 0, y: 0, z: 0 };
+    const start = cam.computeAtAngle(origin, 0);
+    const mid = cam.computeAtAngle(origin, -Math.PI / 4);
+    const end = cam.computeAtAngle(origin, -Math.PI / 2);
+    // All three should be equidistant from the player (on the circle)
+    const distStart = Math.hypot(start.position.x, start.position.z);
+    const distMid = Math.hypot(mid.position.x, mid.position.z);
+    const distEnd = Math.hypot(end.position.x, end.position.z);
+    expect(distMid).toBeCloseTo(distStart, 5);
+    expect(distEnd).toBeCloseTo(distStart, 5);
   });
 
   it("zoom adjusts offset magnitude", () => {
