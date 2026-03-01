@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { Inventory } from "../inventory";
+import { describe, expect, it } from "vitest";
 import type { ItemDef } from "../entity";
+import { Inventory } from "../inventory";
 
 const SWORD: ItemDef = {
   id: "sword",
@@ -24,7 +24,7 @@ describe("Inventory", () => {
     inv.add(POTION);
     inv.add(POTION);
     expect(inv.slots.filter((s) => s !== null)).toHaveLength(1);
-    expect(inv.slots[0]!.quantity).toBe(3);
+    expect(inv.slots[0]?.quantity).toBe(3);
   });
 
   it("rejects when full", () => {
@@ -38,7 +38,7 @@ describe("Inventory", () => {
     const inv = new Inventory(10);
     inv.add(SWORD);
     const removed = inv.removeAt(0);
-    expect(removed!.item.id).toBe("sword");
+    expect(removed?.item.id).toBe("sword");
     expect(inv.slots[0]).toBeNull();
   });
 
