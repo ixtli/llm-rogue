@@ -123,17 +123,33 @@ function sendGameState(): void {
   });
 }
 
-function sendFollowCamera(playerPos: { x: number; y: number; z: number }, animate: boolean): void {
+let lastSentYaw = Number.NaN;
+
+function sendFollowCamera(
+  playerPos: { x: number; y: number; z: number },
+  animate: boolean,
+  duration = 0.25,
+): void {
   const target = followCamera.compute(playerPos);
+  let yaw = target.yaw;
+
+  // Normalize yaw for shortest-path interpolation to avoid
+  // the camera spinning the long way around at the ±π boundary.
+  if (animate && !Number.isNaN(lastSentYaw)) {
+    while (yaw - lastSentYaw > Math.PI) yaw -= 2 * Math.PI;
+    while (yaw - lastSentYaw < -Math.PI) yaw += 2 * Math.PI;
+  }
+  lastSentYaw = yaw;
+
   if (animate) {
     sendToRender({
       type: "animate_camera",
       x: target.position.x,
       y: target.position.y,
       z: target.position.z,
-      yaw: target.yaw,
+      yaw,
       pitch: target.pitch,
-      duration: 0.25,
+      duration,
       easing: 2, // CubicInOut
     });
   } else {
@@ -142,7 +158,7 @@ function sendFollowCamera(playerPos: { x: number; y: number; z: number }, animat
       x: target.position.x,
       y: target.position.y,
       z: target.position.z,
-      yaw: target.yaw,
+      yaw,
       pitch: target.pitch,
     });
   }
@@ -284,19 +300,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
         followCamera.orbit(key === "q" ? -1 : 1);
         if (turnLoop) {
           const player = world.getEntity(turnLoop.turnOrder()[0]);
-          if (player) {
-            const target = followCamera.compute(player.position);
-            sendToRender({
-              type: "animate_camera",
-              x: target.position.x,
-              y: target.position.y,
-              z: target.position.z,
-              yaw: target.yaw,
-              pitch: target.pitch,
-              duration: 0.4,
-              easing: 2,
-            });
-          }
+          if (player) sendFollowCamera(player.position, true, 0.4);
         }
         return;
       }
