@@ -124,18 +124,21 @@ function sendGameState(): void {
 function initializeGame(): void {
   if (gameInitialized) return;
 
-  const player = createPlayer({ x: 5, y: 5, z: 5 });
+  // Query terrain to find surface Y at spawn positions
+  const spawnY = (x: number, z: number) => world.findTopSurface(x, z) ?? 0;
+
+  const player = createPlayer({ x: 5, y: spawnY(5, 5), z: 5 });
   world.addEntity(player);
 
   // Spawn test NPCs
-  const npc1 = createNpc({ x: 10, y: 5, z: 10 }, "hostile");
-  const npc2 = createNpc({ x: 16, y: 5, z: 8 }, "neutral");
+  const npc1 = createNpc({ x: 10, y: spawnY(10, 10), z: 10 }, "hostile");
+  const npc2 = createNpc({ x: 16, y: spawnY(16, 8), z: 8 }, "neutral");
   world.addEntity(npc1);
   world.addEntity(npc2);
 
   // Spawn a test item
   const item = createItemEntity(
-    { x: 7, y: 5, z: 5 },
+    { x: 7, y: spawnY(7, 5), z: 5 },
     {
       id: "potion",
       name: "Health Potion",

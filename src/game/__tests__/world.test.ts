@@ -109,4 +109,54 @@ describe("findReachableSurface", () => {
     const result = world.findReachableSurface(5, 0, 0, 1, 3);
     expect(result).toBeUndefined();
   });
+
+  it("works with non-zero chunk cy (world Y != local Y)", () => {
+    const world = new GameWorld();
+    // Terrain in chunk cy=1 (world Y offset = 32), surface at local y=5 = world y=37
+    const columns: TileSurface[][] = [];
+    for (let i = 0; i < 32 * 32; i++) {
+      columns.push([{ y: 5, terrainId: 1, headroom: 26 }]);
+    }
+    world.loadTerrain({ cx: 0, cy: 1, cz: 0, columns });
+    // Player at world y=37, stepping to (1,0) — should find surface at world y=37
+    const result = world.findReachableSurface(37, 1, 0, 1, 3);
+    expect(result).toEqual({ y: 37, isJump: false });
+  });
+
+  it("finds top walkable surface at a column", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat(0, 0, 24, 1));
+    expect(world.findTopSurface(5, 5)).toBe(24);
+  });
+
+  it("findTopSurface returns undefined for unloaded terrain", () => {
+    const world = new GameWorld();
+    expect(world.findTopSurface(5, 5)).toBeUndefined();
+  });
+
+  it("findTopSurface picks highest walkable in multi-layer", () => {
+    const world = new GameWorld();
+    const columns: TileSurface[][] = [];
+    for (let i = 0; i < 32 * 32; i++) {
+      columns.push([
+        { y: 5, terrainId: 1, headroom: 6 },
+        { y: 12, terrainId: 1, headroom: 19 },
+      ]);
+    }
+    world.loadTerrain({ cx: 0, cy: 0, cz: 0, columns });
+    expect(world.findTopSurface(3, 3)).toBe(12);
+  });
+
+  it("returns world Y not local Y for surfaces", () => {
+    const world = new GameWorld();
+    // Surface at local y=24 in chunk cy=0 = world y=24
+    const columns: TileSurface[][] = [];
+    for (let i = 0; i < 32 * 32; i++) {
+      columns.push([{ y: 24, terrainId: 1, headroom: 7 }]);
+    }
+    world.loadTerrain({ cx: 0, cy: 0, cz: 0, columns });
+    // Player at world y=24
+    const result = world.findReachableSurface(24, 1, 0, 1, 3);
+    expect(result).toEqual({ y: 24, isJump: false });
+  });
 });
