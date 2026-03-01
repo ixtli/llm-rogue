@@ -58,6 +58,7 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
 
     const VIEW_DIST = 3;
     const emittedTerrainChunks = new Set<string>();
+    let needsTerrainScan = true;
 
     function loop() {
       render_frame(performance.now() / 1000.0);
@@ -86,8 +87,11 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
         camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
       });
 
-      // Emit terrain grids for newly loaded chunks
-      if (s[STAT_LOADED_THIS_TICK] > 0) {
+      // Emit terrain grids for newly loaded chunks, or on first frame
+      // (init loads all chunks with unlimited budget, so LOADED_THIS_TICK
+      // may be 0 even though chunks are already loaded).
+      if (s[STAT_LOADED_THIS_TICK] > 0 || needsTerrainScan) {
+        needsTerrainScan = false;
         const camCX = s[STAT_CAMERA_CHUNK_X];
         const camCY = s[STAT_CAMERA_CHUNK_Y];
         const camCZ = s[STAT_CAMERA_CHUNK_Z];

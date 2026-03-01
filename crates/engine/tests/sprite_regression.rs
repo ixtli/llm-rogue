@@ -369,3 +369,30 @@ fn sprite_multiple() {
     ];
     regression_check(&mut renderer, "sprite_multiple", &camera, &sprites);
 }
+
+/// Sprites render correctly at the default camera position (isometric view
+/// from southwest, steep ~42° pitch). Verifies the rendering pipeline works
+/// at this angle — the browser sprite visibility bug was in the terrain
+/// emission timing, not the GPU depth pipeline.
+#[test]
+fn sprite_default_camera() {
+    let mut renderer = HeadlessFullRenderer::new();
+    let camera = Camera::default(); // (-8, 55, -8) looking at (16, 24, 16)
+
+    // Place a 2x2 sprite at (16, 45, 16) — above terrain, in the camera's
+    // line of sight. Should be clearly visible as a white rectangle.
+    let sprites = [make_sprite(16.0, 45.0, 16.0, 2.0, 2.0)];
+    let pixels = renderer.render(&camera, &sprites);
+
+    // Count bright white pixels (sprite is white placeholder atlas).
+    let white_count = pixels
+        .chunks_exact(4)
+        .filter(|px| px[0] > 250 && px[1] > 250 && px[2] > 250)
+        .count();
+
+    assert!(
+        white_count > 0,
+        "Expected white sprite pixels at default camera angle, found 0. \
+         Sprite may be failing depth test or projecting off-screen."
+    );
+}
