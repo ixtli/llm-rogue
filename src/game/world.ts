@@ -94,6 +94,8 @@ export class GameWorld {
     const cz = Math.floor(toZ / CHUNK_SIZE);
     const lx = ((toX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const lz = ((toZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localFromY = ((fromY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const yOffset = cy * CHUNK_SIZE;
     const grid = this.terrainGrids.get(chunkKey(cx, cy, cz));
     if (!grid) return undefined;
 
@@ -103,11 +105,33 @@ export class GameWorld {
 
     for (const s of surfaces) {
       if (!(getTerrainDef(s.terrainId)?.walkable ?? false)) continue;
-      const dy = Math.abs(s.y - fromY);
+      const dy = Math.abs(s.y - localFromY);
       if (dy > jumpHeight) continue;
       if (dy < bestDist) {
         bestDist = dy;
-        best = { y: s.y, isJump: dy > stepHeight };
+        best = { y: s.y + yOffset, isJump: dy > stepHeight };
+      }
+    }
+    return best;
+  }
+
+  findTopSurface(worldX: number, worldZ: number): number | undefined {
+    const cx = Math.floor(worldX / CHUNK_SIZE);
+    const cz = Math.floor(worldZ / CHUNK_SIZE);
+    const lx = ((worldX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const lz = ((worldZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    // Search loaded chunks from highest cy downward
+    let best: number | undefined;
+    for (const [key, grid] of this.terrainGrids) {
+      const [gcx, , gcz] = key.split(",").map(Number);
+      if (gcx !== cx || gcz !== cz) continue;
+      const surfaces = grid.columns[lz * CHUNK_SIZE + lx];
+      for (const s of surfaces) {
+        if (!(getTerrainDef(s.terrainId)?.walkable ?? false)) continue;
+        const worldY = s.y + grid.cy * CHUNK_SIZE;
+        if (best === undefined || worldY > best) {
+          best = worldY;
+        }
       }
     }
     return best;
