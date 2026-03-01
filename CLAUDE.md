@@ -8,12 +8,15 @@ Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
 **Current state:** Phases 1–4b, Phase 5 (stages A+B), and Phase 5c (occupancy
-bitmask) are complete. The engine renders dynamically-loaded multi-chunk terrain
-with hard shadows and ambient occlusion via three-level DDA ray marching through
-a 3D texture atlas. Per-chunk 64-bit occupancy bitmasks let the shader skip
-empty 8x8x8 sub-regions. Chunk loading is budgeted (4/frame),
-distance-prioritized, with trajectory prediction and implicit LRU caching.
-Collision gating prevents the camera from entering solid voxels. Three-thread
+bitmask) are complete. A composable `MapFeature` system flattens terrain near
+origin and places stone walls for play-testing. The engine renders
+dynamically-loaded multi-chunk terrain with hard shadows and ambient occlusion
+via three-level DDA ray marching through a 3D texture atlas. Per-chunk 64-bit
+occupancy bitmasks let the shader skip empty 8x8x8 sub-regions. Chunk loading
+is budgeted (4/frame), distance-prioritized, with trajectory prediction and
+implicit LRU caching. `ChunkManager` accepts a pluggable chunk generator
+(`with_chunk_gen`). Collision gating prevents the camera from entering solid
+voxels. Isometric camera defaults for the play-test area. Three-thread
 architecture (UI → game worker → render worker) with intent-based camera control.
 
 Next milestone: Phase 6 (game logic loop, player state, UI).
@@ -215,7 +218,7 @@ occlusion samples), using the material's palette color.
 |--------|------|---------|
 | `camera` | `crates/engine/src/camera.rs` | Camera state, GPU uniform struct, GridInfo, intent API, animation, look_at |
 | `collision` | `crates/engine/src/collision.rs` | CollisionMap bitfield (1 bit/voxel), is_solid, crosses_voxel_boundary |
-| `chunk_manager` | `crates/engine/src/chunk_manager.rs` | Visible set computation, chunk load/unload, collision map lifecycle, is_solid query |
+| `chunk_manager` | `crates/engine/src/chunk_manager.rs` | Visible set computation, chunk load/unload, pluggable chunk_gen, collision map lifecycle, is_solid query |
 | `voxel` | `crates/engine/src/voxel.rs` | Voxel pack/unpack, Chunk (32^3), Perlin terrain generation, test grid builder |
 | `chunk_atlas` | `crates/engine/src/render/chunk_atlas.rs` | 3D texture atlas for multi-chunk storage, GPU index buffer, occupancy buffer, slot management |
 | `render` | `crates/engine/src/render/mod.rs` | Renderer: owns GPU context, camera, atlas, passes, collision gating |
@@ -227,6 +230,7 @@ occlusion samples), using the material's palette color.
 | `messages` | `src/messages.ts` | Worker message types (single source of truth for worker API) |
 | `stats` | `src/stats.ts` | StatsAggregator ring buffer, DiagnosticsDigest interface, EMPTY_DIGEST |
 | `sparkline` | `src/ui/sparkline.ts` | Canvas sparkline with stats.js scroll-blit trick, fpsColor |
+| `map_features` | `crates/engine/src/map_features.rs` | MapFeature trait, MapConfig, FlattenNearOrigin, PlaceWalls |
 | `DiagnosticsOverlay` | `src/ui/DiagnosticsOverlay.tsx` | Toggle-able overlay: FPS sparkline, frame time, chunks, camera, WASM memory |
 
 ## Skill Usage (mandatory)

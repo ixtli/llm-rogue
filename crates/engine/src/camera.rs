@@ -134,17 +134,17 @@ pub struct Camera {
     pub fov: f32,
 }
 
-/// Default camera target: center of the test grid at terrain level.
-const DEFAULT_LOOK_TARGET: Vec3 = Vec3::new(64.0, 20.0, 64.0);
-/// Default camera position: pulled back behind -Z edge, centered on X, elevated.
-const DEFAULT_POSITION: Vec3 = Vec3::new(64.0, 70.0, -40.0);
+/// Default camera target: center of the flat play area.
+const DEFAULT_LOOK_TARGET: Vec3 = Vec3::new(16.0, 24.0, 16.0);
+/// Default camera position: isometric view from the southwest.
+const DEFAULT_POSITION: Vec3 = Vec3::new(-8.0, 55.0, -8.0);
 
 impl Default for Camera {
     fn default() -> Self {
         // Pre-computed yaw/pitch from look_at(DEFAULT_LOOK_TARGET):
-        //   dir = (0, -50, 104)
-        //   yaw = atan2(0, -104) = PI
-        //   pitch = atan2(-50, 104) ≈ -0.4480
+        //   dir = (24, -31, 24)
+        //   yaw = atan2(-24, -24) ≈ -2.356 (3π/4)
+        //   pitch = atan2(-31, sqrt(24²+24²)) ≈ -0.697
         let dir = DEFAULT_LOOK_TARGET - DEFAULT_POSITION;
         let yaw = (-dir.x).atan2(-dir.z);
         let pitch = dir.y.atan2((dir.x * dir.x + dir.z * dir.z).sqrt());

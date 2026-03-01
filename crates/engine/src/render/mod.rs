@@ -25,7 +25,7 @@ use crate::chunk_manager::ChunkManager;
 #[cfg(feature = "wasm")]
 use crate::collision::CollisionMap;
 #[cfg(feature = "wasm")]
-use crate::voxel::TEST_GRID_SEED;
+use crate::map_features::MapConfig;
 #[cfg(feature = "wasm")]
 use glam::{IVec3, UVec3, Vec3};
 
@@ -117,8 +117,10 @@ impl Renderer {
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let atlas_slots = UVec3::new(ATLAS_SLOTS_X, ATLAS_SLOTS_Y, ATLAS_SLOTS_Z);
+        let map_config = MapConfig::default();
+        let chunk_gen = Box::new(move |coord: IVec3| map_config.generate_chunk(coord));
         let mut chunk_manager =
-            ChunkManager::new(&gpu.device, TEST_GRID_SEED, VIEW_DISTANCE, atlas_slots);
+            ChunkManager::with_chunk_gen(&gpu.device, VIEW_DISTANCE, atlas_slots, chunk_gen);
 
         // Initial tick loads chunks around default camera position.
         let camera = Camera::default();

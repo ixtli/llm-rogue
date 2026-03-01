@@ -21,6 +21,7 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Debounced resize | DPI-aware resize, 150ms debounce, renderer rebuild | `archive/2026-02-24-debounced-resize-*.md` |
 | Legacy cleanup + is_solid | Removed string-based input WASM exports, added `is_solid` WASM export for game worker | `archive/2026-02-24-legacy-cleanup-is-solid-*.md` |
 | Phase 5c: Occupancy bitmask | Per-chunk 64-bit bitmask enabling three-level DDA; shader skips empty 8x8x8 sub-regions | `2026-02-24-occupancy-bitmask.md` |
+| Play-test map & camera | Composable MapFeature system, flat terrain near origin, stone walls, isometric camera, pluggable chunk_gen | `2026-02-28-playtest-map-camera-*.md` |
 
 ## Not yet planned
 

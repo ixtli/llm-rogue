@@ -69,7 +69,7 @@ pub struct ChunkManager {
     loaded: HashMap<IVec3, LoadedChunk>,
     /// The set of chunk coordinates currently visible from the camera.
     visible: HashSet<IVec3>,
-    seed: u32,
+    chunk_gen: Box<dyn Fn(IVec3) -> Chunk + Send>,
     view_distance: u32,
     atlas_slots: UVec3,
 }
@@ -82,6 +82,26 @@ impl ChunkManager {
     /// slot collisions.
     #[must_use]
     pub fn new(device: &wgpu::Device, seed: u32, view_distance: u32, atlas_slots: UVec3) -> Self {
+        Self::with_chunk_gen(
+            device,
+            view_distance,
+            atlas_slots,
+            Box::new(move |coord| Chunk::new_terrain_at(seed, coord)),
+        )
+    }
+
+    /// Create a `ChunkManager` with a custom chunk generation closure.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any axis of `atlas_slots` is smaller than `2 * view_distance + 1`.
+    #[must_use]
+    pub fn with_chunk_gen(
+        device: &wgpu::Device,
+        view_distance: u32,
+        atlas_slots: UVec3,
+        chunk_gen: Box<dyn Fn(IVec3) -> Chunk + Send>,
+    ) -> Self {
         let min_slots = 2 * view_distance + 1;
         assert!(
             atlas_slots.x >= min_slots && atlas_slots.y >= min_slots && atlas_slots.z >= min_slots,
@@ -91,7 +111,7 @@ impl ChunkManager {
             atlas: ChunkAtlas::new(device, atlas_slots),
             loaded: HashMap::new(),
             visible: HashSet::new(),
-            seed,
+            chunk_gen,
             view_distance,
             atlas_slots,
         }
@@ -119,7 +139,7 @@ impl ChunkManager {
             self.atlas.clear_slot(queue, slot);
         }
 
-        let chunk = Chunk::new_terrain_at(self.seed, coord);
+        let chunk = (self.chunk_gen)(coord);
         if chunk.is_empty() {
             // Track as loaded but don't upload — shader sees flags=0.
             self.loaded.insert(
@@ -694,5 +714,27 @@ mod tests {
     fn unloaded_chunk_has_no_terrain_grid() {
         let (_gpu, mgr) = make_manager(42, 1);
         assert!(mgr.terrain_grid(IVec3::ZERO).is_none());
+    }
+
+    #[test]
+    fn custom_chunk_generator_is_used() {
+        let gpu = pollster::block_on(GpuContext::new_headless());
+        let slots = UVec3::splat(7);
+        let mut mgr = ChunkManager::with_chunk_gen(
+            &gpu.device,
+            3,
+            slots,
+            Box::new(|_coord| {
+                // Generate an all-stone chunk instead of Perlin terrain.
+                let mut voxels = vec![0u32; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+                for v in &mut voxels[..CHUNK_SIZE * CHUNK_SIZE] {
+                    *v = crate::voxel::pack_voxel(crate::voxel::MAT_STONE, 0, 0, 0);
+                }
+                Chunk { voxels }
+            }),
+        );
+        mgr.load_chunk(&gpu.queue, IVec3::ZERO);
+        // The chunk should be loaded and solid at y=0 (stone).
+        assert!(mgr.is_solid(Vec3::new(0.5, 0.5, 0.5)));
     }
 }
