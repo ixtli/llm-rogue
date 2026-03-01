@@ -381,7 +381,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     }
   } else if (msg.type === "scroll") {
     if (followCamera.mode === "follow") {
-      followCamera.adjustZoom(msg.dy);
+      followCamera.adjustZoom(msg.dy * 0.001);
       if (turnLoop) {
         const player = world.getEntity(turnLoop.turnOrder()[0]);
         if (player) sendFollowCamera(player.position, false);
