@@ -69,7 +69,7 @@ pub struct ChunkManager {
     loaded: HashMap<IVec3, LoadedChunk>,
     /// The set of chunk coordinates currently visible from the camera.
     visible: HashSet<IVec3>,
-    chunk_gen: Box<dyn Fn(IVec3) -> Chunk>,
+    chunk_gen: Box<dyn Fn(IVec3) -> Chunk + Send>,
     view_distance: u32,
     atlas_slots: UVec3,
 }
@@ -100,7 +100,7 @@ impl ChunkManager {
         device: &wgpu::Device,
         view_distance: u32,
         atlas_slots: UVec3,
-        chunk_gen: Box<dyn Fn(IVec3) -> Chunk>,
+        chunk_gen: Box<dyn Fn(IVec3) -> Chunk + Send>,
     ) -> Self {
         let min_slots = 2 * view_distance + 1;
         assert!(

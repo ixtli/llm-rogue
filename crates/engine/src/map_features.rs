@@ -6,7 +6,7 @@ use crate::voxel::{
 };
 
 /// A composable post-processing transform applied to a chunk after terrain generation.
-pub trait MapFeature {
+pub trait MapFeature: Send {
     fn apply(&self, chunk: &mut Chunk, chunk_coord: IVec3);
 }
 
