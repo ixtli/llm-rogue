@@ -21,6 +21,7 @@ export interface Actor extends Entity {
   maxHealth: number;
   inventory: ItemStack[];
   hostility: Hostility;
+  mobility: Mobility;
 }
 
 export interface ItemDef {
@@ -34,6 +35,13 @@ export interface ItemDef {
 export interface ItemStack {
   item: ItemDef;
   quantity: number;
+}
+
+export interface Mobility {
+  stepHeight: number;
+  jumpHeight: number;
+  reach: number;
+  movementBudget: number;
 }
 
 export interface ItemEntity extends Entity {
@@ -53,14 +61,11 @@ export function createPlayer(position: Position): Actor {
     maxHealth: 100,
     inventory: [],
     hostility: "friendly",
+    mobility: { stepHeight: 1, jumpHeight: 3, reach: 1, movementBudget: 1 },
   };
 }
 
-export function createNpc(
-  position: Position,
-  hostility: Hostility,
-  health = 50,
-): Actor {
+export function createNpc(position: Position, hostility: Hostility, health = 50): Actor {
   return {
     id: nextId++,
     type: "npc",
@@ -70,13 +75,11 @@ export function createNpc(
     maxHealth: health,
     inventory: [],
     hostility,
+    mobility: { stepHeight: 1, jumpHeight: 2, reach: 1, movementBudget: 1 },
   };
 }
 
-export function createItemEntity(
-  position: Position,
-  item: ItemDef,
-): ItemEntity {
+export function createItemEntity(position: Position, item: ItemDef): ItemEntity {
   return {
     id: nextId++,
     type: "item",

@@ -1,11 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-  createPlayer,
-  createNpc,
-  createItemEntity,
-  _resetIdCounter,
-} from "../entity";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ItemDef } from "../entity";
+import { _resetIdCounter, createItemEntity, createNpc, createPlayer } from "../entity";
 
 beforeEach(() => _resetIdCounter());
 
@@ -21,6 +16,28 @@ describe("createPlayer", () => {
     const a = createPlayer({ x: 0, y: 0, z: 0 });
     const b = createNpc({ x: 1, y: 0, z: 1 }, "hostile");
     expect(a.id).not.toBe(b.id);
+  });
+});
+
+describe("mobility defaults", () => {
+  it("player has default mobility", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    expect(p.mobility).toEqual({
+      stepHeight: 1,
+      jumpHeight: 3,
+      reach: 1,
+      movementBudget: 1,
+    });
+  });
+
+  it("npc has default mobility", () => {
+    const n = createNpc({ x: 0, y: 0, z: 0 }, "hostile");
+    expect(n.mobility).toEqual({
+      stepHeight: 1,
+      jumpHeight: 2,
+      reach: 1,
+      movementBudget: 1,
+    });
   });
 });
 
