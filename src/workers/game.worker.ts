@@ -2,6 +2,7 @@
 import { CameraIntent } from "../../crates/engine/pkg/engine";
 import type { Actor, Entity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
+import { FollowCamera } from "../game/follow-camera";
 import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
 import { TurnLoop } from "../game/turn-loop";
@@ -45,6 +46,7 @@ let digestTimer: ReturnType<typeof setInterval> | null = null;
 // --- Game state ---
 
 const world = new GameWorld();
+const followCamera = new FollowCamera();
 let turnLoop: TurnLoop | null = null;
 let turnNumber = 0;
 let gameInitialized = false;
@@ -121,6 +123,31 @@ function sendGameState(): void {
   });
 }
 
+function sendFollowCamera(playerPos: { x: number; y: number; z: number }, animate: boolean): void {
+  const target = followCamera.compute(playerPos);
+  if (animate) {
+    sendToRender({
+      type: "animate_camera",
+      x: target.position.x,
+      y: target.position.y,
+      z: target.position.z,
+      yaw: target.yaw,
+      pitch: target.pitch,
+      duration: 0.25,
+      easing: 2, // CubicInOut
+    });
+  } else {
+    sendToRender({
+      type: "set_camera",
+      x: target.position.x,
+      y: target.position.y,
+      z: target.position.z,
+      yaw: target.yaw,
+      pitch: target.pitch,
+    });
+  }
+}
+
 function initializeGame(): void {
   if (gameInitialized) return;
 
@@ -151,15 +178,21 @@ function initializeGame(): void {
 
   turnLoop = new TurnLoop(world, player.id);
   gameInitialized = true;
+
+  const playerEntity = world.getEntity(turnLoop?.turnOrder()[0]);
+  if (playerEntity) sendFollowCamera(playerEntity.position, false);
 }
 
 function handlePlayerAction(action: PlayerAction): void {
   if (!turnLoop) return;
+  if (followCamera.mode !== "follow") return;
   const result = turnLoop.submitAction(action);
   if (result.resolved) {
     turnNumber++;
     sendSpriteUpdate();
     sendGameState();
+    const player = world.getEntity(turnLoop.turnOrder()[0]);
+    if (player) sendFollowCamera(player.position, true);
   }
 }
 
@@ -227,21 +260,89 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       sendToUI({ type: "diagnostics", ...statsAggregator.digest() });
     }, 250);
   } else if (msg.type === "key_down") {
-    // Check for game action keys first
-    const action = KEY_TO_DIRECTION[msg.key];
-    if (action) {
-      handlePlayerAction(action);
+    const key = msg.key;
+
+    // Tab toggles camera mode
+    if (key === "tab") {
+      followCamera.toggleMode();
+      sendToUI({ type: "camera_mode", mode: followCamera.mode });
+      if (followCamera.mode === "follow" && turnLoop) {
+        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        if (player) sendFollowCamera(player.position, true);
+      }
       return;
     }
-    // Fall through to camera intents
-    const intent = KEY_TO_INTENT[msg.key];
-    if (intent !== undefined) {
-      sendToRender({ type: "begin_intent", intent });
+
+    if (followCamera.mode === "follow") {
+      // Follow mode: WASD = player movement, Q/E = orbit
+      const action = KEY_TO_DIRECTION[key];
+      if (action) {
+        handlePlayerAction(action);
+        return;
+      }
+      if (key === "q" || key === "e") {
+        followCamera.orbit(key === "q" ? -1 : 1);
+        if (turnLoop) {
+          const player = world.getEntity(turnLoop.turnOrder()[0]);
+          if (player) {
+            const target = followCamera.compute(player.position);
+            sendToRender({
+              type: "animate_camera",
+              x: target.position.x,
+              y: target.position.y,
+              z: target.position.z,
+              yaw: target.yaw,
+              pitch: target.pitch,
+              duration: 0.4,
+              easing: 2,
+            });
+          }
+        }
+        return;
+      }
+    } else {
+      // Free-look mode: WASD = camera intents, Q/E/R/F = camera intents
+      const wasdToIntent: Record<string, number | undefined> = {
+        w: CameraIntent.TrackForward,
+        arrowup: CameraIntent.TrackForward,
+        s: CameraIntent.TrackBackward,
+        arrowdown: CameraIntent.TrackBackward,
+        a: CameraIntent.TruckLeft,
+        arrowleft: CameraIntent.TruckLeft,
+        d: CameraIntent.TruckRight,
+        arrowright: CameraIntent.TruckRight,
+      };
+      const camIntent = wasdToIntent[key];
+      if (camIntent !== undefined) {
+        sendToRender({ type: "begin_intent", intent: camIntent });
+        return;
+      }
+      const intent = KEY_TO_INTENT[key];
+      if (intent !== undefined) {
+        sendToRender({ type: "begin_intent", intent });
+      }
     }
   } else if (msg.type === "key_up") {
-    const intent = KEY_TO_INTENT[msg.key];
-    if (intent !== undefined) {
-      sendToRender({ type: "end_intent", intent });
+    if (followCamera.mode === "free_look") {
+      const wasdToIntent: Record<string, number | undefined> = {
+        w: CameraIntent.TrackForward,
+        arrowup: CameraIntent.TrackForward,
+        s: CameraIntent.TrackBackward,
+        arrowdown: CameraIntent.TrackBackward,
+        a: CameraIntent.TruckLeft,
+        arrowleft: CameraIntent.TruckLeft,
+        d: CameraIntent.TruckRight,
+        arrowright: CameraIntent.TruckRight,
+      };
+      const intent = wasdToIntent[msg.key] ?? KEY_TO_INTENT[msg.key];
+      if (intent !== undefined) {
+        sendToRender({ type: "end_intent", intent });
+      }
+    } else {
+      const intent = KEY_TO_INTENT[msg.key];
+      if (intent !== undefined) {
+        sendToRender({ type: "end_intent", intent });
+      }
     }
   } else if (msg.type === "player_action") {
     // Explicit player action from UI
@@ -271,9 +372,19 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     }
     handlePlayerAction(action);
   } else if (msg.type === "pointer_move") {
-    sendToRender({ type: "set_look_delta", dyaw: msg.dx, dpitch: msg.dy });
+    if (followCamera.mode === "free_look") {
+      sendToRender({ type: "set_look_delta", dyaw: msg.dx, dpitch: msg.dy });
+    }
   } else if (msg.type === "scroll") {
-    sendToRender({ type: "set_dolly", amount: msg.dy });
+    if (followCamera.mode === "follow") {
+      followCamera.adjustZoom(msg.dy);
+      if (turnLoop) {
+        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        if (player) sendFollowCamera(player.position, false);
+      }
+    } else {
+      sendToRender({ type: "set_dolly", amount: msg.dy });
+    }
   } else if (msg.type === "pan") {
     // Pan is currently not mapped to a stage direction.
   } else if (msg.type === "resize") {
