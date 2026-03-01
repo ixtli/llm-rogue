@@ -22,11 +22,15 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Legacy cleanup + is_solid | Removed string-based input WASM exports, added `is_solid` WASM export for game worker | `archive/2026-02-24-legacy-cleanup-is-solid-*.md` |
 | Phase 5c: Occupancy bitmask | Per-chunk 64-bit bitmask enabling three-level DDA; shader skips empty 8x8x8 sub-regions | `2026-02-24-occupancy-bitmask.md` |
 | Play-test map & camera | Composable MapFeature system, flat terrain near origin, stone walls, isometric camera, pluggable chunk_gen | `2026-02-28-playtest-map-camera-*.md` |
+| Phase 6a: Game state foundation | Entity system (Actor, ItemEntity), inventory with stacking, FOV, GameWorld, TerrainGrid deserialization | `2026-02-27-game-logic-loop-*.md` |
+| Phase 6a: Turn loop | Turn-based game loop, player actions (move, attack, pickup, wait), NPC AI, sprite updates | `2026-02-27-game-logic-loop-*.md` |
+| Phase 6a: Y-axis movement | Y-aware movement with step/jump budgets, `findReachableSurface`, Mobility interface, asymmetric 3D attack range | `2026-03-01-y-axis-movement-*.md` |
+| Phase 6a: Follow camera | FollowCamera with 4-step orbit (Q/E), scroll zoom, Tab free-look toggle, mode-aware input routing, pointer lock gating | `2026-03-01-follow-camera-*.md` |
 
 ## Not yet planned
 
 | Phase | Summary | Notes |
 |-------|---------|-------|
-| Phase 4b: Game logic loop | 60Hz tick in game worker, player state (position, velocity, health, inventory), movement collision via `is_solid` queries | Game worker is currently a message router — no simulation loop |
 | Phase 5c: Global illumination | Voxel cone tracing for approximate GI | Conditional on performance; hard shadows + AO are done |
-| Phase 6: Game and UI | HUD, inventory, roguelike game loop, chunk server stub for LLM/MCP integration | |
+| Phase 6b: HUD & combat | Health bar, combat feedback, damage numbers, death/respawn | |
+| Phase 6c: Chunk server | LLM/MCP integration for procedural chunk generation | |

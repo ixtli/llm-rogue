@@ -7,19 +7,22 @@ GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
 Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phases 1–4b, Phase 5 (stages A+B), and Phase 5c (occupancy
-bitmask) are complete. A composable `MapFeature` system flattens terrain near
-origin and places stone walls for play-testing. The engine renders
-dynamically-loaded multi-chunk terrain with hard shadows and ambient occlusion
-via three-level DDA ray marching through a 3D texture atlas. Per-chunk 64-bit
-occupancy bitmasks let the shader skip empty 8x8x8 sub-regions. Chunk loading
-is budgeted (4/frame), distance-prioritized, with trajectory prediction and
-implicit LRU caching. `ChunkManager` accepts a pluggable chunk generator
-(`with_chunk_gen`). Collision gating prevents the camera from entering solid
-voxels. Isometric camera defaults for the play-test area. Three-thread
-architecture (UI → game worker → render worker) with intent-based camera control.
+**Current state:** Phases 1–5c are complete. Phase 6 (game logic) is in
+progress: turn-based game loop, entity system, inventory, FOV, Y-axis-aware
+movement with jump/step budgets, and a follow camera with orbit/zoom are
+implemented. The engine renders dynamically-loaded multi-chunk terrain with hard
+shadows and ambient occlusion via three-level DDA ray marching through a 3D
+texture atlas. Per-chunk 64-bit occupancy bitmasks skip empty 8×8×8 sub-regions.
+Chunk loading is budgeted (4/frame), distance-prioritized, with trajectory
+prediction and implicit LRU caching. A composable `MapFeature` system generates
+the play-test terrain. Three-thread architecture (UI → game worker → render
+worker) with a follow camera in the game worker and intent-based free-look
+fallback in the render worker.
 
-Next milestone: Phase 6 (game logic loop, player state, UI).
+**Controls:** WASD moves the player (turn-based), Q/E orbits the camera 90°,
+scroll zooms, Tab toggles free-look (WASD/mouse moves camera). Space waits.
+
+Next milestone: Phase 6 continued (HUD, combat feedback, chunk server stub).
 
 ## Tech Stack
 
@@ -29,16 +32,18 @@ Next milestone: Phase 6 (game logic loop, player state, UI).
 - **Game logic:** TypeScript (Web Worker — input routing + stats aggregation)
 - **Build:** Vite + vite-plugin-wasm + wasm-pack
 - **Package manager:** Bun (standard package.json, npm/pnpm as fallback)
+- **Linting/Formatting (TS):** Biome (`bunx biome check --fix src/` for all-in-one)
 - **Testing (Rust):** `cargo test -p engine` (unit + regression)
 - **Testing (Regression):** Headless wgpu render tests (`cargo test -p engine --test render_regression`)
 - **Testing (UI):** Vitest + @solidjs/testing-library (`bun run test`)
+- **Testing (Game logic):** `npx vitest run --environment node src/game/__tests__/`
 
 ## Architecture Rules
 
 - **Rust owns:** rendering, chunk lifecycle, GPU pipeline, ray marching, lighting,
   collision detection, 3D texture atlas management.
-- **TypeScript owns:** game logic (future), networking (future), UI, input
-  translation.
+- **TypeScript owns:** game logic (turn loop, entities, movement, camera),
+  networking (future), UI, input translation.
 - **Communication:** All cross-layer communication is via `postMessage`. No shared
   mutable state between workers.
 - **Three threads:** UI thread (Solid.js + input + diagnostics overlay), game
@@ -232,6 +237,19 @@ occlusion samples), using the material's palette color.
 | `sparkline` | `src/ui/sparkline.ts` | Canvas sparkline with stats.js scroll-blit trick, fpsColor |
 | `map_features` | `crates/engine/src/map_features.rs` | MapFeature trait, MapConfig, FlattenNearOrigin, PlaceWalls |
 | `DiagnosticsOverlay` | `src/ui/DiagnosticsOverlay.tsx` | Toggle-able overlay: FPS sparkline, frame time, chunks, camera, WASM memory |
+| `follow-camera` | `src/game/follow-camera.ts` | FollowCamera: offset-based follow, 4-step orbit, zoom, follow/free-look toggle |
+| `turn-loop` | `src/game/turn-loop.ts` | TurnLoop: turn-based game loop, Y-aware movement with step/jump budgets, attack range |
+| `entity` | `src/game/entity.ts` | Entity types (Actor, ItemEntity), Mobility interface, factory functions |
+| `world` | `src/game/world.ts` | GameWorld: entity registry, terrain grid storage, surface lookup |
+| `terrain` | `src/game/terrain.ts` | TerrainGrid/TileSurface deserialization from chunk_terrain messages |
+| `fov` | `src/game/fov.ts` | Field-of-view computation for entity visibility |
+| `inventory` | `src/game/inventory.ts` | Inventory management with stacking |
+
+## Worktree Gotchas
+
+- Vitest jsdom environment fails in git worktrees (`@testing-library/jest-dom`
+  path resolution). Game logic tests work with `--environment node`. UI tests
+  (jsdom) must be run from the main checkout.
 
 ## Skill Usage (mandatory)
 
