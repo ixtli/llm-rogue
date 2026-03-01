@@ -64,13 +64,14 @@ describe("FollowCamera", () => {
     expect(farDist).toBeLessThan(200);
   });
 
-  it("computes yaw and pitch for look_at orientation", () => {
+  it("computes yaw and pitch matching Rust camera convention", () => {
     const cam = new FollowCamera();
+    // Camera at (-24, 31, -24), looking at origin: dir = (24, -31, 24)
+    // Rust: yaw = atan2(-dir.x, -dir.z) = atan2(-24, -24) ≈ -2.356
+    // Rust: pitch = atan2(dir.y, sqrt(dx²+dz²)) = atan2(-31, ~33.94) ≈ -0.742
     const { yaw, pitch } = cam.compute({ x: 0, y: 0, z: 0 });
-    expect(typeof yaw).toBe("number");
-    expect(typeof pitch).toBe("number");
-    expect(Number.isFinite(yaw)).toBe(true);
-    expect(Number.isFinite(pitch)).toBe(true);
+    expect(yaw).toBeCloseTo(Math.atan2(-24, -24), 5);
+    expect(pitch).toBeCloseTo(Math.atan2(-31, Math.sqrt(24 * 24 + 24 * 24)), 5);
   });
 
   it("mode starts as follow", () => {

@@ -50,7 +50,7 @@ export class FollowCamera {
     const dy = playerPos.y - position.y;
     const dz = playerPos.z - position.z;
     const horizontalDist = Math.sqrt(dx * dx + dz * dz);
-    const yaw = Math.atan2(dx, -dz);
+    const yaw = Math.atan2(-dx, -dz);
     const pitch = Math.atan2(dy, horizontalDist);
 
     return { position, lookAt: { ...playerPos }, yaw, pitch };
