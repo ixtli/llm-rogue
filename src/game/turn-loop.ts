@@ -24,10 +24,20 @@ export interface TurnResult {
 
 const BASE_DAMAGE = 10;
 
+function attackDistance(attacker: Actor, target: Actor): number {
+  const horizontal =
+    Math.abs(target.position.x - attacker.position.x) +
+    Math.abs(target.position.z - attacker.position.z);
+  const dy = target.position.y - attacker.position.y;
+  // Attacking uphill costs reach, downhill is free
+  return dy > 0 ? horizontal + dy : horizontal;
+}
+
 export class TurnLoop {
   private world: GameWorld;
   private playerId: number;
   private turnIndex = 0;
+  private movementBudget = 0;
 
   constructor(world: GameWorld, playerId: number) {
     this.world = world;
@@ -63,8 +73,25 @@ export class TurnLoop {
     if (!this.isPlayerTurn()) return result;
     const player = this.world.getEntity(this.playerId) as Actor | undefined;
     if (!player) return result;
-    if (!this.resolveAction(player, action)) return result;
-    result.resolved = true;
+
+    // Initialize budget on first action of the turn
+    if (this.movementBudget === 0 && action.type === "move") {
+      this.movementBudget = player.mobility.movementBudget;
+    }
+
+    if (action.type === "move") {
+      if (this.movementBudget <= 0) return result;
+      if (!this.resolveMove(player, action)) return result;
+      result.resolved = true;
+      // If budget remains, stay in move phase — don't run NPC turns yet
+      if (this.movementBudget > 0) return result;
+    } else {
+      if (!this.resolveAction(player, action)) return result;
+      result.resolved = true;
+    }
+
+    // Move phase over — apply terrain effects and run NPC turns
+    this.movementBudget = 0;
     this.applyTerrainEffects(player, result);
 
     const order = this.turnOrder();
@@ -85,31 +112,39 @@ export class TurnLoop {
     return result;
   }
 
+  private resolveMove(actor: Actor, action: { type: "move"; dx: number; dz: number }): boolean {
+    const nx = actor.position.x + action.dx;
+    const nz = actor.position.z + action.dz;
+    const landing = this.world.findReachableSurface(
+      actor.position.y,
+      nx,
+      nz,
+      actor.mobility.stepHeight,
+      actor.mobility.jumpHeight,
+    );
+    if (!landing) return false;
+    const cost = landing.isJump ? 2 : 1;
+    if (cost > this.movementBudget) return false;
+    if (this.world.entitiesAt(nx, landing.y, nz).some((e) => e.type !== "item")) return false;
+    actor.position.x = nx;
+    actor.position.y = landing.y;
+    actor.position.z = nz;
+    this.movementBudget -= cost;
+    if (action.dx > 0) actor.facing = "e";
+    else if (action.dx < 0) actor.facing = "w";
+    else if (action.dz > 0) actor.facing = "s";
+    else if (action.dz < 0) actor.facing = "n";
+    return true;
+  }
+
   private resolveAction(actor: Actor, action: PlayerAction): boolean {
     switch (action.type) {
-      case "move": {
-        const nx = actor.position.x + action.dx;
-        const nz = actor.position.z + action.dz;
-        if (!this.world.isWalkable(nx, actor.position.y, nz)) return false;
-        if (this.world.entitiesAt(nx, actor.position.y, nz).some((e) => e.type !== "item"))
-          return false;
-        actor.position.x = nx;
-        actor.position.z = nz;
-        if (action.dx > 0) actor.facing = "e";
-        else if (action.dx < 0) actor.facing = "w";
-        else if (action.dz > 0) actor.facing = "s";
-        else if (action.dz < 0) actor.facing = "n";
-        return true;
-      }
+      case "move":
+        return false; // handled by resolveMove
       case "attack": {
         const target = this.world.getEntity(action.targetId) as Actor | undefined;
         if (!target) return false;
-        if (
-          Math.abs(target.position.x - actor.position.x) +
-            Math.abs(target.position.z - actor.position.z) !==
-          1
-        )
-          return false;
+        if (attackDistance(actor, target) > actor.mobility.reach) return false;
         target.health -= BASE_DAMAGE;
         return true;
       }
@@ -133,25 +168,34 @@ export class TurnLoop {
     if (npc.hostility === "hostile") {
       const player = this.world.getEntity(this.playerId);
       if (player) {
-        const dx = player.position.x - npc.position.x;
-        const dz = player.position.z - npc.position.z;
-        const dist = Math.abs(dx) + Math.abs(dz);
-        if (dist === 1) {
+        const dist = attackDistance(npc, player as Actor);
+        if (dist <= npc.mobility.reach) {
           (player as Actor).health -= BASE_DAMAGE;
           return { actorId: npc.id, action: "attack", from };
         }
-        if (dist > 1) {
-          let mx = 0,
-            mz = 0;
+        if (dist > npc.mobility.reach) {
+          const dx = player.position.x - npc.position.x;
+          const dz = player.position.z - npc.position.z;
+          let mx = 0;
+          let mz = 0;
           if (Math.abs(dx) >= Math.abs(dz)) mx = dx > 0 ? 1 : -1;
           else mz = dz > 0 ? 1 : -1;
           const nx = npc.position.x + mx;
           const nz = npc.position.z + mz;
+          const npcLanding = this.world.findReachableSurface(
+            npc.position.y,
+            nx,
+            nz,
+            npc.mobility.stepHeight,
+            npc.mobility.jumpHeight,
+          );
           if (
-            this.world.isWalkable(nx, npc.position.y, nz) &&
-            !this.world.entitiesAt(nx, npc.position.y, nz).some((e) => e.type !== "item")
+            npcLanding &&
+            !npcLanding.isJump &&
+            !this.world.entitiesAt(nx, npcLanding.y, nz).some((e) => e.type !== "item")
           ) {
             npc.position.x = nx;
+            npc.position.y = npcLanding.y;
             npc.position.z = nz;
           }
           return {
@@ -172,11 +216,20 @@ export class TurnLoop {
     const [rdx, rdz] = dirs[Math.floor(Math.random() * dirs.length)];
     const nx = npc.position.x + rdx;
     const nz = npc.position.z + rdz;
+    const npcLanding = this.world.findReachableSurface(
+      npc.position.y,
+      nx,
+      nz,
+      npc.mobility.stepHeight,
+      npc.mobility.jumpHeight,
+    );
     if (
-      this.world.isWalkable(nx, npc.position.y, nz) &&
-      !this.world.entitiesAt(nx, npc.position.y, nz).some((e) => e.type !== "item")
+      npcLanding &&
+      !npcLanding.isJump &&
+      !this.world.entitiesAt(nx, npcLanding.y, nz).some((e) => e.type !== "item")
     ) {
       npc.position.x = nx;
+      npc.position.y = npcLanding.y;
       npc.position.z = nz;
     }
     return {

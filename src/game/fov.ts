@@ -15,9 +15,9 @@ export function computeFov(
 // Four cardinal quadrants, each scanning two octants via row/col symmetry.
 // dx/dz multipliers for (row, col) in each quadrant.
 const QUADRANTS: [number, number][] = [
-  [1, 0],  // +x
+  [1, 0], // +x
   [-1, 0], // -x
-  [0, 1],  // +z
+  [0, 1], // +z
   [0, -1], // -z
 ];
 
@@ -60,7 +60,11 @@ function scanSlope(
   let prevBlocked = false;
   let savedSlope = startSlope;
 
-  for (let col = Math.ceil(depth * startSlope - 0.5); col <= Math.floor(depth * endSlope + 0.5); col++) {
+  for (
+    let col = Math.ceil(depth * startSlope - 0.5);
+    col <= Math.floor(depth * endSlope + 0.5);
+    col++
+  ) {
     const mapX = ox + depth * rdx + col * cdx;
     const mapZ = oz + depth * rdz + col * cdz;
 
@@ -75,16 +79,36 @@ function scanSlope(
     }
     if (!prevBlocked && curBlocked) {
       scanSlope(
-        visible, ox, oz, radius, rdx, rdz, cdx, cdz,
-        depth + 1, savedSlope, (col - 0.5) / depth, isBlocked,
+        visible,
+        ox,
+        oz,
+        radius,
+        rdx,
+        rdz,
+        cdx,
+        cdz,
+        depth + 1,
+        savedSlope,
+        (col - 0.5) / depth,
+        isBlocked,
       );
     }
     prevBlocked = curBlocked;
   }
   if (!prevBlocked) {
     scanSlope(
-      visible, ox, oz, radius, rdx, rdz, cdx, cdz,
-      depth + 1, savedSlope, endSlope, isBlocked,
+      visible,
+      ox,
+      oz,
+      radius,
+      rdx,
+      rdz,
+      cdx,
+      cdz,
+      depth + 1,
+      savedSlope,
+      endSlope,
+      isBlocked,
     );
   }
 }

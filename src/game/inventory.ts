@@ -44,9 +44,6 @@ export class Inventory {
   }
 
   countOf(itemId: string): number {
-    return this.slots.reduce(
-      (sum, s) => sum + (s && s.item.id === itemId ? s.quantity : 0),
-      0,
-    );
+    return this.slots.reduce((sum, s) => sum + (s && s.item.id === itemId ? s.quantity : 0), 0);
   }
 }

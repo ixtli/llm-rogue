@@ -1,7 +1,7 @@
-import type { Entity, Actor, ItemEntity } from "./entity";
+import type { Actor, Entity, ItemEntity } from "./entity";
+import { computeFov } from "./fov";
 import type { ChunkTerrainGrid, TileSurface } from "./terrain";
 import { getTerrainDef } from "./terrain";
-import { computeFov } from "./fov";
 
 const CHUNK_SIZE = 32;
 
@@ -31,9 +31,7 @@ export class GameWorld {
   }
 
   items(): ItemEntity[] {
-    return [...this.entities.values()].filter(
-      (e): e is ItemEntity => e.type === "item",
-    );
+    return [...this.entities.values()].filter((e): e is ItemEntity => e.type === "item");
   }
 
   entitiesAt(x: number, y: number, z: number): Entity[] {
@@ -60,16 +58,10 @@ export class GameWorld {
     const grid = this.terrainGrids.get(chunkKey(cx, cy, cz));
     if (!grid) return false;
     const surfaces = grid.columns[lz * CHUNK_SIZE + lx];
-    return surfaces.some(
-      (s) => s.y === ly && (getTerrainDef(s.terrainId)?.walkable ?? false),
-    );
+    return surfaces.some((s) => s.y === ly && (getTerrainDef(s.terrainId)?.walkable ?? false));
   }
 
-  surfaceAtWorld(
-    worldX: number,
-    worldY: number,
-    worldZ: number,
-  ): TileSurface | undefined {
+  surfaceAtWorld(worldX: number, worldY: number, worldZ: number): TileSurface | undefined {
     const cx = Math.floor(worldX / CHUNK_SIZE);
     const cy = Math.floor(worldY / CHUNK_SIZE);
     const cz = Math.floor(worldZ / CHUNK_SIZE);
@@ -88,6 +80,37 @@ export class GameWorld {
     isBlocked: (x: number, z: number) => boolean,
   ): void {
     this.visibleTiles = computeFov(originX, originZ, radius, isBlocked);
+  }
+
+  findReachableSurface(
+    fromY: number,
+    toX: number,
+    toZ: number,
+    stepHeight: number,
+    jumpHeight: number,
+  ): { y: number; isJump: boolean } | undefined {
+    const cx = Math.floor(toX / CHUNK_SIZE);
+    const cy = Math.floor(fromY / CHUNK_SIZE);
+    const cz = Math.floor(toZ / CHUNK_SIZE);
+    const lx = ((toX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const lz = ((toZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const grid = this.terrainGrids.get(chunkKey(cx, cy, cz));
+    if (!grid) return undefined;
+
+    const surfaces = grid.columns[lz * CHUNK_SIZE + lx];
+    let best: { y: number; isJump: boolean } | undefined;
+    let bestDist = Infinity;
+
+    for (const s of surfaces) {
+      if (!(getTerrainDef(s.terrainId)?.walkable ?? false)) continue;
+      const dy = Math.abs(s.y - fromY);
+      if (dy > jumpHeight) continue;
+      if (dy < bestDist) {
+        bestDist = dy;
+        best = { y: s.y, isJump: dy > stepHeight };
+      }
+    }
+    return best;
   }
 
   isVisible(x: number, z: number): boolean {
