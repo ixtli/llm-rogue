@@ -26,6 +26,7 @@ const TOUCH_PAN_SPEED = 0.05;
 export interface InputCallbacks {
   postMessage(msg: UIToGameMessage): void;
   onPointerLockChange(locked: boolean): void;
+  isFreeLookEnabled(): boolean;
 }
 
 export function setupInputHandlers(
@@ -39,7 +40,7 @@ export function setupInputHandlers(
   // --- Pointer lock ---
 
   function onCanvasClick() {
-    if (!pointerLocked) {
+    if (!pointerLocked && callbacks.isFreeLookEnabled()) {
       canvas.requestPointerLock();
     }
   }
@@ -67,11 +68,13 @@ export function setupInputHandlers(
       // Pinch-to-zoom gesture (browser synthesizes ctrl+wheel for trackpad pinch)
       const dy = -e.deltaY * PINCH_SPEED;
       postMessage({ type: "scroll", dy });
-    } else if (e.deltaMode === 0 && !pointerLocked) {
-      // Pixel-based deltas = trackpad two-finger scroll (when not locked)
+    } else if (e.deltaMode === 0 && !pointerLocked && callbacks.isFreeLookEnabled()) {
       const dx = -e.deltaX * TRACKPAD_LOOK_SENSITIVITY;
       const dy = e.deltaY * TRACKPAD_LOOK_SENSITIVITY;
       postMessage({ type: "pointer_move", dx, dy });
+    } else if (e.deltaMode === 0 && !pointerLocked) {
+      const dy = -e.deltaY * SCROLL_SPEED;
+      postMessage({ type: "scroll", dy });
     } else {
       // Line-based deltas = mouse scroll wheel, or any scroll while locked
       const dy = -e.deltaY * SCROLL_SPEED;

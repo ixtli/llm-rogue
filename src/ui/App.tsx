@@ -20,6 +20,7 @@ const App: Component<AppProps> = (props) => {
   const [status, setStatus] = createSignal("loading engine...");
   const [error, setError] = createSignal<string | null>(null);
   const [diagnostics, setDiagnostics] = createSignal(EMPTY_DIGEST);
+  const [cameraMode, setCameraMode] = createSignal<"follow" | "free_look">("follow");
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;
@@ -38,11 +39,16 @@ const App: Component<AppProps> = (props) => {
 
     worker.onmessage = (e: MessageEvent<GameToUIMessage>) => {
       if (e.data.type === "ready") {
-        setStatus("click to look | WASD move | scroll zoom");
+        setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look");
       } else if (e.data.type === "error") {
         setError(`Engine failed to initialize: ${e.data.message}`);
       } else if (e.data.type === "diagnostics") {
         setDiagnostics(e.data);
+      } else if (e.data.type === "camera_mode") {
+        setCameraMode(e.data.mode);
+        if (e.data.mode === "follow" && document.pointerLockElement) {
+          document.exitPointerLock();
+        }
       }
     };
 
@@ -77,12 +83,17 @@ const App: Component<AppProps> = (props) => {
     const cleanupInput = setupInputHandlers(canvasRef, {
       postMessage: (msg) => worker.postMessage(msg),
       onPointerLockChange: (locked) => {
-        if (locked) {
-          setStatus("mouse look | WASD move | scroll zoom | ESC exit");
+        if (cameraMode() === "free_look") {
+          setStatus(
+            locked
+              ? "FREE LOOK | WASD move | mouse look | Tab return"
+              : "FREE LOOK | click to look | WASD move | Tab return",
+          );
         } else {
-          setStatus("click to look | WASD move | scroll zoom");
+          setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look");
         }
       },
+      isFreeLookEnabled: () => cameraMode() === "free_look",
     });
 
     // Debounced resize handler
