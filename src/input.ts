@@ -12,7 +12,7 @@ const TRACKPAD_LOOK_SENSITIVITY = 0.003;
 const TOUCH_LOOK_SENSITIVITY = 0.005;
 
 /** Scroll wheel: world units per line of scroll. */
-const SCROLL_SPEED = 2.0;
+const SCROLL_SPEED = 0.5;
 
 /** Trackpad pinch (ctrl+wheel): world units per pixel of delta. */
 const PINCH_SPEED = 0.05;
