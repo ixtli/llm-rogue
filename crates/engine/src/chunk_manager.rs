@@ -5,13 +5,14 @@ use glam::{IVec3, UVec3, Vec3};
 use crate::collision::CollisionMap;
 use crate::render::chunk_atlas::{ChunkAtlas, world_to_slot};
 use crate::terrain_grid::TerrainGrid;
-use crate::voxel::{CHUNK_SIZE, Chunk};
+use crate::voxel::{CHUNK_SIZE, Chunk, pack_voxel};
 
 /// Per-chunk data retained after GPU upload: atlas slot + collision bitfield + terrain grid.
 struct LoadedChunk {
     slot: u32,
     collision: Option<CollisionMap>,
     terrain: Option<TerrainGrid>,
+    chunk: Chunk,
 }
 
 /// Streaming state derived from tick statistics.
@@ -148,6 +149,7 @@ impl ChunkManager {
                     slot,
                     collision: None,
                     terrain: None,
+                    chunk,
                 },
             );
             return;
@@ -161,6 +163,7 @@ impl ChunkManager {
                 slot,
                 collision,
                 terrain,
+                chunk,
             },
         );
     }
@@ -245,6 +248,32 @@ impl ChunkManager {
     #[must_use]
     pub fn terrain_grid(&self, coord: IVec3) -> Option<&TerrainGrid> {
         self.loaded.get(&coord).and_then(|lc| lc.terrain.as_ref())
+    }
+
+    /// Mutate a single voxel at `world_pos` to the given `material_id`.
+    ///
+    /// Updates the chunk's voxel data, rebuilds collision and terrain maps,
+    /// and re-uploads the chunk to the GPU atlas. No-op if the chunk at
+    /// `world_pos` is not loaded.
+    #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+    pub fn mutate_voxel(&mut self, queue: &wgpu::Queue, world_pos: IVec3, material_id: u8) {
+        let chunk_size = CHUNK_SIZE as i32;
+        let chunk_coord = IVec3::new(
+            world_pos.x.div_euclid(chunk_size),
+            world_pos.y.div_euclid(chunk_size),
+            world_pos.z.div_euclid(chunk_size),
+        );
+        let local_x = world_pos.x.rem_euclid(chunk_size) as usize;
+        let local_y = world_pos.y.rem_euclid(chunk_size) as usize;
+        let local_z = world_pos.z.rem_euclid(chunk_size) as usize;
+        if let Some(loaded) = self.loaded.get_mut(&chunk_coord) {
+            let idx = local_z * CHUNK_SIZE * CHUNK_SIZE + local_y * CHUNK_SIZE + local_x;
+            loaded.chunk.voxels[idx] = pack_voxel(material_id, 0, 0, 0);
+            loaded.collision = Some(CollisionMap::from_voxels(&loaded.chunk.voxels));
+            loaded.terrain = Some(TerrainGrid::from_chunk(&loaded.chunk));
+            self.atlas
+                .upload_chunk(queue, loaded.slot, &loaded.chunk, chunk_coord);
+        }
     }
 
     /// Compute the set of chunk coordinates visible from `camera_pos` with the
@@ -714,6 +743,33 @@ mod tests {
     fn unloaded_chunk_has_no_terrain_grid() {
         let (_gpu, mgr) = make_manager(42, 1);
         assert!(mgr.terrain_grid(IVec3::ZERO).is_none());
+    }
+
+    #[test]
+    fn mutate_voxel_updates_collision_and_terrain() {
+        let gpu = pollster::block_on(GpuContext::new_headless());
+        let slots = UVec3::splat(7);
+        // All-stone chunk: every voxel is deterministically solid.
+        let mut mgr = ChunkManager::with_chunk_gen(
+            &gpu.device,
+            3,
+            slots,
+            Box::new(|_| {
+                let voxels =
+                    vec![pack_voxel(crate::voxel::MAT_STONE, 0, 0, 0); CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+                Chunk { voxels }
+            }),
+        );
+        mgr.load_chunk(&gpu.queue, IVec3::ZERO);
+        assert!(
+            mgr.is_solid(Vec3::new(5.5, 0.5, 5.5)),
+            "precondition: voxel must be solid"
+        );
+        mgr.mutate_voxel(&gpu.queue, IVec3::new(5, 0, 5), 0);
+        assert!(
+            !mgr.is_solid(Vec3::new(5.5, 0.5, 5.5)),
+            "collision map must update after mutation"
+        );
     }
 
     #[test]

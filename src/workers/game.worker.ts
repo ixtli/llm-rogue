@@ -3,7 +3,7 @@ import { CameraIntent } from "../../crates/engine/pkg/engine";
 import type { Actor, Entity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
-import { FollowCamera } from "../game/follow-camera";
+import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
 import { TurnLoop } from "../game/turn-loop";
@@ -336,6 +336,29 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
     }
   } else if (msg.type === "chunk_terrain_unload") {
     world.unloadTerrain(msg.cx, msg.cy, msg.cz);
+  } else if (msg.type === "animation_complete") {
+    if (followCamera.mode === "cinematic") {
+      const next = followCamera.onAnimationComplete();
+      if (next) {
+        sendToRender({
+          type: "animate_camera",
+          x: next.x,
+          y: next.y,
+          z: next.z,
+          yaw: next.yaw,
+          pitch: next.pitch,
+          duration: next.duration,
+          easing: 2, // CubicInOut
+        });
+      } else {
+        // Cinematic ended, return to follow
+        if (turnLoop) {
+          const player = world.getEntity(turnLoop.turnOrder()[0]);
+          if (player) sendFollowCamera(player.position, true);
+        }
+        sendToUI({ type: "camera_mode", mode: followCamera.mode });
+      }
+    }
   }
 }
 
@@ -362,14 +385,17 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
   } else if (msg.type === "key_down") {
     const key = msg.key;
 
-    // Tab toggles camera mode
+    // Tab toggles camera mode (no-op during cinematic)
     if (key === "tab") {
+      const prevMode = followCamera.mode;
       cancelOrbitAnimation();
       followCamera.toggleMode();
-      sendToUI({ type: "camera_mode", mode: followCamera.mode });
-      if (followCamera.mode === "follow" && turnLoop) {
-        const player = world.getEntity(turnLoop.turnOrder()[0]);
-        if (player) sendFollowCamera(player.position, true);
+      if (followCamera.mode !== prevMode) {
+        sendToUI({ type: "camera_mode", mode: followCamera.mode });
+        if (followCamera.mode === "follow" && turnLoop) {
+          const player = world.getEntity(turnLoop.turnOrder()[0]);
+          if (player) sendFollowCamera(player.position, true);
+        }
       }
       return;
     }
@@ -386,6 +412,40 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
         if (turnLoop) {
           const player = world.getEntity(turnLoop.turnOrder()[0]);
           if (player) startOrbitAnimation(player.position, arc, 0.4);
+        }
+        return;
+      }
+      if (key === "c" && turnLoop) {
+        cancelOrbitAnimation();
+        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        if (!player) return;
+        const waypoints = buildFlybyWaypoints(player.position);
+        const [start, ...rest] = waypoints;
+        // Teleport to first position
+        lastSentYaw = start.yaw;
+        sendToRender({
+          type: "set_camera",
+          x: start.x,
+          y: start.y,
+          z: start.z,
+          yaw: start.yaw,
+          pitch: start.pitch,
+        });
+        // Queue remaining waypoints and kick off the chain
+        followCamera.startCinematic(rest);
+        sendToUI({ type: "camera_mode", mode: followCamera.mode });
+        const first = followCamera.nextWaypoint();
+        if (first) {
+          sendToRender({
+            type: "animate_camera",
+            x: first.x,
+            y: first.y,
+            z: first.z,
+            yaw: first.yaw,
+            pitch: first.pitch,
+            duration: first.duration,
+            easing: 2, // CubicInOut
+          });
         }
         return;
       }

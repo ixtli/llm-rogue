@@ -73,6 +73,10 @@ export type GameToRenderMessage =
       originZ: number;
       gridSize: number;
       data: ArrayBuffer;
+    }
+  | {
+      type: "voxel_mutate";
+      changes: { x: number; y: number; z: number; materialId: number }[];
     };
 
 // --- Render Worker → Game Worker ---
@@ -167,4 +171,4 @@ export type GameToUIMessage =
       camera_chunk_y: number;
       camera_chunk_z: number;
     }
-  | { type: "camera_mode"; mode: "follow" | "free_look" };
+  | { type: "camera_mode"; mode: "follow" | "free_look" | "cinematic" };

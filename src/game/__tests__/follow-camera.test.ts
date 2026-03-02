@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FollowCamera } from "../follow-camera";
+import { buildFlybyWaypoints, FollowCamera } from "../follow-camera";
 
 describe("FollowCamera", () => {
   it("computes camera position from player position and offset", () => {
@@ -106,5 +106,102 @@ describe("FollowCamera", () => {
     expect(cam.mode).toBe("free_look");
     cam.toggleMode();
     expect(cam.mode).toBe("follow");
+  });
+
+  it("startCinematic sets mode to cinematic", () => {
+    const cam = new FollowCamera();
+    cam.startCinematic([{ x: 0, y: 10, z: 0, yaw: 0, pitch: -0.5, duration: 1 }]);
+    expect(cam.mode).toBe("cinematic");
+  });
+
+  it("nextWaypoint returns current waypoint", () => {
+    const cam = new FollowCamera();
+    const wp = { x: 5, y: 10, z: 5, yaw: 0.5, pitch: -0.3, duration: 2 };
+    cam.startCinematic([wp]);
+    expect(cam.nextWaypoint()).toEqual(wp);
+  });
+
+  it("onAnimationComplete advances to next waypoint", () => {
+    const cam = new FollowCamera();
+    const wp1 = { x: 0, y: 10, z: 0, yaw: 0, pitch: -0.5, duration: 1 };
+    const wp2 = { x: 5, y: 10, z: 5, yaw: 0.5, pitch: -0.3, duration: 2 };
+    cam.startCinematic([wp1, wp2]);
+    cam.onAnimationComplete();
+    expect(cam.nextWaypoint()).toEqual(wp2);
+    expect(cam.mode).toBe("cinematic");
+  });
+
+  it("cinematic completes to follow when queue exhausted", () => {
+    const cam = new FollowCamera();
+    cam.startCinematic([{ x: 0, y: 10, z: 0, yaw: 0, pitch: -0.5, duration: 1 }]);
+    cam.onAnimationComplete();
+    expect(cam.mode).toBe("follow");
+    expect(cam.nextWaypoint()).toBeUndefined();
+  });
+
+  it("user input during cinematic does not change mode", () => {
+    const cam = new FollowCamera();
+    cam.startCinematic([{ x: 0, y: 10, z: 0, yaw: 0, pitch: -0.5, duration: 1 }]);
+    cam.toggleMode();
+    expect(cam.mode).toBe("cinematic");
+  });
+
+  it("startCinematic with empty array is a no-op", () => {
+    const cam = new FollowCamera();
+    cam.startCinematic([]);
+    expect(cam.mode).toBe("follow");
+    expect(cam.nextWaypoint()).toBeUndefined();
+  });
+
+  it("onAnimationComplete outside cinematic returns undefined", () => {
+    const cam = new FollowCamera();
+    expect(cam.onAnimationComplete()).toBeUndefined();
+    expect(cam.mode).toBe("follow");
+  });
+});
+
+describe("buildFlybyWaypoints", () => {
+  it("returns 4 waypoints", () => {
+    const wps = buildFlybyWaypoints({ x: 5, y: 10, z: 5 });
+    expect(wps).toHaveLength(4);
+  });
+
+  it("all waypoints look toward the player", () => {
+    const player = { x: 5, y: 10, z: 5 };
+    const wps = buildFlybyWaypoints(player);
+    for (const wp of wps) {
+      const dx = player.x - wp.x;
+      const dy = player.y - wp.y;
+      const dz = player.z - wp.z;
+      const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+      const expectedYaw = Math.atan2(-dx, -dz);
+      const expectedPitch = Math.atan2(dy, horizontalDist);
+      expect(wp.yaw).toBeCloseTo(expectedYaw, 5);
+      expect(wp.pitch).toBeCloseTo(expectedPitch, 5);
+    }
+  });
+
+  it("waypoints are spread around the player (not clustered)", () => {
+    const wps = buildFlybyWaypoints({ x: 0, y: 0, z: 0 });
+    // Check that angles span at least 180 degrees
+    const angles = wps.map((wp) => Math.atan2(wp.x, wp.z));
+    const sorted = [...angles].sort((a, b) => a - b);
+    const maxGap = Math.max(
+      ...sorted.map((a, i) => {
+        const next = sorted[(i + 1) % sorted.length];
+        let gap = next - a;
+        if (gap < 0) gap += 2 * Math.PI;
+        return gap;
+      }),
+    );
+    // No single gap should be more than half the circle
+    expect(maxGap).toBeLessThan(Math.PI);
+  });
+
+  it("each waypoint has a positive duration", () => {
+    const wps = buildFlybyWaypoints({ x: 0, y: 0, z: 0 });
+    for (const wp of wps) {
+      expect(wp.duration).toBeGreaterThan(0);
+    }
   });
 });
