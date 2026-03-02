@@ -29,6 +29,30 @@ const BASE_OFFSET: Vec3 = { x: -24, y: 31, z: -24 };
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 2.0;
 
+const FLYBY_RADIUS = 20;
+const FLYBY_STOPS: { angle: number; height: number; duration: number }[] = [
+  { angle: 0, height: 10, duration: 2 },
+  { angle: Math.PI / 2, height: 15, duration: 2 },
+  { angle: Math.PI, height: 25, duration: 2.5 },
+  { angle: (3 * Math.PI) / 2, height: 10, duration: 2 },
+];
+
+/** Build 4 waypoints circling the player at varying heights. */
+export function buildFlybyWaypoints(playerPos: Vec3): CameraWaypoint[] {
+  return FLYBY_STOPS.map(({ angle, height, duration }) => {
+    const cx = playerPos.x + FLYBY_RADIUS * Math.sin(angle);
+    const cz = playerPos.z + FLYBY_RADIUS * Math.cos(angle);
+    const cy = playerPos.y + height;
+    const dx = playerPos.x - cx;
+    const dy = playerPos.y - cy;
+    const dz = playerPos.z - cz;
+    const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+    const yaw = Math.atan2(-dx, -dz);
+    const pitch = Math.atan2(dy, horizontalDist);
+    return { x: cx, y: cy, z: cz, yaw, pitch, duration };
+  });
+}
+
 export class FollowCamera {
   private orbitAngle = 0;
   private zoomFactor = 1.0;

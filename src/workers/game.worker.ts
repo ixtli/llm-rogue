@@ -3,7 +3,7 @@ import { CameraIntent } from "../../crates/engine/pkg/engine";
 import type { Actor, Entity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
-import { FollowCamera } from "../game/follow-camera";
+import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
 import { TurnLoop } from "../game/turn-loop";
@@ -412,6 +412,40 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
         if (turnLoop) {
           const player = world.getEntity(turnLoop.turnOrder()[0]);
           if (player) startOrbitAnimation(player.position, arc, 0.4);
+        }
+        return;
+      }
+      if (key === "c" && turnLoop) {
+        cancelOrbitAnimation();
+        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        if (!player) return;
+        const waypoints = buildFlybyWaypoints(player.position);
+        const [start, ...rest] = waypoints;
+        // Teleport to first position
+        lastSentYaw = start.yaw;
+        sendToRender({
+          type: "set_camera",
+          x: start.x,
+          y: start.y,
+          z: start.z,
+          yaw: start.yaw,
+          pitch: start.pitch,
+        });
+        // Queue remaining waypoints and kick off the chain
+        followCamera.startCinematic(rest);
+        sendToUI({ type: "camera_mode", mode: followCamera.mode });
+        const first = followCamera.nextWaypoint();
+        if (first) {
+          sendToRender({
+            type: "animate_camera",
+            x: first.x,
+            y: first.y,
+            z: first.z,
+            yaw: first.yaw,
+            pitch: first.pitch,
+            duration: first.duration,
+            easing: 2, // CubicInOut
+          });
         }
         return;
       }

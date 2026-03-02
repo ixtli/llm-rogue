@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FollowCamera } from "../follow-camera";
+import { buildFlybyWaypoints, FollowCamera } from "../follow-camera";
 
 describe("FollowCamera", () => {
   it("computes camera position from player position and offset", () => {
@@ -157,5 +157,51 @@ describe("FollowCamera", () => {
     const cam = new FollowCamera();
     expect(cam.onAnimationComplete()).toBeUndefined();
     expect(cam.mode).toBe("follow");
+  });
+});
+
+describe("buildFlybyWaypoints", () => {
+  it("returns 4 waypoints", () => {
+    const wps = buildFlybyWaypoints({ x: 5, y: 10, z: 5 });
+    expect(wps).toHaveLength(4);
+  });
+
+  it("all waypoints look toward the player", () => {
+    const player = { x: 5, y: 10, z: 5 };
+    const wps = buildFlybyWaypoints(player);
+    for (const wp of wps) {
+      const dx = player.x - wp.x;
+      const dy = player.y - wp.y;
+      const dz = player.z - wp.z;
+      const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+      const expectedYaw = Math.atan2(-dx, -dz);
+      const expectedPitch = Math.atan2(dy, horizontalDist);
+      expect(wp.yaw).toBeCloseTo(expectedYaw, 5);
+      expect(wp.pitch).toBeCloseTo(expectedPitch, 5);
+    }
+  });
+
+  it("waypoints are spread around the player (not clustered)", () => {
+    const wps = buildFlybyWaypoints({ x: 0, y: 0, z: 0 });
+    // Check that angles span at least 180 degrees
+    const angles = wps.map((wp) => Math.atan2(wp.x, wp.z));
+    const sorted = [...angles].sort((a, b) => a - b);
+    const maxGap = Math.max(
+      ...sorted.map((a, i) => {
+        const next = sorted[(i + 1) % sorted.length];
+        let gap = next - a;
+        if (gap < 0) gap += 2 * Math.PI;
+        return gap;
+      }),
+    );
+    // No single gap should be more than half the circle
+    expect(maxGap).toBeLessThan(Math.PI);
+  });
+
+  it("each waypoint has a positive duration", () => {
+    const wps = buildFlybyWaypoints({ x: 0, y: 0, z: 0 });
+    for (const wp of wps) {
+      expect(wp.duration).toBeGreaterThan(0);
+    }
   });
 });
