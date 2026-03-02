@@ -231,6 +231,18 @@ pub fn mutate_voxels(data: &[i32]) {
     });
 }
 
+/// Updates the dynamic light list from a flat f32 slice.
+/// Each light is 12 consecutive f32 values: [px, py, pz, radius, r, g, b, kind, dx, dy, dz, cone].
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn update_lights(data: &[f32]) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.update_lights(data);
+        }
+    });
+}
+
 /// Updates the sprite instance buffer from a flat array of f32.
 /// Each sprite is 12 consecutive f32 values (48 bytes = `SpriteInstance` layout).
 #[cfg(feature = "wasm")]

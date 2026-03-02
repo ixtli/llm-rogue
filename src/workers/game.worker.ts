@@ -58,6 +58,7 @@ function sendToRender(msg: GameToRenderMessage) {
   const transfers: Transferable[] = [];
   if (msg.type === "init") transfers.push(msg.canvas);
   if (msg.type === "visibility_mask") transfers.push(msg.data);
+  if (msg.type === "light_update") transfers.push(msg.data.buffer);
   renderWorker?.postMessage(msg, transfers);
 }
 

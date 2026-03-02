@@ -16,6 +16,7 @@ import init, {
   set_dolly,
   set_look_delta,
   take_animation_completed,
+  update_lights,
   update_sprites,
   update_visibility_mask,
 } from "../../crates/engine/pkg/engine";
@@ -194,6 +195,8 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
       floats[o + 11] = 0.0; // padding
     }
     update_sprites(floats);
+  } else if (msg.type === "light_update") {
+    update_lights(msg.data);
   } else if (msg.type === "voxel_mutate") {
     const flat = new Int32Array(msg.changes.length * 4);
     for (let i = 0; i < msg.changes.length; i++) {
