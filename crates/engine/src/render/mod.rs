@@ -2,6 +2,7 @@
 pub mod blit_pass;
 pub mod chunk_atlas;
 pub mod gpu;
+pub mod light_buffer;
 pub mod raymarch_pass;
 pub mod sprite_pass;
 
