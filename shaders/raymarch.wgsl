@@ -243,7 +243,12 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> RayResult {
             let depth = clamp(t_hit / camera.max_ray_distance, 0.0, 1.0);
             var shaded = shade(mat_id, face, step, hit_pos);
             let vis = fov_factor(i32(floor(hit_pos.x)), i32(floor(hit_pos.z)));
-            shaded = vec4(shaded.rgb * vis, shaded.a);
+            if vis < 1.0 {
+                // Outside FOV: dim + desaturate ~50%
+                let lum = dot(shaded.rgb, vec3<f32>(0.299, 0.587, 0.114));
+                let desat = mix(shaded.rgb, vec3<f32>(lum), 0.5);
+                shaded = vec4(desat * vis, shaded.a);
+            }
             return RayResult(shaded, depth);
         }
 
