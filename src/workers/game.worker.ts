@@ -278,11 +278,11 @@ function initializeGame(): void {
   turnLoop = new TurnLoop(world, player.id);
   gameInitialized = true;
 
-  // Demo torches near player spawn
+  // Demo lights near player spawn (RGB for visibility testing)
   const torchY = spawnY(5, 5) + 2;
-  lightManager.addPoint({ x: 3, y: torchY, z: 3 }, 12, { r: 1, g: 0.7, b: 0.3 });
-  lightManager.addPoint({ x: 8, y: torchY, z: 3 }, 12, { r: 1, g: 0.7, b: 0.3 });
-  lightManager.addPoint({ x: 5, y: torchY, z: 8 }, 10, { r: 0.3, g: 0.5, b: 1.0 });
+  lightManager.addPoint({ x: 3, y: torchY, z: 3 }, 12, { r: 1, g: 0, b: 0 });
+  lightManager.addPoint({ x: 8, y: torchY, z: 3 }, 12, { r: 0, g: 1, b: 0 });
+  lightManager.addPoint({ x: 5, y: torchY, z: 8 }, 12, { r: 0, g: 0, b: 1 });
   lightManager.flush(sendToRender);
 
   const playerEntity = world.getEntity(turnLoop?.turnOrder()[0]);
