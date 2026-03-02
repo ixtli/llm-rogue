@@ -8,6 +8,7 @@ import init, {
   is_chunk_loaded_at,
   is_solid,
   look_at,
+  mutate_voxels,
   preload_view,
   render_frame,
   resize_renderer,
@@ -193,5 +194,15 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
       floats[o + 11] = 0.0; // padding
     }
     update_sprites(floats);
+  } else if (msg.type === "voxel_mutate") {
+    const flat = new Int32Array(msg.changes.length * 4);
+    for (let i = 0; i < msg.changes.length; i++) {
+      const c = msg.changes[i];
+      flat[i * 4] = c.x;
+      flat[i * 4 + 1] = c.y;
+      flat[i * 4 + 2] = c.z;
+      flat[i * 4 + 3] = c.materialId;
+    }
+    mutate_voxels(flat);
   }
 };

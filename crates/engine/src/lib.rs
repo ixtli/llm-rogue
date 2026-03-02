@@ -219,6 +219,18 @@ pub fn update_visibility_mask(origin_x: i32, origin_z: i32, grid_size: u32, data
     });
 }
 
+/// Mutate voxels in loaded chunks from a flat `i32` slice.
+/// Each group of 4 values is `[world_x, world_y, world_z, material_id]`.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn mutate_voxels(data: &[i32]) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.mutate_voxels(data);
+        }
+    });
+}
+
 /// Updates the sprite instance buffer from a flat array of f32.
 /// Each sprite is 12 consecutive f32 values (48 bytes = `SpriteInstance` layout).
 #[cfg(feature = "wasm")]

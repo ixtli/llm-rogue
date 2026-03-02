@@ -73,6 +73,10 @@ export type GameToRenderMessage =
       originZ: number;
       gridSize: number;
       data: ArrayBuffer;
+    }
+  | {
+      type: "voxel_mutate";
+      changes: { x: number; y: number; z: number; materialId: number }[];
     };
 
 // --- Render Worker → Game Worker ---

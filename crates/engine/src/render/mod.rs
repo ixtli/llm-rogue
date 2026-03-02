@@ -412,6 +412,20 @@ impl Renderer {
         );
     }
 
+    /// Mutate one or more voxels in loaded chunks.
+    ///
+    /// `data` is a flat `i32` slice where each group of 4 values is
+    /// `[world_x, world_y, world_z, material_id]`. Updates voxel data,
+    /// rebuilds collision/terrain, and re-uploads to the GPU atlas.
+    pub fn mutate_voxels(&mut self, data: &[i32]) {
+        for group in data.chunks_exact(4) {
+            let world_pos = IVec3::new(group[0], group[1], group[2]);
+            let material_id = group[3] as u8;
+            self.chunk_manager
+                .mutate_voxel(&self.gpu.queue, world_pos, material_id);
+        }
+    }
+
     /// Updates sprite instances from a flat f32 slice (12 floats per sprite,
     /// matching the 48-byte `SpriteInstance` layout). Called from the WASM
     /// boundary where typed arrays arrive as raw float slices.
