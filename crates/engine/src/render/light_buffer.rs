@@ -137,6 +137,11 @@ mod tests {
     }
 
     #[test]
+    fn total_buffer_size_matches_spec() {
+        assert_eq!(HEADER_SIZE + 64 * FLOATS_PER_LIGHT * 4, 3088);
+    }
+
+    #[test]
     fn buffer_is_created() {
         let gpu = pollster::block_on(GpuContext::new_headless());
         let buf = LightBuffer::new(&gpu.device, 64);

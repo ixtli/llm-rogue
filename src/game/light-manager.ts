@@ -22,6 +22,7 @@ export interface LightDef {
 }
 
 const FLOATS_PER_LIGHT = 12;
+const MAX_LIGHTS = 64;
 
 export class LightManager {
   private lights = new Map<number, LightDef>();
@@ -33,6 +34,7 @@ export class LightManager {
   }
 
   addPoint(position: Vec3, radius: number, color: Color3, shadow = false): number {
+    if (this.lights.size >= MAX_LIGHTS) return -1;
     const id = this.nextId++;
     this.lights.set(id, {
       position: { ...position },
@@ -54,6 +56,7 @@ export class LightManager {
     cone: number,
     shadow = false,
   ): number {
+    if (this.lights.size >= MAX_LIGHTS) return -1;
     const id = this.nextId++;
     this.lights.set(id, {
       position: { ...position },

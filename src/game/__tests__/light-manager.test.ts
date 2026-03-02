@@ -71,6 +71,15 @@ describe("LightManager", () => {
     expect(msg.data.length).toBe(0);
   });
 
+  it("rejects lights beyond capacity (64)", () => {
+    const mgr = new LightManager();
+    for (let i = 0; i < 64; i++) {
+      expect(mgr.addPoint({ x: i, y: 0, z: 0 }, 10, { r: 1, g: 1, b: 1 })).toBeGreaterThanOrEqual(0);
+    }
+    expect(mgr.addPoint({ x: 65, y: 0, z: 0 }, 10, { r: 1, g: 1, b: 1 })).toBe(-1);
+    expect(mgr.count).toBe(64);
+  });
+
   it("serializes 12 floats per light", () => {
     const mgr = new LightManager();
     mgr.addPoint({ x: 1, y: 2, z: 3 }, 10, { r: 0.5, g: 0.6, b: 0.7 });
