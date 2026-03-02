@@ -747,15 +747,29 @@ mod tests {
 
     #[test]
     fn mutate_voxel_updates_collision_and_terrain() {
-        let (gpu, mut mgr) = make_manager(42, 1);
+        let gpu = pollster::block_on(GpuContext::new_headless());
+        let slots = UVec3::splat(7);
+        // All-stone chunk: every voxel is deterministically solid.
+        let mut mgr = ChunkManager::with_chunk_gen(
+            &gpu.device,
+            3,
+            slots,
+            Box::new(|_| {
+                let voxels =
+                    vec![pack_voxel(crate::voxel::MAT_STONE, 0, 0, 0); CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+                Chunk { voxels }
+            }),
+        );
         mgr.load_chunk(&gpu.queue, IVec3::ZERO);
-        // Voxel at (5,0,5) should be solid in generated terrain
-        let was_solid = mgr.is_solid(Vec3::new(5.5, 0.5, 5.5));
-        // Mutate to air (material_id = 0)
+        assert!(
+            mgr.is_solid(Vec3::new(5.5, 0.5, 5.5)),
+            "precondition: voxel must be solid"
+        );
         mgr.mutate_voxel(&gpu.queue, IVec3::new(5, 0, 5), 0);
-        if was_solid {
-            assert!(!mgr.is_solid(Vec3::new(5.5, 0.5, 5.5)));
-        }
+        assert!(
+            !mgr.is_solid(Vec3::new(5.5, 0.5, 5.5)),
+            "collision map must update after mutation"
+        );
     }
 
     #[test]
