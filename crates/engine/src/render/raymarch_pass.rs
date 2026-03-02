@@ -32,6 +32,7 @@ impl RaymarchPass {
         camera_uniform: &CameraUniform,
         width: u32,
         height: u32,
+        light_buffer: &wgpu::Buffer,
     ) -> Self {
         let camera_buffer = Self::create_camera_buffer(device, camera_uniform);
         let palette_buffer = Self::create_storage_buffer(device, "Material Palette", palette_data);
@@ -49,6 +50,7 @@ impl RaymarchPass {
             &palette_buffer,
             &visibility_buffer,
             &depth_view,
+            light_buffer,
         );
         let pipeline = Self::create_pipeline(device, &layout, &shader);
 
@@ -79,6 +81,7 @@ impl RaymarchPass {
         atlas: &ChunkAtlas,
         width: u32,
         height: u32,
+        light_buffer: &wgpu::Buffer,
     ) {
         self.depth_texture = Self::create_depth_texture(device, width, height);
         self.depth_view = self
@@ -93,6 +96,7 @@ impl RaymarchPass {
             &self.palette_buffer,
             &self.visibility_buffer,
             &self.depth_view,
+            light_buffer,
         );
         self.width = width;
         self.height = height;
@@ -127,6 +131,7 @@ impl RaymarchPass {
         origin_z: i32,
         grid_size: u32,
         data: &[u8],
+        light_buffer: &wgpu::Buffer,
     ) {
         let buf = Self::pack_visibility_buffer(origin_x, origin_z, grid_size, data);
         if buf.len() as u64 > self.visibility_buffer.size() {
@@ -146,6 +151,7 @@ impl RaymarchPass {
                 &self.palette_buffer,
                 &self.visibility_buffer,
                 &self.depth_view,
+                light_buffer,
             );
         }
         queue.write_buffer(&self.visibility_buffer, 0, &buf);
@@ -319,10 +325,13 @@ impl RaymarchPass {
                 },
                 // 7: visibility mask
                 read_only_storage(7),
+                // 8: light buffer
+                read_only_storage(8),
             ],
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_bind_group(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
@@ -332,6 +341,7 @@ impl RaymarchPass {
         palette_buffer: &wgpu::Buffer,
         visibility_buffer: &wgpu::Buffer,
         depth_view: &wgpu::TextureView,
+        light_buffer: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Raymarch BG"),
@@ -369,6 +379,10 @@ impl RaymarchPass {
                     binding: 7,
                     resource: visibility_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: light_buffer.as_entire_binding(),
+                },
             ],
         })
     }
@@ -401,6 +415,7 @@ mod tests {
     use crate::camera::{Camera, GridInfo};
     use crate::render::chunk_atlas::ChunkAtlas;
     use crate::render::gpu::GpuContext;
+    use crate::render::light_buffer::LightBuffer;
     use crate::render::{build_palette, create_storage_texture};
     use glam::{IVec3, UVec3};
 
@@ -425,8 +440,19 @@ mod tests {
         let camera = Camera::default();
         let uniform = camera.to_uniform(w, h, &grid_info);
 
+        let lbuf = LightBuffer::new(&gpu.device, 64);
+
         // This should not panic — the bind group layout includes occupancy at binding 5
-        let pass = RaymarchPass::new(&gpu.device, &view, &atlas, &palette, &uniform, w, h);
+        let pass = RaymarchPass::new(
+            &gpu.device,
+            &view,
+            &atlas,
+            &palette,
+            &uniform,
+            w,
+            h,
+            lbuf.buffer(),
+        );
 
         let mut encoder = gpu
             .device
@@ -458,7 +484,17 @@ mod tests {
         let camera = Camera::default();
         let uniform = camera.to_uniform(w1, h1, &grid_info);
 
-        let mut pass = RaymarchPass::new(&gpu.device, &view1, &atlas, &palette, &uniform, w1, h1);
+        let lbuf = LightBuffer::new(&gpu.device, 64);
+        let mut pass = RaymarchPass::new(
+            &gpu.device,
+            &view1,
+            &atlas,
+            &palette,
+            &uniform,
+            w1,
+            h1,
+            lbuf.buffer(),
+        );
 
         // Resize to different dimensions.
         let w2: u32 = 256;
@@ -466,7 +502,7 @@ mod tests {
         let tex2 = create_storage_texture(&gpu.device, w2, h2);
         let view2 = tex2.create_view(&wgpu::TextureViewDescriptor::default());
 
-        pass.rebuild_for_resize(&gpu.device, &view2, &atlas, w2, h2);
+        pass.rebuild_for_resize(&gpu.device, &view2, &atlas, w2, h2, lbuf.buffer());
 
         // Verify it can encode without panicking at the new size.
         let mut encoder = gpu
@@ -542,11 +578,31 @@ mod tests {
         let camera = Camera::default();
         let uniform = camera.to_uniform(w, h, &grid_info);
 
-        let mut pass = RaymarchPass::new(&gpu.device, &view, &atlas, &palette, &uniform, w, h);
+        let lbuf = LightBuffer::new(&gpu.device, 64);
+        let mut pass = RaymarchPass::new(
+            &gpu.device,
+            &view,
+            &atlas,
+            &palette,
+            &uniform,
+            w,
+            h,
+            lbuf.buffer(),
+        );
 
         // Update with a 3x3 visibility mask
         let mask = vec![1u8, 0, 1, 0, 1, 0, 1, 0, 1];
-        pass.update_visibility_mask(&gpu.device, &gpu.queue, &atlas, &view, -1, -1, 3, &mask);
+        pass.update_visibility_mask(
+            &gpu.device,
+            &gpu.queue,
+            &atlas,
+            &view,
+            -1,
+            -1,
+            3,
+            &mask,
+            lbuf.buffer(),
+        );
 
         // Should still encode without panicking
         let mut encoder = gpu

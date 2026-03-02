@@ -90,6 +90,7 @@ pub struct Renderer {
     sprite_pass: SpritePass,
     _storage_texture: wgpu::Texture,
     chunk_manager: ChunkManager,
+    light_buffer: light_buffer::LightBuffer,
     camera: Camera,
     grid_info: GridInfo,
     input: InputState,
@@ -130,6 +131,8 @@ impl Renderer {
         let camera_uniform = camera.to_uniform(width, height, &grid_info);
         let palette = build_palette();
 
+        let light_buffer = light_buffer::LightBuffer::new(&gpu.device, 64);
+
         let raymarch_pass = RaymarchPass::new(
             &gpu.device,
             &storage_view,
@@ -138,6 +141,7 @@ impl Renderer {
             &camera_uniform,
             width,
             height,
+            light_buffer.buffer(),
         );
 
         let blit_pass = BlitPass::new(
@@ -165,6 +169,7 @@ impl Renderer {
             sprite_pass,
             _storage_texture: storage_texture,
             chunk_manager,
+            light_buffer,
             camera,
             grid_info,
             input: InputState::default(),
@@ -410,6 +415,7 @@ impl Renderer {
             origin_z,
             grid_size,
             data,
+            self.light_buffer.buffer(),
         );
     }
 
@@ -425,6 +431,23 @@ impl Renderer {
             self.chunk_manager
                 .mutate_voxel(&self.gpu.queue, world_pos, material_id);
         }
+    }
+
+    /// Updates the dynamic light list from a flat f32 slice (12 floats per light).
+    /// Layout: [px, py, pz, radius, r, g, b, kind, dx, dy, dz, cone] per light.
+    pub fn update_lights(&mut self, data: &[f32]) {
+        let lights: Vec<light_buffer::Light> = data
+            .chunks_exact(12)
+            .map(|c| light_buffer::Light {
+                position: Vec3::new(c[0], c[1], c[2]),
+                radius: c[3],
+                color: Vec3::new(c[4], c[5], c[6]),
+                kind: c[7] as u32,
+                direction: Vec3::new(c[8], c[9], c[10]),
+                cone: c[11],
+            })
+            .collect();
+        self.light_buffer.update(&self.gpu.queue, &lights);
     }
 
     /// Updates sprite instances from a flat f32 slice (12 floats per sprite,
@@ -458,6 +481,7 @@ impl Renderer {
             self.chunk_manager.atlas(),
             width,
             height,
+            self.light_buffer.buffer(),
         );
         self.blit_pass.rebuild_for_resize(
             &self.gpu.device,

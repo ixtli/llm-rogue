@@ -25,6 +25,7 @@ struct ChunkSlot {
 @group(0) @binding(5) var<storage, read> occupancy: array<vec2<u32>>;
 @group(0) @binding(6) var depth_output: texture_storage_2d<r32float, write>;
 @group(0) @binding(7) var<storage, read> visibility: array<u32>;
+@group(0) @binding(8) var<storage, read> light_buf: array<u32>;
 
 struct RayResult {
     color: vec4<f32>,

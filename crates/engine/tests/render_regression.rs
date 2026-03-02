@@ -118,6 +118,7 @@ struct HeadlessRenderer {
     raymarch_pass: RaymarchPass,
     storage_texture: wgpu::Texture,
     _atlas: ChunkAtlas,
+    _light_buffer: engine::render::light_buffer::LightBuffer,
 }
 
 impl HeadlessRenderer {
@@ -138,6 +139,7 @@ impl HeadlessRenderer {
         let camera = Camera::default();
         let camera_uniform = camera.to_uniform(WIDTH, HEIGHT, &GRID_INFO);
 
+        let light_buffer = engine::render::light_buffer::LightBuffer::new(&gpu.device, 64);
         let raymarch_pass = RaymarchPass::new(
             &gpu.device,
             &storage_view,
@@ -146,6 +148,7 @@ impl HeadlessRenderer {
             &camera_uniform,
             WIDTH,
             HEIGHT,
+            light_buffer.buffer(),
         );
 
         Self {
@@ -153,6 +156,7 @@ impl HeadlessRenderer {
             raymarch_pass,
             storage_texture,
             _atlas: atlas,
+            _light_buffer: light_buffer,
         }
     }
 
