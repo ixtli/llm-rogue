@@ -29,11 +29,11 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Phase 6a: FOV rendering | Visibility mask message, WASM export, GPU storage buffer (binding 7), shader dimming + desaturation | `archive/2026-02-27-game-logic-loop-*.md` |
 | Phase 6a: Cinematic camera | Cinematic mode with waypoint queue, animation_complete handler, C-key flyby demo | `archive/2026-02-27-game-logic-loop-*.md` |
 | Phase 6a: Voxel mutations | mutate_voxel in ChunkManager, Chunk data retention, WASM export, render worker handler | `archive/2026-02-27-game-logic-loop-*.md` |
+| Phase 5c: Dynamic local lighting | Storage buffer light list (binding 8), point/spot lights, radius culling, per-pixel budget cap (8), LightManager API, shadow rays | `archive/2026-03-02-dynamic-local-lighting-*.md` |
 
 ## Not yet planned
 
 | Phase | Summary | Notes |
 |-------|---------|-------|
-| Phase 5c: Global illumination | Voxel cone tracing for approximate GI | Conditional on performance; hard shadows + AO are done |
 | Phase 6b: HUD & combat | Health bar, combat feedback, damage numbers, death/respawn | |
 | Phase 6c: Chunk server | LLM/MCP integration for procedural chunk generation | |

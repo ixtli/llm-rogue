@@ -10,15 +10,16 @@ full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 **Current state:** Phases 1–5c and Phase 6a are complete. The game has a
 turn-based game loop with entities, inventory, FOV (with shader dimming +
 desaturation), Y-axis-aware movement, follow camera with orbit/zoom, cinematic
-camera mode with waypoint queue, and voxel mutation support. The engine renders
-dynamically-loaded multi-chunk terrain with hard shadows and ambient occlusion
-via three-level DDA ray marching through a 3D texture atlas. Per-chunk 64-bit
-occupancy bitmasks skip empty 8×8×8 sub-regions. Chunk loading is budgeted
-(4/frame), distance-prioritized, with trajectory prediction and implicit LRU
-caching. A composable `MapFeature` system generates the play-test terrain.
-Three-thread architecture (UI → game worker → render worker) with a follow
-camera in the game worker and intent-based free-look fallback in the render
-worker.
+camera mode with waypoint queue, voxel mutation support, and dynamic local
+lighting (point/spot lights with radius culling, per-pixel budget cap, optional
+shadow rays). The engine renders dynamically-loaded multi-chunk terrain with
+hard shadows, ambient occlusion, and local light sources via three-level DDA
+ray marching through a 3D texture atlas. Per-chunk 64-bit occupancy bitmasks
+skip empty 8×8×8 sub-regions. Chunk loading is budgeted (4/frame),
+distance-prioritized, with trajectory prediction and implicit LRU caching. A
+composable `MapFeature` system generates the play-test terrain. Three-thread
+architecture (UI → game worker → render worker) with a follow camera in the
+game worker and intent-based free-look fallback in the render worker.
 
 **Controls:** WASD moves the player (turn-based), Q/E orbits the camera 90°,
 scroll zooms, Tab toggles free-look (WASD/mouse moves camera), C triggers
@@ -246,6 +247,8 @@ occlusion samples), using the material's palette color.
 | `terrain` | `src/game/terrain.ts` | TerrainGrid/TileSurface deserialization from chunk_terrain messages |
 | `fov` | `src/game/fov.ts` | Field-of-view computation for entity visibility |
 | `inventory` | `src/game/inventory.ts` | Inventory management with stacking |
+| `light_buffer` | `crates/engine/src/render/light_buffer.rs` | GPU storage buffer for dynamic lights (binding 8), pack/update API |
+| `light-manager` | `src/game/light-manager.ts` | LightManager: point/spot lights, dirty-flag flush, 64-light capacity |
 
 ## Worktree Gotchas
 
