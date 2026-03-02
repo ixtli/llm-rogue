@@ -537,6 +537,78 @@ fn fov_factor(world_x: i32, world_z: i32) -> f32 {
     return 1.0;
 }
 
+const MAX_LIGHTS_PER_PIXEL: u32 = 8u;
+
+fn read_light_f32(base: u32, offset: u32) -> f32 {
+    return bitcast<f32>(light_buf[base + offset]);
+}
+
+fn evaluate_lights(hit_pos: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+    let count = light_buf[0];
+    if count == 0u { return vec3(0.0); }
+
+    var total = vec3<f32>(0.0);
+    var evaluated = 0u;
+
+    for (var i = 0u; i < count; i++) {
+        if evaluated >= MAX_LIGHTS_PER_PIXEL { break; }
+
+        // Header is 4 u32s, each light is 12 u32s
+        let base = 4u + i * 12u;
+
+        let lx = read_light_f32(base, 0u);
+        let ly = read_light_f32(base, 1u);
+        let lz = read_light_f32(base, 2u);
+        let radius = read_light_f32(base, 3u);
+
+        let light_pos = vec3(lx, ly, lz);
+        let to_light = light_pos - hit_pos;
+        let dist = length(to_light);
+
+        // Radius culling
+        if dist > radius { continue; }
+
+        let lr = read_light_f32(base, 4u);
+        let lg = read_light_f32(base, 5u);
+        let lb = read_light_f32(base, 6u);
+        let kind = light_buf[base + 7u];
+        let light_color = vec3(lr, lg, lb);
+        let light_dir = to_light / dist;
+
+        // Spot culling
+        if (kind & 1u) != 0u {
+            let dx = read_light_f32(base, 8u);
+            let dy = read_light_f32(base, 9u);
+            let dz = read_light_f32(base, 10u);
+            let cone = read_light_f32(base, 11u);
+            let spot_cos = dot(-light_dir, vec3(dx, dy, dz));
+            if spot_cos < cone { continue; }
+        }
+
+        // Attenuation (quadratic falloff)
+        let att_linear = saturate(1.0 - dist / radius);
+        let att = att_linear * att_linear;
+
+        // Diffuse
+        let ndotl = max(dot(normal, light_dir), 0.0);
+
+        // Optional shadow ray
+        var shadowed = false;
+        if (kind & 2u) != 0u {
+            let shadow_origin = hit_pos + normal * SHADOW_BIAS;
+            shadowed = trace_ray(shadow_origin, light_dir, dist);
+        }
+
+        if !shadowed {
+            total += light_color * att * ndotl;
+        }
+
+        evaluated++;
+    }
+
+    return total;
+}
+
 fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f32> {
     var normal = vec3<f32>(0.0);
     if face == 0u { normal.x = -f32(step.x); }
@@ -549,5 +621,6 @@ fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f3
     let ao = trace_ao(shadow_origin, face, step);
     let diffuse = select(max(dot(normal, SUN_DIR), 0.0), 0.0, in_shadow);
     let ambient = 0.15 * ao;
-    return vec4(base.rgb * (ambient + diffuse), 1.0);
+    let local = evaluate_lights(hit_pos, normal);
+    return vec4(base.rgb * (ambient + diffuse + local), 1.0);
 }
