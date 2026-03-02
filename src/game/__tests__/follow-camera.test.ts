@@ -107,4 +107,42 @@ describe("FollowCamera", () => {
     cam.toggleMode();
     expect(cam.mode).toBe("follow");
   });
+
+  it("startCinematic sets mode to cinematic", () => {
+    const cam = new FollowCamera();
+    cam.startCinematic([{ x: 0, y: 10, z: 0, yaw: 0, pitch: -0.5, duration: 1 }]);
+    expect(cam.mode).toBe("cinematic");
+  });
+
+  it("nextWaypoint returns current waypoint", () => {
+    const cam = new FollowCamera();
+    const wp = { x: 5, y: 10, z: 5, yaw: 0.5, pitch: -0.3, duration: 2 };
+    cam.startCinematic([wp]);
+    expect(cam.nextWaypoint()).toEqual(wp);
+  });
+
+  it("onAnimationComplete advances to next waypoint", () => {
+    const cam = new FollowCamera();
+    const wp1 = { x: 0, y: 10, z: 0, yaw: 0, pitch: -0.5, duration: 1 };
+    const wp2 = { x: 5, y: 10, z: 5, yaw: 0.5, pitch: -0.3, duration: 2 };
+    cam.startCinematic([wp1, wp2]);
+    cam.onAnimationComplete();
+    expect(cam.nextWaypoint()).toEqual(wp2);
+    expect(cam.mode).toBe("cinematic");
+  });
+
+  it("cinematic completes to follow when queue exhausted", () => {
+    const cam = new FollowCamera();
+    cam.startCinematic([{ x: 0, y: 10, z: 0, yaw: 0, pitch: -0.5, duration: 1 }]);
+    cam.onAnimationComplete();
+    expect(cam.mode).toBe("follow");
+    expect(cam.nextWaypoint()).toBeUndefined();
+  });
+
+  it("user input during cinematic does not change mode", () => {
+    const cam = new FollowCamera();
+    cam.startCinematic([{ x: 0, y: 10, z: 0, yaw: 0, pitch: -0.5, duration: 1 }]);
+    cam.toggleMode();
+    expect(cam.mode).toBe("cinematic");
+  });
 });

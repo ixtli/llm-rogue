@@ -4,6 +4,15 @@ export interface Vec3 {
   z: number;
 }
 
+export interface CameraWaypoint {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+  duration: number;
+}
+
 export interface CameraTarget {
   position: Vec3;
   lookAt: Vec3;
@@ -23,7 +32,8 @@ const ZOOM_MAX = 2.0;
 export class FollowCamera {
   private orbitAngle = 0;
   private zoomFactor = 1.0;
-  mode: "follow" | "free_look" = "follow";
+  private cinematicQueue: CameraWaypoint[] = [];
+  mode: "follow" | "free_look" | "cinematic" = "follow";
 
   orbit(direction: 1 | -1): OrbitArc {
     const fromAngle = this.orbitAngle;
@@ -36,7 +46,27 @@ export class FollowCamera {
   }
 
   toggleMode(): void {
+    if (this.mode === "cinematic") return;
     this.mode = this.mode === "follow" ? "free_look" : "follow";
+  }
+
+  startCinematic(waypoints: CameraWaypoint[]): void {
+    this.cinematicQueue = [...waypoints];
+    this.mode = "cinematic";
+  }
+
+  onAnimationComplete(): CameraWaypoint | undefined {
+    if (this.mode === "cinematic") {
+      this.cinematicQueue.shift();
+      if (this.cinematicQueue.length === 0) {
+        this.mode = "follow";
+      }
+    }
+    return this.cinematicQueue[0];
+  }
+
+  nextWaypoint(): CameraWaypoint | undefined {
+    return this.cinematicQueue[0];
   }
 
   computeAtAngle(playerPos: Vec3, angle: number): CameraTarget {

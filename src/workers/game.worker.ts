@@ -336,6 +336,26 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
     }
   } else if (msg.type === "chunk_terrain_unload") {
     world.unloadTerrain(msg.cx, msg.cy, msg.cz);
+  } else if (msg.type === "animation_complete") {
+    if (followCamera.mode === "cinematic") {
+      const next = followCamera.onAnimationComplete();
+      if (next) {
+        sendToRender({
+          type: "animate_camera",
+          x: next.x,
+          y: next.y,
+          z: next.z,
+          yaw: next.yaw,
+          pitch: next.pitch,
+          duration: next.duration,
+          easing: 2, // CubicInOut
+        });
+      } else if (turnLoop) {
+        // Cinematic ended, return to follow
+        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        if (player) sendFollowCamera(player.position, true);
+      }
+    }
   }
 }
 

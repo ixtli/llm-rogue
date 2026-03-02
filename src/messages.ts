@@ -167,4 +167,4 @@ export type GameToUIMessage =
       camera_chunk_y: number;
       camera_chunk_z: number;
     }
-  | { type: "camera_mode"; mode: "follow" | "free_look" };
+  | { type: "camera_mode"; mode: "follow" | "free_look" | "cinematic" };
