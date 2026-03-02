@@ -350,10 +350,13 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
           duration: next.duration,
           easing: 2, // CubicInOut
         });
-      } else if (turnLoop) {
+      } else {
         // Cinematic ended, return to follow
-        const player = world.getEntity(turnLoop.turnOrder()[0]);
-        if (player) sendFollowCamera(player.position, true);
+        if (turnLoop) {
+          const player = world.getEntity(turnLoop.turnOrder()[0]);
+          if (player) sendFollowCamera(player.position, true);
+        }
+        sendToUI({ type: "camera_mode", mode: followCamera.mode });
       }
     }
   }
@@ -382,14 +385,17 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
   } else if (msg.type === "key_down") {
     const key = msg.key;
 
-    // Tab toggles camera mode
+    // Tab toggles camera mode (no-op during cinematic)
     if (key === "tab") {
+      const prevMode = followCamera.mode;
       cancelOrbitAnimation();
       followCamera.toggleMode();
-      sendToUI({ type: "camera_mode", mode: followCamera.mode });
-      if (followCamera.mode === "follow" && turnLoop) {
-        const player = world.getEntity(turnLoop.turnOrder()[0]);
-        if (player) sendFollowCamera(player.position, true);
+      if (followCamera.mode !== prevMode) {
+        sendToUI({ type: "camera_mode", mode: followCamera.mode });
+        if (followCamera.mode === "follow" && turnLoop) {
+          const player = world.getEntity(turnLoop.turnOrder()[0]);
+          if (player) sendFollowCamera(player.position, true);
+        }
       }
       return;
     }

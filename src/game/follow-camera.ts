@@ -51,16 +51,17 @@ export class FollowCamera {
   }
 
   startCinematic(waypoints: CameraWaypoint[]): void {
+    if (waypoints.length === 0) return;
     this.cinematicQueue = [...waypoints];
     this.mode = "cinematic";
   }
 
   onAnimationComplete(): CameraWaypoint | undefined {
-    if (this.mode === "cinematic") {
-      this.cinematicQueue.shift();
-      if (this.cinematicQueue.length === 0) {
-        this.mode = "follow";
-      }
+    if (this.mode !== "cinematic") return undefined;
+    this.cinematicQueue.shift();
+    if (this.cinematicQueue.length === 0) {
+      this.mode = "follow";
+      return undefined;
     }
     return this.cinematicQueue[0];
   }

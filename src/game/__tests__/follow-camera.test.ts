@@ -145,4 +145,17 @@ describe("FollowCamera", () => {
     cam.toggleMode();
     expect(cam.mode).toBe("cinematic");
   });
+
+  it("startCinematic with empty array is a no-op", () => {
+    const cam = new FollowCamera();
+    cam.startCinematic([]);
+    expect(cam.mode).toBe("follow");
+    expect(cam.nextWaypoint()).toBeUndefined();
+  });
+
+  it("onAnimationComplete outside cinematic returns undefined", () => {
+    const cam = new FollowCamera();
+    expect(cam.onAnimationComplete()).toBeUndefined();
+    expect(cam.mode).toBe("follow");
+  });
 });
