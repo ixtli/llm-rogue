@@ -3,6 +3,11 @@ use wgpu::util::DeviceExt;
 use super::chunk_atlas::ChunkAtlas;
 use crate::camera::CameraUniform;
 
+/// Minimum size (in bytes) for the visibility buffer.
+/// Header: `origin_x` (i32), `origin_z` (i32), `grid_size` (u32), padding (u32) = 16 bytes.
+/// An empty mask still needs at least the header so the shader has valid data to read.
+const VISIBILITY_HEADER_SIZE: usize = 16;
+
 /// A compute pass that ray-marches a multi-chunk voxel atlas.
 pub struct RaymarchPass {
     pipeline: wgpu::ComputePipeline,
@@ -10,6 +15,7 @@ pub struct RaymarchPass {
     bind_group: wgpu::BindGroup,
     camera_buffer: wgpu::Buffer,
     palette_buffer: wgpu::Buffer,
+    visibility_buffer: wgpu::Buffer,
     depth_texture: wgpu::Texture,
     depth_view: wgpu::TextureView,
     width: u32,
@@ -29,6 +35,7 @@ impl RaymarchPass {
     ) -> Self {
         let camera_buffer = Self::create_camera_buffer(device, camera_uniform);
         let palette_buffer = Self::create_storage_buffer(device, "Material Palette", palette_data);
+        let visibility_buffer = Self::create_empty_visibility_buffer(device);
         let depth_texture = Self::create_depth_texture(device, width, height);
         let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let shader = Self::load_shader(device);
@@ -40,6 +47,7 @@ impl RaymarchPass {
             &camera_buffer,
             atlas,
             &palette_buffer,
+            &visibility_buffer,
             &depth_view,
         );
         let pipeline = Self::create_pipeline(device, &layout, &shader);
@@ -50,6 +58,7 @@ impl RaymarchPass {
             bind_group,
             camera_buffer,
             palette_buffer,
+            visibility_buffer,
             depth_texture,
             depth_view,
             width,
@@ -82,6 +91,7 @@ impl RaymarchPass {
             &self.camera_buffer,
             atlas,
             &self.palette_buffer,
+            &self.visibility_buffer,
             &self.depth_view,
         );
         self.width = width;
@@ -99,6 +109,46 @@ impl RaymarchPass {
     #[must_use]
     pub fn camera_buffer(&self) -> &wgpu::Buffer {
         &self.camera_buffer
+    }
+
+    /// Updates the visibility mask buffer and rebuilds the bind group.
+    ///
+    /// `origin_x` / `origin_z` are the world-space coordinates of the mask's
+    /// top-left corner. `grid_size` is the side length of the square mask.
+    /// `data` contains one byte per tile (1 = visible, 0 = dimmed).
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_visibility_mask(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        atlas: &ChunkAtlas,
+        storage_view: &wgpu::TextureView,
+        origin_x: i32,
+        origin_z: i32,
+        grid_size: u32,
+        data: &[u8],
+    ) {
+        let buf = Self::pack_visibility_buffer(origin_x, origin_z, grid_size, data);
+        if buf.len() as u64 > self.visibility_buffer.size() {
+            // Reallocate if the new data is larger.
+            self.visibility_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Visibility Mask"),
+                size: buf.len() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.bind_group = Self::create_bind_group(
+                device,
+                &self.bind_group_layout,
+                storage_view,
+                &self.camera_buffer,
+                atlas,
+                &self.palette_buffer,
+                &self.visibility_buffer,
+                &self.depth_view,
+            );
+        }
+        queue.write_buffer(&self.visibility_buffer, 0, &buf);
     }
 
     pub fn encode(&self, encoder: &mut wgpu::CommandEncoder) {
@@ -146,6 +196,49 @@ impl RaymarchPass {
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         })
+    }
+
+    /// Creates an empty visibility buffer with a zero-sized grid (no dimming).
+    fn create_empty_visibility_buffer(device: &wgpu::Device) -> wgpu::Buffer {
+        // Header: origin_x=0, origin_z=0, grid_size=0, padding=0
+        let data = [0u8; VISIBILITY_HEADER_SIZE];
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Visibility Mask"),
+            contents: &data,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        })
+    }
+
+    /// Packs the visibility header and data into a `Vec<u8>` suitable for GPU
+    /// upload. Layout (all u32-aligned):
+    ///   - `[0]`: `origin_x` (bitcast i32)
+    ///   - `[1]`: `origin_z` (bitcast i32)
+    ///   - `[2]`: `grid_size` (u32)
+    ///   - `[3]`: padding (u32)
+    ///   - `[4..]`: visibility bytes packed into u32s (little-endian)
+    fn pack_visibility_buffer(
+        origin_x: i32,
+        origin_z: i32,
+        grid_size: u32,
+        data: &[u8],
+    ) -> Vec<u8> {
+        let tile_count = (grid_size * grid_size) as usize;
+        // Round up to next multiple of 4 for u32 packing.
+        let packed_words = tile_count.div_ceil(4);
+        let total_bytes = VISIBILITY_HEADER_SIZE + packed_words * 4;
+        let mut buf = vec![0u8; total_bytes];
+
+        // Write header as little-endian u32s.
+        buf[0..4].copy_from_slice(&origin_x.to_le_bytes());
+        buf[4..8].copy_from_slice(&origin_z.to_le_bytes());
+        buf[8..12].copy_from_slice(&grid_size.to_le_bytes());
+        // buf[12..16] is padding, already zero.
+
+        // Pack visibility bytes into u32 words (little-endian byte order).
+        for (i, &vis) in data.iter().enumerate().take(tile_count) {
+            buf[VISIBILITY_HEADER_SIZE + i] = vis;
+        }
+        buf
     }
 
     fn load_shader(device: &wgpu::Device) -> wgpu::ShaderModule {
@@ -224,6 +317,8 @@ impl RaymarchPass {
                     },
                     count: None,
                 },
+                // 7: visibility mask
+                read_only_storage(7),
             ],
         })
     }
@@ -235,6 +330,7 @@ impl RaymarchPass {
         camera_buffer: &wgpu::Buffer,
         atlas: &ChunkAtlas,
         palette_buffer: &wgpu::Buffer,
+        visibility_buffer: &wgpu::Buffer,
         depth_view: &wgpu::TextureView,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -268,6 +364,10 @@ impl RaymarchPass {
                 wgpu::BindGroupEntry {
                     binding: 6,
                     resource: wgpu::BindingResource::TextureView(depth_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: visibility_buffer.as_entire_binding(),
                 },
             ],
         })
@@ -369,6 +469,86 @@ mod tests {
         pass.rebuild_for_resize(&gpu.device, &view2, &atlas, w2, h2);
 
         // Verify it can encode without panicking at the new size.
+        let mut encoder = gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Test"),
+            });
+        pass.encode(&mut encoder);
+        gpu.queue.submit(std::iter::once(encoder.finish()));
+    }
+
+    #[test]
+    fn pack_visibility_buffer_header_layout() {
+        let data = vec![1u8, 0, 1, 0, 0, 1, 0, 1, 1];
+        let buf = RaymarchPass::pack_visibility_buffer(-5, 10, 3, &data);
+
+        // Header: 4 u32 words = 16 bytes
+        assert!(buf.len() >= VISIBILITY_HEADER_SIZE);
+
+        let origin_x = i32::from_le_bytes(buf[0..4].try_into().unwrap());
+        let origin_z = i32::from_le_bytes(buf[4..8].try_into().unwrap());
+        let grid_size = u32::from_le_bytes(buf[8..12].try_into().unwrap());
+
+        assert_eq!(origin_x, -5);
+        assert_eq!(origin_z, 10);
+        assert_eq!(grid_size, 3);
+    }
+
+    #[test]
+    fn pack_visibility_buffer_data_packing() {
+        // 2x2 grid: [1, 0, 1, 1]
+        let data = vec![1u8, 0, 1, 1];
+        let buf = RaymarchPass::pack_visibility_buffer(0, 0, 2, &data);
+
+        // Data starts at offset 16. 4 bytes fit in 1 u32 word.
+        assert_eq!(buf.len(), VISIBILITY_HEADER_SIZE + 4);
+
+        // Read packed u32 (little-endian): byte0=1, byte1=0, byte2=1, byte3=1
+        let word = u32::from_le_bytes(buf[16..20].try_into().unwrap());
+        assert_eq!(word & 0xFF, 1); // byte 0
+        assert_eq!((word >> 8) & 0xFF, 0); // byte 1
+        assert_eq!((word >> 16) & 0xFF, 1); // byte 2
+        assert_eq!((word >> 24) & 0xFF, 1); // byte 3
+    }
+
+    #[test]
+    fn pack_visibility_buffer_empty_grid() {
+        let buf = RaymarchPass::pack_visibility_buffer(0, 0, 0, &[]);
+        // Header only, no data words.
+        assert_eq!(buf.len(), VISIBILITY_HEADER_SIZE);
+        let grid_size = u32::from_le_bytes(buf[8..12].try_into().unwrap());
+        assert_eq!(grid_size, 0);
+    }
+
+    #[test]
+    fn update_visibility_mask_does_not_panic() {
+        let gpu = pollster::block_on(GpuContext::new_headless());
+        let slots = UVec3::new(4, 2, 4);
+        let atlas = ChunkAtlas::new(&gpu.device, slots);
+        let palette = build_palette();
+
+        let w: u32 = 128;
+        let h: u32 = 128;
+        let tex = create_storage_texture(&gpu.device, w, h);
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let grid_info = GridInfo {
+            origin: IVec3::ZERO,
+            size: UVec3::new(4, 2, 4),
+            atlas_slots: slots,
+            max_ray_distance: 256.0,
+        };
+        let camera = Camera::default();
+        let uniform = camera.to_uniform(w, h, &grid_info);
+
+        let mut pass = RaymarchPass::new(&gpu.device, &view, &atlas, &palette, &uniform, w, h);
+
+        // Update with a 3x3 visibility mask
+        let mask = vec![1u8, 0, 1, 0, 1, 0, 1, 0, 1];
+        pass.update_visibility_mask(&gpu.device, &gpu.queue, &atlas, &view, -1, -1, 3, &mask);
+
+        // Should still encode without panicking
         let mut encoder = gpu
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {

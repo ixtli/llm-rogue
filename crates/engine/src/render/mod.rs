@@ -388,6 +388,30 @@ impl Renderer {
         self.camera.look_at(glam::Vec3::new(x, y, z));
     }
 
+    /// Updates the visibility mask buffer used by the shader to dim tiles
+    /// outside the player's field of view.
+    pub fn update_visibility_mask(
+        &mut self,
+        origin_x: i32,
+        origin_z: i32,
+        grid_size: u32,
+        data: &[u8],
+    ) {
+        let storage_view = self
+            ._storage_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        self.raymarch_pass.update_visibility_mask(
+            &self.gpu.device,
+            &self.gpu.queue,
+            self.chunk_manager.atlas(),
+            &storage_view,
+            origin_x,
+            origin_z,
+            grid_size,
+            data,
+        );
+    }
+
     /// Updates sprite instances from a flat f32 slice (12 floats per sprite,
     /// matching the 48-byte `SpriteInstance` layout). Called from the WASM
     /// boundary where typed arrays arrive as raw float slices.

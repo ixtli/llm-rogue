@@ -66,6 +66,13 @@ export type GameToRenderMessage =
         spriteId: number;
         facing: number;
       }[];
+    }
+  | {
+      type: "visibility_mask";
+      originX: number;
+      originZ: number;
+      gridSize: number;
+      data: ArrayBuffer;
     };
 
 // --- Render Worker → Game Worker ---

@@ -55,7 +55,10 @@ let gameInitialized = false;
 const FACING_MAP: Record<string, number> = { s: 0, e: 1, n: 2, w: 3 };
 
 function sendToRender(msg: GameToRenderMessage) {
-  renderWorker?.postMessage(msg, msg.type === "init" ? [msg.canvas] : []);
+  const transfers: Transferable[] = [];
+  if (msg.type === "init") transfers.push(msg.canvas);
+  if (msg.type === "visibility_mask") transfers.push(msg.data);
+  renderWorker?.postMessage(msg, transfers);
 }
 
 function sendToUI(msg: GameToUIMessage) {
@@ -83,6 +86,38 @@ function sendSpriteUpdate(): void {
     });
   }
   sendToRender({ type: "sprite_update", sprites });
+}
+
+const FOV_RADIUS = 10;
+
+function sendVisibilityMask(): void {
+  if (!turnLoop) return;
+  const player = world.getEntity(turnLoop.turnOrder()[0]);
+  if (!player) return;
+  const { x: px, z: pz } = player.position;
+  const gridSize = FOV_RADIUS * 2 + 1;
+
+  world.updateFov(px, pz, FOV_RADIUS, (x, z) => {
+    const surfaceY = world.findTopSurface(x, z);
+    if (surfaceY === undefined) return true;
+    return !world.isWalkable(x, surfaceY, z);
+  });
+
+  const data = new Uint8Array(gridSize * gridSize);
+  for (let dz = -FOV_RADIUS; dz <= FOV_RADIUS; dz++) {
+    for (let dx = -FOV_RADIUS; dx <= FOV_RADIUS; dx++) {
+      const idx = (dz + FOV_RADIUS) * gridSize + (dx + FOV_RADIUS);
+      data[idx] = world.isVisible(px + dx, pz + dz) ? 1 : 0;
+    }
+  }
+
+  sendToRender({
+    type: "visibility_mask",
+    originX: px - FOV_RADIUS,
+    originZ: pz - FOV_RADIUS,
+    gridSize,
+    data: data.buffer,
+  });
 }
 
 function sendGameState(): void {
@@ -242,6 +277,8 @@ function initializeGame(): void {
 
   const playerEntity = world.getEntity(turnLoop?.turnOrder()[0]);
   if (playerEntity) sendFollowCamera(playerEntity.position, false);
+
+  sendVisibilityMask();
 }
 
 function handlePlayerAction(action: PlayerAction): void {
@@ -253,6 +290,7 @@ function handlePlayerAction(action: PlayerAction): void {
     turnNumber++;
     sendSpriteUpdate();
     sendGameState();
+    sendVisibilityMask();
     const player = world.getEntity(turnLoop.turnOrder()[0]);
     if (player) sendFollowCamera(player.position, true);
   }
