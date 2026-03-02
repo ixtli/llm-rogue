@@ -77,7 +77,8 @@ export type GameToRenderMessage =
   | {
       type: "voxel_mutate";
       changes: { x: number; y: number; z: number; materialId: number }[];
-    };
+    }
+  | { type: "light_update"; data: Float32Array };
 
 // --- Render Worker → Game Worker ---
 
