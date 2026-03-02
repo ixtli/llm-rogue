@@ -24,6 +24,7 @@ struct ChunkSlot {
 @group(0) @binding(4) var<storage, read> palette: array<vec4<f32>>;
 @group(0) @binding(5) var<storage, read> occupancy: array<vec2<u32>>;
 @group(0) @binding(6) var depth_output: texture_storage_2d<r32float, write>;
+@group(0) @binding(7) var<storage, read> visibility: array<u32>;
 
 struct RayResult {
     color: vec4<f32>,
@@ -240,7 +241,10 @@ fn ray_march(origin: vec3<f32>, dir: vec3<f32>) -> RayResult {
             let t_hit = result.z;
             let hit_pos = origin + dir * t_hit;
             let depth = clamp(t_hit / camera.max_ray_distance, 0.0, 1.0);
-            return RayResult(shade(mat_id, face, step, hit_pos), depth);
+            var shaded = shade(mat_id, face, step, hit_pos);
+            let vis = fov_factor(i32(floor(hit_pos.x)), i32(floor(hit_pos.z)));
+            shaded = vec4(shaded.rgb * vis, shaded.a);
+            return RayResult(shaded, depth);
         }
 
         // Advance to next chunk along the exit face.
@@ -499,6 +503,32 @@ fn trace_ao(origin: vec3<f32>, face: u32, step: vec3<i32>) -> f32 {
     }
 
     return 1.0 - f32(hits) / f32(AO_SAMPLES);
+}
+
+/// Look up the FOV visibility for a world-space (x, z) position.
+/// Returns 1.0 if visible (or outside the mask), 0.4 if dimmed.
+fn fov_factor(world_x: i32, world_z: i32) -> f32 {
+    let header_origin_x = bitcast<i32>(visibility[0]);
+    let header_origin_z = bitcast<i32>(visibility[1]);
+    let header_grid_size = visibility[2];
+    if header_grid_size == 0u {
+        return 1.0;
+    }
+    let local_x = world_x - header_origin_x;
+    let local_z = world_z - header_origin_z;
+    if local_x < 0 || local_x >= i32(header_grid_size) || local_z < 0 || local_z >= i32(header_grid_size) {
+        return 0.4;
+    }
+    let byte_index = u32(local_z) * header_grid_size + u32(local_x);
+    let word_index = byte_index / 4u;
+    let byte_offset = byte_index % 4u;
+    // Header is 4 u32 words (origin_x, origin_z, grid_size, padding).
+    let word = visibility[4u + word_index];
+    let vis_byte = (word >> (byte_offset * 8u)) & 0xFFu;
+    if vis_byte == 0u {
+        return 0.4;
+    }
+    return 1.0;
 }
 
 fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f32> {

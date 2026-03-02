@@ -204,6 +204,21 @@ pub fn get_terrain_grid(cx: i32, cy: i32, cz: i32) -> Option<Vec<u8>> {
     })
 }
 
+/// Updates the visibility mask used by the shader to dim tiles outside LOS.
+///
+/// `origin_x` / `origin_z` are the world-space coordinates of the mask's
+/// top-left corner. `grid_size` is the side length of the square mask.
+/// `data` contains one byte per tile (1 = visible, 0 = dimmed).
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn update_visibility_mask(origin_x: i32, origin_z: i32, grid_size: u32, data: &[u8]) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.update_visibility_mask(origin_x, origin_z, grid_size, data);
+        }
+    });
+}
+
 /// Updates the sprite instance buffer from a flat array of f32.
 /// Each sprite is 12 consecutive f32 values (48 bytes = `SpriteInstance` layout).
 #[cfg(feature = "wasm")]

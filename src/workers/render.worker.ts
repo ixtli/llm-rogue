@@ -16,6 +16,7 @@ import init, {
   set_look_delta,
   take_animation_completed,
   update_sprites,
+  update_visibility_mask,
 } from "../../crates/engine/pkg/engine";
 import type { GameToRenderMessage } from "../messages";
 import {
@@ -167,6 +168,8 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     });
   } else if (msg.type === "resize") {
     resize_renderer(msg.width, msg.height);
+  } else if (msg.type === "visibility_mask") {
+    update_visibility_mask(msg.originX, msg.originZ, msg.gridSize, new Uint8Array(msg.data));
   } else if (msg.type === "sprite_update") {
     // Convert sprite data to flat Float32Array for WASM.
     // Each SpriteInstance is 12 floats: position(3), sprite_id(1), size(2), uv_offset(2), uv_size(2), padding(2)
