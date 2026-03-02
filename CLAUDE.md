@@ -7,22 +7,24 @@ GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
 Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phases 1–5c are complete. Phase 6 (game logic) is in
-progress: turn-based game loop, entity system, inventory, FOV, Y-axis-aware
-movement with jump/step budgets, and a follow camera with orbit/zoom are
-implemented. The engine renders dynamically-loaded multi-chunk terrain with hard
-shadows and ambient occlusion via three-level DDA ray marching through a 3D
-texture atlas. Per-chunk 64-bit occupancy bitmasks skip empty 8×8×8 sub-regions.
-Chunk loading is budgeted (4/frame), distance-prioritized, with trajectory
-prediction and implicit LRU caching. A composable `MapFeature` system generates
-the play-test terrain. Three-thread architecture (UI → game worker → render
-worker) with a follow camera in the game worker and intent-based free-look
-fallback in the render worker.
+**Current state:** Phases 1–5c and Phase 6a are complete. The game has a
+turn-based game loop with entities, inventory, FOV (with shader dimming +
+desaturation), Y-axis-aware movement, follow camera with orbit/zoom, cinematic
+camera mode with waypoint queue, and voxel mutation support. The engine renders
+dynamically-loaded multi-chunk terrain with hard shadows and ambient occlusion
+via three-level DDA ray marching through a 3D texture atlas. Per-chunk 64-bit
+occupancy bitmasks skip empty 8×8×8 sub-regions. Chunk loading is budgeted
+(4/frame), distance-prioritized, with trajectory prediction and implicit LRU
+caching. A composable `MapFeature` system generates the play-test terrain.
+Three-thread architecture (UI → game worker → render worker) with a follow
+camera in the game worker and intent-based free-look fallback in the render
+worker.
 
 **Controls:** WASD moves the player (turn-based), Q/E orbits the camera 90°,
-scroll zooms, Tab toggles free-look (WASD/mouse moves camera). Space waits.
+scroll zooms, Tab toggles free-look (WASD/mouse moves camera), C triggers
+cinematic flyby. Space waits.
 
-Next milestone: Phase 6 continued (HUD, combat feedback, chunk server stub).
+Next milestone: Phase 6b (HUD & combat), Phase 6c (chunk server).
 
 ## Tech Stack
 

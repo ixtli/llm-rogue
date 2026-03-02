@@ -26,14 +26,9 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Phase 6a: Turn loop | Turn-based game loop, player actions (move, attack, pickup, wait), NPC AI, sprite updates | `2026-02-27-game-logic-loop-*.md` |
 | Phase 6a: Y-axis movement | Y-aware movement with step/jump budgets, `findReachableSurface`, Mobility interface, asymmetric 3D attack range | `archive/2026-03-01-y-axis-movement-*.md` |
 | Phase 6a: Follow camera | FollowCamera with 4-step orbit (Q/E), scroll zoom, Tab free-look toggle, mode-aware input routing, pointer lock gating | `archive/2026-03-01-follow-camera-*.md` |
-
-## In progress
-
-| Phase | Summary | Plans |
-|-------|---------|-------|
-| Game logic loop: Chunk 3 | FOV rendering — visibility_mask message, WASM export, GPU buffer, shader dimming (FOV algorithm in TS is done) | `2026-02-27-game-logic-loop-*.md` |
-| Game logic loop: Chunk 4 | Cinematic camera mode with waypoint queue (follow + free-look already done via FollowCamera) | `2026-02-27-game-logic-loop-*.md` |
-| Game logic loop: Chunk 5 | Voxel mutations — mutate_voxel in ChunkManager, WASM export, message type, render worker handler | `2026-02-27-game-logic-loop-*.md` |
+| Phase 6a: FOV rendering | Visibility mask message, WASM export, GPU storage buffer (binding 7), shader dimming + desaturation | `archive/2026-02-27-game-logic-loop-*.md` |
+| Phase 6a: Cinematic camera | Cinematic mode with waypoint queue, animation_complete handler, C-key flyby demo | `archive/2026-02-27-game-logic-loop-*.md` |
+| Phase 6a: Voxel mutations | mutate_voxel in ChunkManager, Chunk data retention, WASM export, render worker handler | `archive/2026-02-27-game-logic-loop-*.md` |
 
 ## Not yet planned
 
