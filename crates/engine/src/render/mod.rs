@@ -450,6 +450,19 @@ impl Renderer {
         self.light_buffer.update(&self.gpu.queue, &lights);
     }
 
+    /// Replaces the sprite atlas texture with new RGBA pixel data.
+    /// Rebuilds the sprite bind group to reference the new texture.
+    pub fn update_sprite_atlas(&mut self, data: &[u8], width: u32, height: u32) {
+        self.sprite_pass.update_atlas(
+            &self.gpu.device,
+            &self.gpu.queue,
+            self.raymarch_pass.camera_buffer(),
+            data,
+            width,
+            height,
+        );
+    }
+
     /// Updates sprite instances from a flat f32 slice (12 floats per sprite,
     /// matching the 48-byte `SpriteInstance` layout). Called from the WASM
     /// boundary where typed arrays arrive as raw float slices.

@@ -88,6 +88,48 @@ impl SpritePass {
         self.instance_count = count as u32;
     }
 
+    /// Replaces the sprite atlas texture with new RGBA data.
+    /// Rebuilds the bind group to reference the new texture.
+    pub fn update_atlas(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        camera_buffer: &wgpu::Buffer,
+        data: &[u8],
+        width: u32,
+        height: u32,
+    ) {
+        let texture = device.create_texture_with_data(
+            queue,
+            &wgpu::TextureDescriptor {
+                label: Some("Sprite Atlas"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            data,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.bind_group = Self::create_bind_group(
+            device,
+            &self.bind_group_layout,
+            camera_buffer,
+            &view,
+            &self.sampler,
+        );
+        self.placeholder_texture = texture;
+        self.placeholder_view = view;
+    }
+
     /// Records the sprite render pass into the command encoder.
     /// Renders billboard quads with alpha blending and read-only depth test.
     pub fn encode(
@@ -139,8 +181,8 @@ impl SpritePass {
     fn create_sampler(device: &wgpu::Device) -> wgpu::Sampler {
         device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Sprite Sampler"),
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         })
     }
@@ -365,6 +407,15 @@ mod tests {
     #[test]
     fn sprite_instance_is_pod() {
         let _: SpriteInstance = bytemuck::Zeroable::zeroed();
+    }
+
+    #[test]
+    fn sprite_instance_default_tint_is_opaque_white() {
+        let tint: u32 = 0xFF_FF_FF_FF;
+        assert_eq!(tint & 0xFF, 255); // R
+        assert_eq!((tint >> 8) & 0xFF, 255); // G
+        assert_eq!((tint >> 16) & 0xFF, 255); // B
+        assert_eq!((tint >> 24) & 0xFF, 255); // A
     }
 
     #[test]
