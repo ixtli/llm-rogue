@@ -45,6 +45,7 @@ import {
 } from "../stats-layout";
 
 let atlasMetadata: { cols: number; rows: number; tints: Uint32Array } | null = null;
+let lastSpriteUpdate: GameToRenderMessage | null = null;
 
 self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   const msg = e.data;
@@ -176,6 +177,7 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   } else if (msg.type === "visibility_mask") {
     update_visibility_mask(msg.originX, msg.originZ, msg.gridSize, new Uint8Array(msg.data));
   } else if (msg.type === "sprite_update") {
+    lastSpriteUpdate = msg;
     const floats = new Float32Array(msg.sprites.length * 12);
     const dataView = new DataView(floats.buffer);
     for (let i = 0; i < msg.sprites.length; i++) {
@@ -216,6 +218,10 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   } else if (msg.type === "sprite_atlas") {
     update_sprite_atlas(new Uint8Array(msg.data), msg.width, msg.height);
     atlasMetadata = { cols: msg.cols, rows: msg.rows, tints: msg.tints };
+    // Re-pack sprites with correct UVs/tints now that atlas metadata is available
+    if (lastSpriteUpdate && lastSpriteUpdate.type === "sprite_update") {
+      self.onmessage?.(new MessageEvent("message", { data: lastSpriteUpdate }));
+    }
   } else if (msg.type === "voxel_mutate") {
     const flat = new Int32Array(msg.changes.length * 4);
     for (let i = 0; i < msg.changes.length; i++) {
