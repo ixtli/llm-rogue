@@ -288,6 +288,18 @@ impl SpritePass {
                             offset: 32,
                             shader_location: 4,
                         },
+                        // flags: Uint32, offset 40
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Uint32,
+                            offset: 40,
+                            shader_location: 5,
+                        },
+                        // tint: Uint32, offset 44
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Uint32,
+                            offset: 44,
+                            shader_location: 6,
+                        },
                     ],
                 }],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
