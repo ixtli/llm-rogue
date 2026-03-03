@@ -755,8 +755,10 @@ mod tests {
             3,
             slots,
             Box::new(|_| {
-                let voxels =
-                    vec![pack_voxel(crate::voxel::MAT_STONE, 0, 0, 0); CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+                let voxels = vec![
+                    pack_voxel(crate::voxel::MAT_STONE, 0, 0, 0);
+                    CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE
+                ];
                 Chunk { voxels }
             }),
         );

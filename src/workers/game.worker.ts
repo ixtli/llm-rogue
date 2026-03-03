@@ -4,6 +4,7 @@ import type { Actor, Entity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
 import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
+import { LightManager } from "../game/light-manager";
 import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
 import { TurnLoop } from "../game/turn-loop";
@@ -48,6 +49,7 @@ let digestTimer: ReturnType<typeof setInterval> | null = null;
 
 const world = new GameWorld();
 const followCamera = new FollowCamera();
+const lightManager = new LightManager();
 let turnLoop: TurnLoop | null = null;
 let turnNumber = 0;
 let gameInitialized = false;
@@ -58,6 +60,7 @@ function sendToRender(msg: GameToRenderMessage) {
   const transfers: Transferable[] = [];
   if (msg.type === "init") transfers.push(msg.canvas);
   if (msg.type === "visibility_mask") transfers.push(msg.data);
+  if (msg.type === "light_update") transfers.push(msg.data.buffer);
   renderWorker?.postMessage(msg, transfers);
 }
 
@@ -274,6 +277,13 @@ function initializeGame(): void {
 
   turnLoop = new TurnLoop(world, player.id);
   gameInitialized = true;
+
+  // Demo lights near player spawn (RGB for visibility testing)
+  const torchY = spawnY(5, 5) + 2;
+  lightManager.addPoint({ x: 3, y: torchY, z: 3 }, 12, { r: 1, g: 0, b: 0 });
+  lightManager.addPoint({ x: 8, y: torchY, z: 3 }, 12, { r: 0, g: 1, b: 0 });
+  lightManager.addPoint({ x: 5, y: torchY, z: 8 }, 12, { r: 0, g: 0, b: 1 });
+  lightManager.flush(sendToRender);
 
   const playerEntity = world.getEntity(turnLoop?.turnOrder()[0]);
   if (playerEntity) sendFollowCamera(playerEntity.position, false);

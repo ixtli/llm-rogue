@@ -105,6 +105,7 @@ impl HeadlessFullRenderer {
         let camera = Camera::default();
         let camera_uniform = camera.to_uniform(WIDTH, HEIGHT, &GRID_INFO);
 
+        let light_buffer = engine::render::light_buffer::LightBuffer::new(&gpu.device, 64);
         let raymarch_pass = RaymarchPass::new(
             &gpu.device,
             &storage_view,
@@ -113,6 +114,7 @@ impl HeadlessFullRenderer {
             &camera_uniform,
             WIDTH,
             HEIGHT,
+            light_buffer.buffer(),
         );
 
         let blit_pass = BlitPass::new(
