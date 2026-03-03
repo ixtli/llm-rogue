@@ -61,6 +61,7 @@ function sendToRender(msg: GameToRenderMessage) {
   if (msg.type === "init") transfers.push(msg.canvas);
   if (msg.type === "visibility_mask") transfers.push(msg.data);
   if (msg.type === "light_update") transfers.push(msg.data.buffer);
+  if (msg.type === "sprite_atlas") transfers.push(msg.data);
   renderWorker?.postMessage(msg, transfers);
 }
 
@@ -548,5 +549,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     // Pan is currently not mapped to a stage direction.
   } else if (msg.type === "resize") {
     sendToRender({ type: "resize", width: msg.width, height: msg.height });
+  } else if (msg.type === "sprite_atlas") {
+    sendToRender(msg);
   }
 };
