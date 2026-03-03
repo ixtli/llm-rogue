@@ -8,6 +8,7 @@ import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
 } from "./gpu-check";
+import ToolPalette from "./ToolPalette";
 
 const COMPAT_BROWSERS = "Chrome 113+, Edge 113+, Opera 99+, or Samsung Internet 27+";
 
@@ -216,6 +217,9 @@ const App: Component<AppProps> = (props) => {
       >
         {editorMode() === "edit" ? "EDIT MODE | F2 return to play" : status()}
       </div>
+      <Show when={editorMode() === "edit"}>
+        <ToolPalette />
+      </Show>
       <DiagnosticsOverlay data={diagnostics()} />
     </Show>
   );
