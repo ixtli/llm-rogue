@@ -12,12 +12,12 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Phase 4 | Multi-chunk streaming: 3D texture atlas, chunk manager, camera intent API, collision, three-thread architecture, diagnostics, debounced resize | `archive/2026-02-15-phase4a-*.md`, `archive/2026-02-16-phase4b-*.md`, `archive/2026-02-17-camera-intent-*.md`, `archive/2026-02-23-phase4b-collision-*.md`, `archive/2026-02-24-phase4b-streaming-polish-*.md` |
 | Phase 5 | Lighting: hard shadows, ambient occlusion, occupancy bitmask (three-level DDA), dynamic local lights (point/spot, 64 max, shadow rays) | `archive/2026-02-19-phase5-lighting-*.md`, `archive/2026-02-24-occupancy-bitmask.md`, `archive/2026-03-02-dynamic-local-lighting-*.md` |
 | Phase 6 | Game state: entity system, turn loop, Y-axis movement, follow camera, FOV rendering, sprite rasterization, voxel mutations, inventory, cinematic camera, playtest map | `archive/2026-02-27-game-logic-loop-*.md`, `archive/2026-02-28-playtest-map-camera-*.md`, `archive/2026-03-01-follow-camera-*.md`, `archive/2026-03-01-y-axis-movement-*.md` |
+| Phase 7 | Entity sprite editor: Unicode glyph rasterization, atlas packing, per-sprite tint + h-flip, modal edit UI | `archive/2026-03-03-entity-sprite-editor-*.md` |
 | Misc | Glam migration, app error screens, visual diagnostics, debounced resize, legacy cleanup | `archive/2026-02-15-glam-migration-*.md`, `archive/2026-02-15-app-error-screen-tests*.md`, `archive/2026-02-24-visual-diagnostics-*.md`, `archive/2026-02-24-debounced-resize-*.md`, `archive/2026-02-24-legacy-cleanup-is-solid-*.md` |
 
 ## Not yet planned
 
 | Phase | Summary | Notes |
 |-------|---------|-------|
-| Phase 7: Entity sprite editor | Design and tooling for entity sprites | To be brainstormed |
 | Phase 8: HUD & combat UI | Health bars, combat feedback, damage numbers, death/respawn | Game logic exists; needs presentation |
 | Phase 9: Chunk server | LLM/MCP integration, compression codec, chunk worker thread, HTTP endpoints | Replaces procedural generation |
