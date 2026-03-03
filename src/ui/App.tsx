@@ -4,13 +4,18 @@ import type { GameToUIMessage, UIToGameMessage } from "../messages";
 import { EMPTY_DIGEST } from "../stats";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
 import { editorMode, toggleEditorMode } from "./editor-mode";
+import { rasterizeAtlas } from "./glyph-rasterizer";
+import type { GlyphRegistry } from "./glyph-registry";
 import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
 } from "./gpu-check";
-import ToolPalette from "./ToolPalette";
+import { SpriteEditorPanel } from "./SpriteEditorPanel";
+import ToolPalette, { activeTool } from "./ToolPalette";
 
 const COMPAT_BROWSERS = "Chrome 113+, Edge 113+, Opera 99+, or Samsung Internet 27+";
+
+let handleAtlasChanged: ((registry: GlyphRegistry, cellSize: number) => void) | undefined;
 
 interface AppProps {
   checkGpu?: () => string | null;
@@ -52,6 +57,23 @@ const App: Component<AppProps> = (props) => {
           document.exitPointerLock();
         }
       }
+    };
+
+    handleAtlasChanged = (registry: GlyphRegistry, cellSize: number) => {
+      const atlas = rasterizeAtlas(registry.entries(), cellSize);
+      const tints = registry.packTints(atlas.cols, atlas.rows);
+      worker.postMessage(
+        {
+          type: "sprite_atlas",
+          data: atlas.data,
+          width: atlas.width,
+          height: atlas.height,
+          cols: atlas.cols,
+          rows: atlas.rows,
+          tints,
+        } satisfies UIToGameMessage,
+        [atlas.data],
+      );
     };
 
     // Render at 1x CSS pixels. The ray-march shader (shadows + AO) is too
@@ -219,6 +241,9 @@ const App: Component<AppProps> = (props) => {
       </div>
       <Show when={editorMode() === "edit"}>
         <ToolPalette />
+      </Show>
+      <Show when={editorMode() === "edit" && activeTool() === "sprite-editor"}>
+        <SpriteEditorPanel onAtlasChanged={(reg, size) => handleAtlasChanged?.(reg, size)} />
       </Show>
       <DiagnosticsOverlay data={diagnostics()} />
     </Show>
