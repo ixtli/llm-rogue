@@ -8,8 +8,8 @@ pub struct SpriteInstance {
     pub size: [f32; 2],
     pub uv_offset: [f32; 2],
     pub uv_size: [f32; 2],
-    #[allow(clippy::pub_underscore_fields)]
-    pub _padding: [f32; 2],
+    pub flags: u32,
+    pub tint: u32,
 }
 
 pub const MAX_SPRITES: usize = 1024;
@@ -353,5 +353,16 @@ mod tests {
     #[test]
     fn sprite_instance_is_pod() {
         let _: SpriteInstance = bytemuck::Zeroable::zeroed();
+    }
+
+    #[test]
+    fn sprite_instance_field_offsets() {
+        assert_eq!(std::mem::offset_of!(SpriteInstance, position), 0);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, sprite_id), 12);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, size), 16);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, uv_offset), 24);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, uv_size), 32);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, flags), 40);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, tint), 44);
     }
 }

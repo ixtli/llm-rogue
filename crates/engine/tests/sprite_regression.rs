@@ -332,7 +332,8 @@ fn make_sprite(x: f32, y: f32, z: f32, width: f32, height: f32) -> SpriteInstanc
         size: [width, height],
         uv_offset: [0.0, 0.0],
         uv_size: [1.0, 1.0],
-        _padding: [0.0, 0.0],
+        flags: 0,
+        tint: 0,
     }
 }
 
