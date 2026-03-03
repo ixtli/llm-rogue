@@ -50,7 +50,7 @@ const App: Component<AppProps> = (props) => {
 
         // Send default sprite atlas on startup
         const defaultRegistry = new GlyphRegistry();
-        const atlas = rasterizeAtlas(defaultRegistry.entries(), 32);
+        const atlas = rasterizeAtlas(defaultRegistry.entries(), defaultRegistry.cellSize);
         const tints = defaultRegistry.packTints(atlas.cols, atlas.rows);
         worker.postMessage(
           {

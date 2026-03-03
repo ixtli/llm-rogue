@@ -8,7 +8,7 @@ interface SpriteEditorPanelProps {
 const SpriteEditorPanel: Component<SpriteEditorPanelProps> = (props) => {
   const registry = new GlyphRegistry();
   const [entries, setEntries] = createSignal<GlyphEntry[]>([...registry.entries()]);
-  const [cellSize, setCellSize] = createSignal(32);
+  const [cellSize, setCellSize] = createSignal(registry.cellSize);
 
   const refresh = () => {
     setEntries([...registry.entries()]);
@@ -39,6 +39,7 @@ const SpriteEditorPanel: Component<SpriteEditorPanelProps> = (props) => {
 
   const toggleCellSize = () => {
     const newSize = cellSize() === 32 ? 64 : 32;
+    registry.cellSize = newSize;
     setCellSize(newSize);
     props.onAtlasChanged(registry, newSize);
   };

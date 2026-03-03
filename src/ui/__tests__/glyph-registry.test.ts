@@ -74,4 +74,25 @@ describe("GlyphRegistry", () => {
     // null tint -> opaque white = 0xFFFFFFFF
     expect(tints[1]).toBe(0xffffffff);
   });
+
+  it("defaults cellSize to 32", () => {
+    const reg = new GlyphRegistry();
+    expect(reg.cellSize).toBe(32);
+  });
+
+  it("persists cellSize to localStorage", () => {
+    const reg = new GlyphRegistry();
+    reg.cellSize = 64;
+    expect(reg.cellSize).toBe(64);
+    expect(localStorage.getItem("glyph-cell-size")).toBe("64");
+
+    const reg2 = new GlyphRegistry();
+    expect(reg2.cellSize).toBe(64);
+  });
+
+  it("clamps cellSize to 32 or 64", () => {
+    const reg = new GlyphRegistry();
+    reg.cellSize = 99;
+    expect(reg.cellSize).toBe(32);
+  });
 });

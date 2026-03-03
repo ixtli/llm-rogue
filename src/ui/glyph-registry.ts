@@ -1,4 +1,5 @@
 const STORAGE_KEY = "glyph-registry";
+const CELL_SIZE_KEY = "glyph-cell-size";
 
 export interface GlyphEntry {
   spriteId: number;
@@ -24,6 +25,7 @@ const OPAQUE_WHITE = 0xffffffff;
 
 export class GlyphRegistry {
   private _entries: GlyphEntry[];
+  private _cellSize: number;
 
   constructor() {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -36,6 +38,17 @@ export class GlyphRegistry {
     } else {
       this._entries = [...DEFAULT_ENTRIES];
     }
+    const savedSize = localStorage.getItem(CELL_SIZE_KEY);
+    this._cellSize = savedSize === "64" ? 64 : 32;
+  }
+
+  get cellSize(): number {
+    return this._cellSize;
+  }
+
+  set cellSize(size: number) {
+    this._cellSize = size === 64 ? 64 : 32;
+    localStorage.setItem(CELL_SIZE_KEY, String(this._cellSize));
   }
 
   entries(): readonly GlyphEntry[] {
