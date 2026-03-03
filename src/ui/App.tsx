@@ -5,7 +5,7 @@ import { EMPTY_DIGEST } from "../stats";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
 import { editorMode, toggleEditorMode } from "./editor-mode";
 import { rasterizeAtlas } from "./glyph-rasterizer";
-import type { GlyphRegistry } from "./glyph-registry";
+import { GlyphRegistry } from "./glyph-registry";
 import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
@@ -46,7 +46,24 @@ const App: Component<AppProps> = (props) => {
 
     worker.onmessage = (e: MessageEvent<GameToUIMessage>) => {
       if (e.data.type === "ready") {
-        setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look");
+        setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look | F2 edit");
+
+        // Send default sprite atlas on startup
+        const defaultRegistry = new GlyphRegistry();
+        const atlas = rasterizeAtlas(defaultRegistry.entries(), 32);
+        const tints = defaultRegistry.packTints(atlas.cols, atlas.rows);
+        worker.postMessage(
+          {
+            type: "sprite_atlas",
+            data: atlas.data,
+            width: atlas.width,
+            height: atlas.height,
+            cols: atlas.cols,
+            rows: atlas.rows,
+            tints,
+          } satisfies UIToGameMessage,
+          [atlas.data],
+        );
       } else if (e.data.type === "error") {
         setError(`Engine failed to initialize: ${e.data.message}`);
       } else if (e.data.type === "diagnostics") {
