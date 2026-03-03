@@ -3,6 +3,7 @@ import { setupInputHandlers } from "../input";
 import type { GameToUIMessage, UIToGameMessage } from "../messages";
 import { EMPTY_DIGEST } from "../stats";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
+import { editorMode, toggleEditorMode } from "./editor-mode";
 import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
@@ -70,9 +71,17 @@ const App: Component<AppProps> = (props) => {
     // Keyboard input
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+      // F2 toggles edit mode
+      if (key === "f2") {
+        toggleEditorMode();
+        return;
+      }
+      // In edit mode, don't forward input to game worker
+      if (editorMode() === "edit") return;
       worker.postMessage({ type: "key_down", key } satisfies UIToGameMessage);
     };
     const onKeyUp = (e: KeyboardEvent) => {
+      if (editorMode() === "edit") return;
       const key = e.key.toLowerCase();
       worker.postMessage({ type: "key_up", key } satisfies UIToGameMessage);
     };
@@ -81,7 +90,10 @@ const App: Component<AppProps> = (props) => {
 
     // Pointer / wheel / touch input
     const cleanupInput = setupInputHandlers(canvasRef, {
-      postMessage: (msg) => worker.postMessage(msg),
+      postMessage: (msg) => {
+        if (editorMode() === "edit") return;
+        worker.postMessage(msg);
+      },
       onPointerLockChange: (locked) => {
         if (cameraMode() === "free_look") {
           setStatus(
@@ -93,7 +105,7 @@ const App: Component<AppProps> = (props) => {
           setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look");
         }
       },
-      isFreeLookEnabled: () => cameraMode() === "free_look",
+      isFreeLookEnabled: () => editorMode() === "play" && cameraMode() === "free_look",
     });
 
     // Debounced resize handler
@@ -202,7 +214,7 @@ const App: Component<AppProps> = (props) => {
           "pointer-events": "none",
         }}
       >
-        {status()}
+        {editorMode() === "edit" ? "EDIT MODE | F2 return to play" : status()}
       </div>
       <DiagnosticsOverlay data={diagnostics()} />
     </Show>
