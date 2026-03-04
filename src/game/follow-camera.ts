@@ -58,6 +58,8 @@ export class FollowCamera {
   private zoomFactor = 1.0;
   private cinematicQueue: CameraWaypoint[] = [];
   mode: "follow" | "free_look" | "cinematic" = "follow";
+  projectionMode: "perspective" | "ortho" = "perspective";
+  snapLevel = 1;
 
   orbit(direction: 1 | -1): OrbitArc {
     const fromAngle = this.orbitAngle;
@@ -65,7 +67,17 @@ export class FollowCamera {
     return { fromAngle, toAngle: this.orbitAngle };
   }
 
+  toggleProjection(): void {
+    this.projectionMode = this.projectionMode === "perspective" ? "ortho" : "perspective";
+  }
+
   adjustZoom(delta: number): void {
+    if (this.projectionMode === "ortho") {
+      // delta < 0 = scroll up = zoom in = increase snap level
+      // delta > 0 = scroll down = zoom out = decrease snap level
+      this.snapLevel = Math.max(1, this.snapLevel + (delta < 0 ? 1 : -1));
+      return;
+    }
     this.zoomFactor = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.zoomFactor - delta));
   }
 
@@ -119,5 +131,22 @@ export class FollowCamera {
 
   compute(playerPos: Vec3): CameraTarget {
     return this.computeAtAngle(playerPos, this.orbitAngle);
+  }
+
+  getProjectionParams(screenHeight: number, cellSize: number): { mode: number; orthoSize: number } {
+    if (this.projectionMode === "perspective") {
+      return { mode: 0, orthoSize: 0 };
+    }
+    const maxLevel = Math.floor(screenHeight / (2 * cellSize));
+    const level = Math.max(1, Math.min(this.snapLevel, maxLevel));
+    const orthoSize = screenHeight / (2 * cellSize * level);
+    return { mode: 1, orthoSize };
+  }
+
+  snapPosition(pos: Vec3, cellSize: number): Vec3 {
+    if (this.projectionMode === "perspective") return pos;
+    const ppu = cellSize * this.snapLevel;
+    const snap = (v: number) => Math.round(v * ppu) / ppu;
+    return { x: snap(pos.x), y: snap(pos.y), z: snap(pos.z) };
   }
 }

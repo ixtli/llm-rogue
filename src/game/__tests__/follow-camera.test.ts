@@ -160,6 +160,90 @@ describe("FollowCamera", () => {
   });
 });
 
+describe("FollowCamera ortho projection", () => {
+  it("starts in perspective mode", () => {
+    const cam = new FollowCamera();
+    expect(cam.projectionMode).toBe("perspective");
+  });
+
+  it("toggleProjection switches to ortho and back", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    expect(cam.projectionMode).toBe("ortho");
+    cam.toggleProjection();
+    expect(cam.projectionMode).toBe("perspective");
+  });
+
+  it("getProjectionParams returns mode 0 and orthoSize 0 for perspective", () => {
+    const cam = new FollowCamera();
+    const params = cam.getProjectionParams(1080, 32);
+    expect(params.mode).toBe(0);
+    expect(params.orthoSize).toBe(0);
+  });
+
+  it("getProjectionParams returns mode 1 and correct orthoSize for ortho", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    const params = cam.getProjectionParams(1080, 32);
+    expect(params.mode).toBe(1);
+    // ortho_size = screen_height / (2 * cell_size * snap_level)
+    // = 1080 / (2 * 32 * 1) = 16.875
+    expect(params.orthoSize).toBeCloseTo(16.875, 5);
+  });
+
+  it("snapLevel defaults to 1", () => {
+    const cam = new FollowCamera();
+    expect(cam.snapLevel).toBe(1);
+  });
+
+  it("adjustZoom in ortho mode increments/decrements snap level", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    cam.adjustZoom(-1); // zoom in = increase snap level
+    expect(cam.snapLevel).toBe(2);
+    cam.adjustZoom(1); // zoom out = decrease snap level
+    expect(cam.snapLevel).toBe(1);
+  });
+
+  it("snapLevel clamps to minimum 1", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    cam.adjustZoom(10); // try to zoom out past 1
+    expect(cam.snapLevel).toBe(1);
+  });
+
+  it("getProjectionParams clamps snap level to screen-based maximum", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    // Zoom in 30 times: snapLevel becomes 31
+    for (let i = 0; i < 30; i++) cam.adjustZoom(-1);
+    // max = floor(1080 / (2 * 32)) = 16
+    // getProjectionParams should clamp to 16
+    const params = cam.getProjectionParams(1080, 32);
+    expect(params.orthoSize).toBeCloseTo(1080 / (2 * 32 * 16), 5);
+  });
+
+  it("snapPosition rounds camera position in ortho mode", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    const pos = { x: 5.123, y: 24.567, z: 5.789 };
+    const snapped = cam.snapPosition(pos, 32);
+    // ppu = 32 * 1 = 32; snap(v) = round(v * 32) / 32
+    expect(snapped.x).toBeCloseTo(Math.round(5.123 * 32) / 32, 5);
+    expect(snapped.y).toBeCloseTo(Math.round(24.567 * 32) / 32, 5);
+    expect(snapped.z).toBeCloseTo(Math.round(5.789 * 32) / 32, 5);
+  });
+
+  it("snapPosition is identity in perspective mode", () => {
+    const cam = new FollowCamera();
+    const pos = { x: 5.123, y: 24.567, z: 5.789 };
+    const result = cam.snapPosition(pos, 32);
+    expect(result.x).toBe(5.123);
+    expect(result.y).toBe(24.567);
+    expect(result.z).toBe(5.789);
+  });
+});
+
 describe("buildFlybyWaypoints", () => {
   it("returns 4 waypoints", () => {
     const wps = buildFlybyWaypoints({ x: 5, y: 10, z: 5 });
