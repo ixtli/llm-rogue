@@ -102,8 +102,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
         proj_y = y / (z * tan(half_fov));
     }
 
-    // Depth uses Euclidean distance matching the raymarch shader's t_hit
-    let depth = clamp(length(view_pos) / camera.max_ray_distance, 0.0, 1.0);
+    // Depth must match the raymarch shader's depth metric.
+    // Perspective: Euclidean distance (rays diverge from one point).
+    // Ortho: z-distance along forward (parallel rays, t_hit has no lateral component).
+    var depth: f32;
+    if camera.projection_mode == 1u {
+        depth = clamp(z / camera.max_ray_distance, 0.0, 1.0);
+    } else {
+        depth = clamp(length(view_pos) / camera.max_ray_distance, 0.0, 1.0);
+    }
 
     var out: VertexOutput;
     out.clip_position = vec4<f32>(proj_x, proj_y, depth, 1.0);
