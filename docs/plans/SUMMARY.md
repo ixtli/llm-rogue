@@ -13,6 +13,7 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Phase 5 | Lighting: hard shadows, ambient occlusion, occupancy bitmask (three-level DDA), dynamic local lights (point/spot, 64 max, shadow rays) | `archive/2026-02-19-phase5-lighting-*.md`, `archive/2026-02-24-occupancy-bitmask.md`, `archive/2026-03-02-dynamic-local-lighting-*.md` |
 | Phase 6 | Game state: entity system, turn loop, Y-axis movement, follow camera, FOV rendering, sprite rasterization, voxel mutations, inventory, cinematic camera, playtest map | `archive/2026-02-27-game-logic-loop-*.md`, `archive/2026-02-28-playtest-map-camera-*.md`, `archive/2026-03-01-follow-camera-*.md`, `archive/2026-03-01-y-axis-movement-*.md` |
 | Phase 7 | Entity sprite editor: Unicode glyph rasterization, atlas packing, per-sprite tint + h-flip, modal edit UI | `archive/2026-03-03-entity-sprite-editor-*.md` |
+| Phase 7b | Orthographic projection toggle: F3 toggles perspective/ortho, pixel-perfect snap zoom, camera position snapping | `archive/2026-03-03-ortho-projection-*.md` |
 | Misc | Glam migration, app error screens, visual diagnostics, debounced resize, legacy cleanup | `archive/2026-02-15-glam-migration-*.md`, `archive/2026-02-15-app-error-screen-tests*.md`, `archive/2026-02-24-visual-diagnostics-*.md`, `archive/2026-02-24-debounced-resize-*.md`, `archive/2026-02-24-legacy-cleanup-is-solid-*.md` |
 
 ## Not yet planned
