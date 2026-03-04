@@ -11,6 +11,8 @@ struct Camera {
     fov: f32,
     width: u32,
     height: u32,
+    projection_mode: u32,
+    ortho_size: f32,
     grid_origin: vec3<i32>,
     max_ray_distance: f32,
     grid_size: vec3<u32>,
