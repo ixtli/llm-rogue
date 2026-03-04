@@ -28,6 +28,7 @@ const App: Component<AppProps> = (props) => {
   const [error, setError] = createSignal<string | null>(null);
   const [diagnostics, setDiagnostics] = createSignal(EMPTY_DIGEST);
   const [cameraMode, setCameraMode] = createSignal<"follow" | "free_look">("follow");
+  const [projectionMode, setProjectionMode] = createSignal<"perspective" | "ortho">("perspective");
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;
@@ -119,6 +120,7 @@ const App: Component<AppProps> = (props) => {
       // F3 toggles ortho/perspective projection (works in both play and edit modes)
       if (key === "f3") {
         e.preventDefault();
+        setProjectionMode((m) => (m === "perspective" ? "ortho" : "perspective"));
         worker.postMessage({ type: "key_down", key: "f3" } satisfies UIToGameMessage);
         return;
       }
@@ -260,7 +262,9 @@ const App: Component<AppProps> = (props) => {
           "pointer-events": "none",
         }}
       >
-        {editorMode() === "edit" ? "EDIT MODE | F2 return to play" : status()}
+        {editorMode() === "edit"
+          ? "EDIT MODE | F2 return to play"
+          : `${status()} | F3 ${projectionMode()}`}
       </div>
       <Show when={editorMode() === "edit"}>
         <ToolPalette />
