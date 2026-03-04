@@ -87,11 +87,20 @@ fn vs_main(in: VertexInput) -> VertexOutput {
         return out;
     }
 
-    // Perspective projection matching the raymarch camera model
     let aspect = f32(camera.width) / f32(camera.height);
-    let half_fov = camera.fov * 0.5;
-    let proj_x = x / (z * tan(half_fov) * aspect);
-    let proj_y = y / (z * tan(half_fov));
+    var proj_x: f32;
+    var proj_y: f32;
+
+    if camera.projection_mode == 1u {
+        // Orthographic projection
+        proj_x = x / (camera.ortho_size * aspect);
+        proj_y = y / camera.ortho_size;
+    } else {
+        // Perspective projection matching the raymarch camera model
+        let half_fov = camera.fov * 0.5;
+        proj_x = x / (z * tan(half_fov) * aspect);
+        proj_y = y / (z * tan(half_fov));
+    }
 
     // Depth uses Euclidean distance matching the raymarch shader's t_hit
     let depth = clamp(length(view_pos) / camera.max_ray_distance, 0.0, 1.0);
