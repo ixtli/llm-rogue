@@ -15,6 +15,7 @@ import init, {
   set_camera,
   set_dolly,
   set_look_delta,
+  set_projection,
   take_animation_completed,
   update_lights,
   update_sprite_atlas,
@@ -222,6 +223,8 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     if (lastSpriteUpdate && lastSpriteUpdate.type === "sprite_update") {
       self.onmessage?.(new MessageEvent("message", { data: lastSpriteUpdate }));
     }
+  } else if (msg.type === "set_projection") {
+    set_projection(msg.mode, msg.orthoSize);
   } else if (msg.type === "voxel_mutate") {
     const flat = new Int32Array(msg.changes.length * 4);
     for (let i = 0; i < msg.changes.length; i++) {
