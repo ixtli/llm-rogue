@@ -89,6 +89,16 @@ pub fn set_camera(x: f32, y: f32, z: f32, yaw: f32, pitch: f32) {
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
+pub fn set_projection(mode: u32, ortho_size: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.set_projection(mode, ortho_size);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
 pub fn animate_camera(
     to_x: f32,
     to_y: f32,
