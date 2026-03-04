@@ -258,8 +258,8 @@ impl Camera {
             fov: self.fov,
             width,
             height,
-            _pad3: 0,
-            _pad4: 0,
+            projection_mode: 0,
+            ortho_size: 0.0,
             grid_origin: grid.origin,
             max_ray_distance: grid.max_ray_distance,
             grid_size: grid.size,
@@ -291,8 +291,8 @@ pub struct CameraUniform {
     pub fov: f32,              // offset 60
     pub width: u32,            // offset 64
     pub height: u32,           // offset 68
-    _pad3: u32,                // offset 72
-    _pad4: u32,                // offset 76
+    pub projection_mode: u32,  // offset 72: 0 = perspective, 1 = orthographic
+    pub ortho_size: f32,       // offset 76: half-height in world units (ortho only)
     pub grid_origin: IVec3,    // offset 80
     pub max_ray_distance: f32, // offset 92
     pub grid_size: UVec3,      // offset 96
@@ -698,6 +698,12 @@ mod tests {
         );
         let pos = anim.position_at(0.5);
         assert!((pos.x - 50.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn gpu_uniform_projection_fields_at_expected_offsets() {
+        assert_eq!(std::mem::offset_of!(CameraUniform, projection_mode), 72);
+        assert_eq!(std::mem::offset_of!(CameraUniform, ortho_size), 76);
     }
 
     #[test]
