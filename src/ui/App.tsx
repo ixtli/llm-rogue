@@ -116,6 +116,12 @@ const App: Component<AppProps> = (props) => {
         toggleEditorMode();
         return;
       }
+      // F3 toggles ortho/perspective projection (works in both play and edit modes)
+      if (key === "f3") {
+        e.preventDefault();
+        worker.postMessage({ type: "key_down", key: "f3" } satisfies UIToGameMessage);
+        return;
+      }
       // In edit mode, don't forward input to game worker
       if (editorMode() === "edit") return;
       worker.postMessage({ type: "key_down", key } satisfies UIToGameMessage);
