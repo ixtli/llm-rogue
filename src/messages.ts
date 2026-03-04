@@ -96,7 +96,8 @@ export type GameToRenderMessage =
       cols: number;
       rows: number;
       tints: Uint32Array;
-    };
+    }
+  | { type: "set_projection"; mode: number; orthoSize: number };
 
 // --- Render Worker → Game Worker ---
 
