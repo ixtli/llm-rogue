@@ -56,6 +56,7 @@ export function buildFlybyWaypoints(playerPos: Vec3): CameraWaypoint[] {
 export class FollowCamera {
   private orbitAngle = 0;
   private zoomFactor = 1.0;
+  private savedZoomFactor = 1.0;
   private cinematicQueue: CameraWaypoint[] = [];
   mode: "follow" | "free_look" | "cinematic" = "follow";
   projectionMode: "perspective" | "ortho" = "perspective";
@@ -68,7 +69,14 @@ export class FollowCamera {
   }
 
   toggleProjection(): void {
-    this.projectionMode = this.projectionMode === "perspective" ? "ortho" : "perspective";
+    if (this.projectionMode === "perspective") {
+      this.projectionMode = "ortho";
+      this.savedZoomFactor = this.zoomFactor;
+      this.zoomFactor = 1.0;
+    } else {
+      this.projectionMode = "perspective";
+      this.zoomFactor = this.savedZoomFactor;
+    }
   }
 
   adjustZoom(delta: number): void {

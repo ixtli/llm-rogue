@@ -234,6 +234,34 @@ describe("FollowCamera ortho projection", () => {
     expect(snapped.z).toBeCloseTo(Math.round(5.789 * 32) / 32, 5);
   });
 
+  it("toggleProjection resets zoomFactor to 1.0 on ortho entry", () => {
+    const cam = new FollowCamera();
+    cam.adjustZoom(0.5); // zoom in perspective
+    const beforeOrtho = cam.compute({ x: 0, y: 0, z: 0 });
+    cam.toggleProjection(); // enter ortho
+    const inOrtho = cam.compute({ x: 0, y: 0, z: 0 });
+    // In ortho, camera should be at default distance (zoomFactor=1.0)
+    const defaultCam = new FollowCamera();
+    const defaultPos = defaultCam.compute({ x: 0, y: 0, z: 0 });
+    expect(inOrtho.position.x).toBeCloseTo(defaultPos.position.x, 5);
+    expect(inOrtho.position.y).toBeCloseTo(defaultPos.position.y, 5);
+    expect(inOrtho.position.z).toBeCloseTo(defaultPos.position.z, 5);
+    // Sanity: before ortho was different (zoomed)
+    expect(beforeOrtho.position.x).not.toBeCloseTo(defaultPos.position.x, 1);
+  });
+
+  it("toggleProjection restores zoomFactor on return to perspective", () => {
+    const cam = new FollowCamera();
+    cam.adjustZoom(0.5); // zoom in perspective
+    const zoomedPos = cam.compute({ x: 0, y: 0, z: 0 });
+    cam.toggleProjection(); // enter ortho (resets zoom)
+    cam.toggleProjection(); // back to perspective (restores zoom)
+    const restoredPos = cam.compute({ x: 0, y: 0, z: 0 });
+    expect(restoredPos.position.x).toBeCloseTo(zoomedPos.position.x, 5);
+    expect(restoredPos.position.y).toBeCloseTo(zoomedPos.position.y, 5);
+    expect(restoredPos.position.z).toBeCloseTo(zoomedPos.position.z, 5);
+  });
+
   it("snapPosition is identity in perspective mode", () => {
     const cam = new FollowCamera();
     const pos = { x: 5.123, y: 24.567, z: 5.789 };
