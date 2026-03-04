@@ -53,6 +53,8 @@ const lightManager = new LightManager();
 let turnLoop: TurnLoop | null = null;
 let turnNumber = 0;
 let gameInitialized = false;
+let _screenWidth = 0;
+let screenHeight = 0;
 
 const FACING_MAP: Record<string, number> = { s: 0, e: 1, n: 2, w: 3 };
 
@@ -93,6 +95,7 @@ function sendSpriteUpdate(): void {
 }
 
 const FOV_RADIUS = 10;
+const CELL_SIZE = 32;
 
 function sendVisibilityMask(): void {
   if (!turnLoop) return;
@@ -209,12 +212,18 @@ function startOrbitAnimation(playerPos: CamVec3, arc: OrbitArc, duration: number
   tick();
 }
 
+function sendProjection(): void {
+  const params = followCamera.getProjectionParams(screenHeight, CELL_SIZE);
+  sendToRender({ type: "set_projection", mode: params.mode, orthoSize: params.orthoSize });
+}
+
 function sendFollowCamera(
   playerPos: { x: number; y: number; z: number },
   animate: boolean,
   duration = 0.25,
 ): void {
   const target = followCamera.compute(playerPos);
+  const snappedPos = followCamera.snapPosition(target.position, CELL_SIZE);
   let yaw = target.yaw;
 
   // Normalize yaw for shortest-path interpolation to avoid
@@ -228,9 +237,9 @@ function sendFollowCamera(
   if (animate) {
     sendToRender({
       type: "animate_camera",
-      x: target.position.x,
-      y: target.position.y,
-      z: target.position.z,
+      x: snappedPos.x,
+      y: snappedPos.y,
+      z: snappedPos.z,
       yaw,
       pitch: target.pitch,
       duration,
@@ -239,9 +248,9 @@ function sendFollowCamera(
   } else {
     sendToRender({
       type: "set_camera",
-      x: target.position.x,
-      y: target.position.y,
-      z: target.position.z,
+      x: snappedPos.x,
+      y: snappedPos.y,
+      z: snappedPos.z,
       yaw,
       pitch: target.pitch,
     });
@@ -389,12 +398,25 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       width: msg.width,
       height: msg.height,
     });
+    _screenWidth = msg.width;
+    screenHeight = msg.height;
     if (digestTimer) clearInterval(digestTimer);
     digestTimer = setInterval(() => {
       sendToUI({ type: "diagnostics", ...statsAggregator.digest() });
     }, 250);
   } else if (msg.type === "key_down") {
     const key = msg.key;
+
+    // F3 toggles ortho/perspective projection
+    if (key === "f3") {
+      followCamera.toggleProjection();
+      sendProjection();
+      if (followCamera.mode === "follow" && turnLoop) {
+        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        if (player) sendFollowCamera(player.position, false);
+      }
+      return;
+    }
 
     // Tab toggles camera mode (no-op during cinematic)
     if (key === "tab") {
@@ -542,12 +564,17 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
         const player = world.getEntity(turnLoop.turnOrder()[0]);
         if (player) sendFollowCamera(player.position, false);
       }
+      if (followCamera.projectionMode === "ortho") {
+        sendProjection();
+      }
     } else {
       sendToRender({ type: "set_dolly", amount: msg.dy });
     }
   } else if (msg.type === "pan") {
     // Pan is currently not mapped to a stage direction.
   } else if (msg.type === "resize") {
+    _screenWidth = msg.width;
+    screenHeight = msg.height;
     sendToRender({ type: "resize", width: msg.width, height: msg.height });
   } else if (msg.type === "sprite_atlas") {
     sendToRender(msg);
