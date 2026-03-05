@@ -45,7 +45,13 @@ import {
   STAT_WASM_MEMORY_BYTES,
 } from "../stats-layout";
 
-let atlasMetadata: { cols: number; rows: number; tints: Uint32Array } | null = null;
+let atlasMetadata: {
+  cols: number;
+  rows: number;
+  width: number;
+  height: number;
+  tints: Uint32Array;
+} | null = null;
 let lastSpriteUpdate: GameToRenderMessage | null = null;
 
 self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
@@ -194,10 +200,16 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
       if (atlasMetadata) {
         const col = s.spriteId % atlasMetadata.cols;
         const row = Math.floor(s.spriteId / atlasMetadata.cols);
-        floats[o + 6] = col / atlasMetadata.cols;
-        floats[o + 7] = row / atlasMetadata.rows;
-        floats[o + 8] = 1 / atlasMetadata.cols;
-        floats[o + 9] = 1 / atlasMetadata.rows;
+        const cellW = 1 / atlasMetadata.cols;
+        const cellH = 1 / atlasMetadata.rows;
+        // Inset UVs by half a texel to prevent bilinear filtering
+        // from bleeding black pixels from adjacent empty atlas cells.
+        const halfTexelU = 0.5 / atlasMetadata.width;
+        const halfTexelV = 0.5 / atlasMetadata.height;
+        floats[o + 6] = col * cellW + halfTexelU;
+        floats[o + 7] = row * cellH + halfTexelV;
+        floats[o + 8] = cellW - 2 * halfTexelU;
+        floats[o + 9] = cellH - 2 * halfTexelV;
       } else {
         floats[o + 6] = 0.0;
         floats[o + 7] = 0.0;
@@ -218,7 +230,13 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     update_lights(msg.data);
   } else if (msg.type === "sprite_atlas") {
     update_sprite_atlas(new Uint8Array(msg.data), msg.width, msg.height);
-    atlasMetadata = { cols: msg.cols, rows: msg.rows, tints: msg.tints };
+    atlasMetadata = {
+      cols: msg.cols,
+      rows: msg.rows,
+      width: msg.width,
+      height: msg.height,
+      tints: msg.tints,
+    };
     // Re-pack sprites with correct UVs/tints now that atlas metadata is available
     if (lastSpriteUpdate && lastSpriteUpdate.type === "sprite_update") {
       self.onmessage?.(new MessageEvent("message", { data: lastSpriteUpdate }));
