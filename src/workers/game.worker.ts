@@ -95,7 +95,6 @@ function sendSpriteUpdate(): void {
 }
 
 const FOV_RADIUS = 10;
-const CELL_SIZE = 32;
 
 function sendVisibilityMask(): void {
   if (!turnLoop) return;
@@ -213,7 +212,7 @@ function startOrbitAnimation(playerPos: CamVec3, arc: OrbitArc, duration: number
 }
 
 function sendProjection(): void {
-  const params = followCamera.getProjectionParams(screenHeight, CELL_SIZE);
+  const params = followCamera.getProjectionParams(screenHeight);
   sendToRender({ type: "set_projection", mode: params.mode, orthoSize: params.orthoSize });
 }
 
@@ -223,7 +222,7 @@ function sendFollowCamera(
   duration = 0.25,
 ): void {
   const target = followCamera.compute(playerPos);
-  const snappedPos = followCamera.snapPosition(target.position, CELL_SIZE);
+  const snappedPos = followCamera.snapPosition(target.position);
   let yaw = target.yaw;
 
   // Normalize yaw for shortest-path interpolation to avoid

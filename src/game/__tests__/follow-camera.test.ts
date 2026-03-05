@@ -176,59 +176,58 @@ describe("FollowCamera ortho projection", () => {
 
   it("getProjectionParams returns mode 0 and orthoSize 0 for perspective", () => {
     const cam = new FollowCamera();
-    const params = cam.getProjectionParams(1080, 32);
+    const params = cam.getProjectionParams(1080);
     expect(params.mode).toBe(0);
     expect(params.orthoSize).toBe(0);
   });
 
-  it("getProjectionParams returns mode 1 and correct orthoSize for ortho", () => {
+  it("getProjectionParams returns mode 1 and orthoSize for 32px at default zoom", () => {
     const cam = new FollowCamera();
     cam.toggleProjection();
-    const params = cam.getProjectionParams(1080, 32);
+    const params = cam.getProjectionParams(1080);
     expect(params.mode).toBe(1);
-    // ortho_size = screen_height / (2 * cell_size * snap_level)
-    // = 1080 / (2 * 32 * 1) = 16.875
-    expect(params.orthoSize).toBeCloseTo(16.875, 5);
+    // ortho_size = screen_height / (2 * 32) = 1080 / 64 = 16.875
+    expect(params.orthoSize).toBeCloseTo(1080 / 64, 5);
   });
 
-  it("snapLevel defaults to 1", () => {
+  it("orthoZoomIndex defaults to 0 (32px)", () => {
     const cam = new FollowCamera();
-    expect(cam.snapLevel).toBe(1);
+    expect(cam.orthoZoomIndex).toBe(0);
   });
 
-  it("adjustZoom in ortho mode increments/decrements snap level", () => {
-    const cam = new FollowCamera();
-    cam.toggleProjection();
-    cam.adjustZoom(-1); // zoom in = increase snap level
-    expect(cam.snapLevel).toBe(2);
-    cam.adjustZoom(1); // zoom out = decrease snap level
-    expect(cam.snapLevel).toBe(1);
-  });
-
-  it("snapLevel clamps to minimum 1", () => {
+  it("adjustZoom in ortho mode cycles through 3 fixed levels", () => {
     const cam = new FollowCamera();
     cam.toggleProjection();
-    cam.adjustZoom(10); // try to zoom out past 1
-    expect(cam.snapLevel).toBe(1);
+    // Default is index 0 (32px)
+    cam.adjustZoom(-1); // zoom in → index 1 (64px)
+    expect(cam.orthoZoomIndex).toBe(1);
+    const params64 = cam.getProjectionParams(1080);
+    expect(params64.orthoSize).toBeCloseTo(1080 / 128, 5);
+
+    cam.adjustZoom(-1); // zoom in → index 2 (92px)
+    expect(cam.orthoZoomIndex).toBe(2);
+    const params92 = cam.getProjectionParams(1080);
+    expect(params92.orthoSize).toBeCloseTo(1080 / 184, 5);
   });
 
-  it("getProjectionParams clamps snap level to screen-based maximum", () => {
+  it("adjustZoom clamps ortho zoom to min/max index", () => {
     const cam = new FollowCamera();
     cam.toggleProjection();
-    // Zoom in 30 times: snapLevel becomes 31
-    for (let i = 0; i < 30; i++) cam.adjustZoom(-1);
-    // max = floor(1080 / (2 * 32)) = 16
-    // getProjectionParams should clamp to 16
-    const params = cam.getProjectionParams(1080, 32);
-    expect(params.orthoSize).toBeCloseTo(1080 / (2 * 32 * 16), 5);
+    cam.adjustZoom(10); // try to zoom out past index 0
+    expect(cam.orthoZoomIndex).toBe(0);
+
+    cam.adjustZoom(-1);
+    cam.adjustZoom(-1);
+    cam.adjustZoom(-1); // try to zoom in past index 2
+    expect(cam.orthoZoomIndex).toBe(2);
   });
 
   it("snapPosition rounds camera position in ortho mode", () => {
     const cam = new FollowCamera();
     cam.toggleProjection();
     const pos = { x: 5.123, y: 24.567, z: 5.789 };
-    const snapped = cam.snapPosition(pos, 32);
-    // ppu = 32 * 1 = 32; snap(v) = round(v * 32) / 32
+    const snapped = cam.snapPosition(pos);
+    // ppu = 32 (level 0); snap(v) = round(v * 32) / 32
     expect(snapped.x).toBeCloseTo(Math.round(5.123 * 32) / 32, 5);
     expect(snapped.y).toBeCloseTo(Math.round(24.567 * 32) / 32, 5);
     expect(snapped.z).toBeCloseTo(Math.round(5.789 * 32) / 32, 5);
@@ -265,7 +264,7 @@ describe("FollowCamera ortho projection", () => {
   it("snapPosition is identity in perspective mode", () => {
     const cam = new FollowCamera();
     const pos = { x: 5.123, y: 24.567, z: 5.789 };
-    const result = cam.snapPosition(pos, 32);
+    const result = cam.snapPosition(pos);
     expect(result.x).toBe(5.123);
     expect(result.y).toBe(24.567);
     expect(result.z).toBe(5.789);

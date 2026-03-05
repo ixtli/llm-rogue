@@ -29,6 +29,9 @@ const BASE_OFFSET: Vec3 = { x: -24, y: 31, z: -24 };
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 2.0;
 
+/** Fixed ortho zoom levels: billboard size in pixels at each step. */
+const ORTHO_ZOOM_LEVELS = [32, 64, 92];
+
 const FLYBY_RADIUS = 20;
 const FLYBY_STOPS: { angle: number; height: number; duration: number }[] = [
   { angle: 0, height: 10, duration: 2 },
@@ -60,7 +63,7 @@ export class FollowCamera {
   private cinematicQueue: CameraWaypoint[] = [];
   mode: "follow" | "free_look" | "cinematic" = "follow";
   projectionMode: "perspective" | "ortho" = "perspective";
-  snapLevel = 1;
+  orthoZoomIndex = 0;
 
   orbit(direction: 1 | -1): OrbitArc {
     const fromAngle = this.orbitAngle;
@@ -81,9 +84,13 @@ export class FollowCamera {
 
   adjustZoom(delta: number): void {
     if (this.projectionMode === "ortho") {
-      // delta < 0 = scroll up = zoom in = increase snap level
-      // delta > 0 = scroll down = zoom out = decrease snap level
-      this.snapLevel = Math.max(1, this.snapLevel + (delta < 0 ? 1 : -1));
+      // delta < 0 = scroll up = zoom in = increase index
+      // delta > 0 = scroll down = zoom out = decrease index
+      const step = delta < 0 ? 1 : -1;
+      this.orthoZoomIndex = Math.max(
+        0,
+        Math.min(ORTHO_ZOOM_LEVELS.length - 1, this.orthoZoomIndex + step),
+      );
       return;
     }
     this.zoomFactor = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.zoomFactor - delta));
@@ -141,19 +148,18 @@ export class FollowCamera {
     return this.computeAtAngle(playerPos, this.orbitAngle);
   }
 
-  getProjectionParams(screenHeight: number, cellSize: number): { mode: number; orthoSize: number } {
+  getProjectionParams(screenHeight: number): { mode: number; orthoSize: number } {
     if (this.projectionMode === "perspective") {
       return { mode: 0, orthoSize: 0 };
     }
-    const maxLevel = Math.floor(screenHeight / (2 * cellSize));
-    const level = Math.max(1, Math.min(this.snapLevel, maxLevel));
-    const orthoSize = screenHeight / (2 * cellSize * level);
+    const targetPx = ORTHO_ZOOM_LEVELS[this.orthoZoomIndex];
+    const orthoSize = screenHeight / (2 * targetPx);
     return { mode: 1, orthoSize };
   }
 
-  snapPosition(pos: Vec3, cellSize: number): Vec3 {
+  snapPosition(pos: Vec3): Vec3 {
     if (this.projectionMode === "perspective") return pos;
-    const ppu = cellSize * this.snapLevel;
+    const ppu = ORTHO_ZOOM_LEVELS[this.orthoZoomIndex];
     const snap = (v: number) => Math.round(v * ppu) / ppu;
     return { x: snap(pos.x), y: snap(pos.y), z: snap(pos.z) };
   }
