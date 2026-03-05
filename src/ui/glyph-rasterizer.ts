@@ -25,48 +25,41 @@ export interface AtlasResult {
   rows: number;
 }
 
+/** Unifont native glyph height in pixels. */
+const NATIVE_SIZE = 16;
+
 export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number): AtlasResult {
   const width = ATLAS_COLS * cellSize;
   const height = ATLAS_ROWS * cellSize;
 
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext("2d")!;
+  // Render each glyph at Unifont's native 16px size on a tiny canvas,
+  // then nearest-neighbor upscale to the atlas cell. This avoids all
+  // anti-aliasing and produces hard pixel edges.
+  const glyphCanvas = new OffscreenCanvas(NATIVE_SIZE, NATIVE_SIZE);
+  const glyphCtx = glyphCanvas.getContext("2d")!;
+  glyphCtx.font = `${NATIVE_SIZE}px ${FONT_FAMILY}, sans-serif`;
+  glyphCtx.textAlign = "center";
+  glyphCtx.textBaseline = "middle";
+  glyphCtx.fillStyle = "white";
 
-  ctx.clearRect(0, 0, width, height);
-
-  const fontSize = Math.floor(cellSize * 0.8);
-  ctx.font = `${fontSize}px ${FONT_FAMILY}, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "white";
+  const atlas = new OffscreenCanvas(width, height);
+  const ctx = atlas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
 
   for (const entry of entries) {
     if (entry.spriteId >= ATLAS_COLS * ATLAS_ROWS) continue;
     const col = entry.spriteId % ATLAS_COLS;
     const row = Math.floor(entry.spriteId / ATLAS_COLS);
-    const cx = col * cellSize + cellSize / 2;
-    const cy = row * cellSize + cellSize / 2;
-    ctx.fillText(entry.char, cx, cy);
+
+    glyphCtx.clearRect(0, 0, NATIVE_SIZE, NATIVE_SIZE);
+    glyphCtx.fillText(entry.char, NATIVE_SIZE / 2, NATIVE_SIZE / 2);
+
+    ctx.drawImage(glyphCanvas, col * cellSize, row * cellSize, cellSize, cellSize);
   }
 
   const imageData = ctx.getImageData(0, 0, width, height);
-
-  // Normalize RGB to pure white, keeping only the alpha channel.
-  // Canvas fillText anti-aliasing (especially subpixel AA) can produce
-  // edge pixels with varying RGB values that create dark fringes when
-  // the sprite shader multiplies by a tint color. Setting RGB to 255
-  // collapses any color differences into a clean alpha-only mask.
-  const pixels = imageData.data;
-  for (let i = 0; i < pixels.length; i += 4) {
-    if (pixels[i + 3] > 0) {
-      pixels[i] = 255;
-      pixels[i + 1] = 255;
-      pixels[i + 2] = 255;
-    }
-  }
-
   return {
-    data: pixels.buffer,
+    data: imageData.data.buffer,
     width,
     height,
     cols: ATLAS_COLS,

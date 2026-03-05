@@ -6,6 +6,7 @@ if (typeof OffscreenCanvas === "undefined") {
   const mockCtx = {
     clearRect: vi.fn(),
     fillText: vi.fn(),
+    drawImage: vi.fn(),
     getImageData: (_x: number, _y: number, w: number, h: number) => ({
       data: { buffer: new ArrayBuffer(w * h * 4) },
     }),
@@ -13,6 +14,7 @@ if (typeof OffscreenCanvas === "undefined") {
     set textAlign(_: string) {},
     set textBaseline(_: string) {},
     set fillStyle(_: string) {},
+    set imageSmoothingEnabled(_: boolean) {},
   };
   (globalThis as any).OffscreenCanvas = class {
     width: number;
