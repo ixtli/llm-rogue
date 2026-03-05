@@ -417,6 +417,20 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       return;
     }
 
+    // +/- zoom (same as scroll)
+    if (key === "=" || key === "+" || key === "-") {
+      const delta = key === "-" ? 1 : -1;
+      followCamera.adjustZoom(delta);
+      if (followCamera.mode === "follow" && turnLoop) {
+        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        if (player) sendFollowCamera(player.position, false);
+      }
+      if (followCamera.projectionMode === "ortho") {
+        sendProjection();
+      }
+      return;
+    }
+
     // Tab toggles camera mode (no-op during cinematic)
     if (key === "tab") {
       const prevMode = followCamera.mode;
