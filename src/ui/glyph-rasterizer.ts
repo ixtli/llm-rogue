@@ -36,8 +36,23 @@ export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number)
   }
 
   const imageData = ctx.getImageData(0, 0, width, height);
+
+  // Normalize RGB to pure white, keeping only the alpha channel.
+  // Canvas fillText anti-aliasing (especially subpixel AA) can produce
+  // edge pixels with varying RGB values that create dark fringes when
+  // the sprite shader multiplies by a tint color. Setting RGB to 255
+  // collapses any color differences into a clean alpha-only mask.
+  const pixels = imageData.data;
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (pixels[i + 3] > 0) {
+      pixels[i] = 255;
+      pixels[i + 1] = 255;
+      pixels[i + 2] = 255;
+    }
+  }
+
   return {
-    data: imageData.data.buffer,
+    data: pixels.buffer,
     width,
     height,
     cols: ATLAS_COLS,
