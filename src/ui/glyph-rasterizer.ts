@@ -2,6 +2,20 @@ import type { GlyphEntry } from "./glyph-registry";
 
 const ATLAS_COLS = 8;
 const ATLAS_ROWS = 8;
+const FONT_FAMILY = "Unifont";
+
+const fontUrl = new URL("../../assets/ui/fonts/unifont.otf", import.meta.url).href;
+let fontLoaded = false;
+
+/** Load the Unifont font so fillText uses it instead of a system font. */
+export async function loadGlyphFont(): Promise<void> {
+  if (fontLoaded) return;
+  if (typeof FontFace === "undefined") return;
+  const face = new FontFace(FONT_FAMILY, `url(${fontUrl})`);
+  await face.load();
+  document.fonts.add(face);
+  fontLoaded = true;
+}
 
 export interface AtlasResult {
   data: ArrayBuffer;
@@ -21,7 +35,7 @@ export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number)
   ctx.clearRect(0, 0, width, height);
 
   const fontSize = Math.floor(cellSize * 0.8);
-  ctx.font = `${fontSize}px sans-serif`;
+  ctx.font = `${fontSize}px ${FONT_FAMILY}, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "white";

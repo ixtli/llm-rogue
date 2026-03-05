@@ -4,7 +4,7 @@ import type { GameToUIMessage, UIToGameMessage } from "../messages";
 import { EMPTY_DIGEST } from "../stats";
 import { appMode, toggleAppMode } from "./app-mode";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
-import { rasterizeAtlas } from "./glyph-rasterizer";
+import { loadGlyphFont, rasterizeAtlas } from "./glyph-rasterizer";
 import { GlyphRegistry } from "./glyph-registry";
 import {
   checkWebGPU as defaultCheckGpu,
@@ -41,6 +41,7 @@ const App: Component<AppProps> = (props) => {
     if (!canvasRef) return;
 
     const offscreen = canvasRef.transferControlToOffscreen();
+    const fontReady = loadGlyphFont();
     const worker = new Worker(new URL("../workers/game.worker.ts", import.meta.url), {
       type: "module",
     });
@@ -49,22 +50,24 @@ const App: Component<AppProps> = (props) => {
       if (e.data.type === "ready") {
         setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look | F2 edit");
 
-        // Send default sprite atlas on startup
-        const defaultRegistry = new GlyphRegistry();
-        const atlas = rasterizeAtlas(defaultRegistry.entries(), defaultRegistry.cellSize);
-        const tints = defaultRegistry.packTints(atlas.cols, atlas.rows);
-        worker.postMessage(
-          {
-            type: "sprite_atlas",
-            data: atlas.data,
-            width: atlas.width,
-            height: atlas.height,
-            cols: atlas.cols,
-            rows: atlas.rows,
-            tints,
-          } satisfies UIToGameMessage,
-          [atlas.data],
-        );
+        // Send default sprite atlas once font is loaded
+        fontReady.then(() => {
+          const defaultRegistry = new GlyphRegistry();
+          const atlas = rasterizeAtlas(defaultRegistry.entries(), defaultRegistry.cellSize);
+          const tints = defaultRegistry.packTints(atlas.cols, atlas.rows);
+          worker.postMessage(
+            {
+              type: "sprite_atlas",
+              data: atlas.data,
+              width: atlas.width,
+              height: atlas.height,
+              cols: atlas.cols,
+              rows: atlas.rows,
+              tints,
+            } satisfies UIToGameMessage,
+            [atlas.data],
+          );
+        });
       } else if (e.data.type === "error") {
         setError(`Engine failed to initialize: ${e.data.message}`);
       } else if (e.data.type === "diagnostics") {
