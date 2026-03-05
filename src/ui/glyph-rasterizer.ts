@@ -59,7 +59,7 @@ export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number)
     const gd = glyphCtx.getImageData(0, 0, NATIVE_SIZE, NATIVE_SIZE);
     const px = gd.data;
     for (let i = 3; i < px.length; i += 4) {
-      px[i] = px[i] > 127 ? 255 : 0;
+      px[i] = px[i] >= 250 ? 255 : 0;
     }
     glyphCtx.putImageData(gd, 0, 0);
 
