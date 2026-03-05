@@ -110,6 +110,7 @@ const SpriteEditorPanel: Component<SpriteEditorPanelProps> = (props) => {
                 border: "1px solid #4a5568",
                 "border-radius": "2px",
                 padding: "2px",
+                "font-family": "Unifont, monospace",
                 "font-size": "16px",
               }}
             />
