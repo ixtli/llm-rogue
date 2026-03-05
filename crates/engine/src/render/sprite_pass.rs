@@ -8,8 +8,8 @@ pub struct SpriteInstance {
     pub size: [f32; 2],
     pub uv_offset: [f32; 2],
     pub uv_size: [f32; 2],
-    #[allow(clippy::pub_underscore_fields)]
-    pub _padding: [f32; 2],
+    pub flags: u32,
+    pub tint: u32,
 }
 
 pub const MAX_SPRITES: usize = 1024;
@@ -86,6 +86,48 @@ impl SpritePass {
             );
         }
         self.instance_count = count as u32;
+    }
+
+    /// Replaces the sprite atlas texture with new RGBA data.
+    /// Rebuilds the bind group to reference the new texture.
+    pub fn update_atlas(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        camera_buffer: &wgpu::Buffer,
+        data: &[u8],
+        width: u32,
+        height: u32,
+    ) {
+        let texture = device.create_texture_with_data(
+            queue,
+            &wgpu::TextureDescriptor {
+                label: Some("Sprite Atlas"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            data,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.bind_group = Self::create_bind_group(
+            device,
+            &self.bind_group_layout,
+            camera_buffer,
+            &view,
+            &self.sampler,
+        );
+        self.placeholder_texture = texture;
+        self.placeholder_view = view;
     }
 
     /// Records the sprite render pass into the command encoder.
@@ -288,6 +330,18 @@ impl SpritePass {
                             offset: 32,
                             shader_location: 4,
                         },
+                        // flags: Uint32, offset 40
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Uint32,
+                            offset: 40,
+                            shader_location: 5,
+                        },
+                        // tint: Uint32, offset 44
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Uint32,
+                            offset: 44,
+                            shader_location: 6,
+                        },
                     ],
                 }],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -353,5 +407,25 @@ mod tests {
     #[test]
     fn sprite_instance_is_pod() {
         let _: SpriteInstance = bytemuck::Zeroable::zeroed();
+    }
+
+    #[test]
+    fn sprite_instance_default_tint_is_opaque_white() {
+        let tint: u32 = 0xFF_FF_FF_FF;
+        assert_eq!(tint & 0xFF, 255); // R
+        assert_eq!((tint >> 8) & 0xFF, 255); // G
+        assert_eq!((tint >> 16) & 0xFF, 255); // B
+        assert_eq!((tint >> 24) & 0xFF, 255); // A
+    }
+
+    #[test]
+    fn sprite_instance_field_offsets() {
+        assert_eq!(std::mem::offset_of!(SpriteInstance, position), 0);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, sprite_id), 12);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, size), 16);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, uv_offset), 24);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, uv_size), 32);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, flags), 40);
+        assert_eq!(std::mem::offset_of!(SpriteInstance, tint), 44);
     }
 }

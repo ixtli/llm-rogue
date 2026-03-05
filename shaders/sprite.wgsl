@@ -11,6 +11,8 @@ struct Camera {
     fov: f32,
     width: u32,
     height: u32,
+    projection_mode: u32,
+    ortho_size: f32,
     grid_origin: vec3<i32>,
     max_ray_distance: f32,
     grid_size: vec3<u32>,
@@ -28,11 +30,14 @@ struct VertexInput {
     @location(2) size: vec2<f32>,
     @location(3) uv_offset: vec2<f32>,
     @location(4) uv_size: vec2<f32>,
+    @location(5) flags: u32,
+    @location(6) tint: u32,
 };
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
+    @location(1) tint_color: vec4<f32>,
 };
 
 @vertex
@@ -78,29 +83,63 @@ fn vs_main(in: VertexInput) -> VertexOutput {
         var out: VertexOutput;
         out.clip_position = vec4<f32>(0.0, 0.0, -1.0, 1.0);
         out.uv = vec2<f32>(0.0, 0.0);
+        out.tint_color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
         return out;
     }
 
-    // Perspective projection matching the raymarch camera model
     let aspect = f32(camera.width) / f32(camera.height);
-    let half_fov = camera.fov * 0.5;
-    let proj_x = x / (z * tan(half_fov) * aspect);
-    let proj_y = y / (z * tan(half_fov));
+    var proj_x: f32;
+    var proj_y: f32;
 
-    // Depth uses Euclidean distance matching the raymarch shader's t_hit
-    let depth = clamp(length(view_pos) / camera.max_ray_distance, 0.0, 1.0);
+    if camera.projection_mode == 1u {
+        // Orthographic projection
+        proj_x = x / (camera.ortho_size * aspect);
+        proj_y = y / camera.ortho_size;
+    } else {
+        // Perspective projection matching the raymarch camera model
+        let half_fov = camera.fov * 0.5;
+        proj_x = x / (z * tan(half_fov) * aspect);
+        proj_y = y / (z * tan(half_fov));
+    }
+
+    // Depth must match the raymarch shader's depth metric.
+    // Perspective: Euclidean distance (rays diverge from one point).
+    // Ortho: z-distance along forward (parallel rays, t_hit has no lateral component).
+    var depth: f32;
+    if camera.projection_mode == 1u {
+        depth = clamp(z / camera.max_ray_distance, 0.0, 1.0);
+    } else {
+        depth = clamp(length(view_pos) / camera.max_ray_distance, 0.0, 1.0);
+    }
 
     var out: VertexOutput;
     out.clip_position = vec4<f32>(proj_x, proj_y, depth, 1.0);
-    out.uv = in.uv_offset + quad_uvs[in.vertex_index] * in.uv_size;
+
+    // Horizontal flip: if bit 0 of flags is set, mirror the U coordinate
+    let raw_uv = quad_uvs[in.vertex_index];
+    let flip = (in.flags & 1u) != 0u;
+    var local_u = raw_uv.x;
+    if (flip) {
+        local_u = 1.0 - local_u;
+    }
+    out.uv = in.uv_offset + vec2<f32>(local_u, raw_uv.y) * in.uv_size;
+
+    // Unpack tint from RGBA u32 (little-endian: R in low byte)
+    let r = f32(in.tint & 0xFFu) / 255.0;
+    let g = f32((in.tint >> 8u) & 0xFFu) / 255.0;
+    let b = f32((in.tint >> 16u) & 0xFFu) / 255.0;
+    let a = f32((in.tint >> 24u) & 0xFFu) / 255.0;
+    out.tint_color = vec4<f32>(r, g, b, a);
+
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = textureSample(sprite_atlas, sprite_sampler, in.uv);
-    if (color.a < 0.01) {
+    let tinted = color * in.tint_color;
+    if (tinted.a < 0.01) {
         discard;
     }
-    return color;
+    return tinted;
 }

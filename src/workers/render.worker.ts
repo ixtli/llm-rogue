@@ -15,8 +15,10 @@ import init, {
   set_camera,
   set_dolly,
   set_look_delta,
+  set_projection,
   take_animation_completed,
   update_lights,
+  update_sprite_atlas,
   update_sprites,
   update_visibility_mask,
 } from "../../crates/engine/pkg/engine";
@@ -42,6 +44,15 @@ import {
   STAT_UNLOADED_THIS_TICK,
   STAT_WASM_MEMORY_BYTES,
 } from "../stats-layout";
+
+let atlasMetadata: {
+  cols: number;
+  rows: number;
+  width: number;
+  height: number;
+  tints: Uint32Array;
+} | null = null;
+let lastSpriteUpdate: GameToRenderMessage | null = null;
 
 self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   const msg = e.data;
@@ -173,30 +184,65 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   } else if (msg.type === "visibility_mask") {
     update_visibility_mask(msg.originX, msg.originZ, msg.gridSize, new Uint8Array(msg.data));
   } else if (msg.type === "sprite_update") {
-    // Convert sprite data to flat Float32Array for WASM.
-    // Each SpriteInstance is 12 floats: position(3), sprite_id(1), size(2), uv_offset(2), uv_size(2), padding(2)
+    lastSpriteUpdate = msg;
     const floats = new Float32Array(msg.sprites.length * 12);
+    const dataView = new DataView(floats.buffer);
     for (let i = 0; i < msg.sprites.length; i++) {
       const s = msg.sprites[i];
       const o = i * 12;
       floats[o + 0] = s.x;
       floats[o + 1] = s.y;
       floats[o + 2] = s.z;
-      // sprite_id is u32, reinterpret as f32 bits
-      const idView = new DataView(floats.buffer);
-      idView.setUint32((o + 3) * 4, s.spriteId, true);
+      dataView.setUint32((o + 3) * 4, s.spriteId, true);
       floats[o + 4] = 1.0; // width
       floats[o + 5] = 1.0; // height
-      floats[o + 6] = 0.0; // uv_offset.x
-      floats[o + 7] = 0.0; // uv_offset.y
-      floats[o + 8] = 1.0; // uv_size.x
-      floats[o + 9] = 1.0; // uv_size.y
-      floats[o + 10] = 0.0; // padding
-      floats[o + 11] = 0.0; // padding
+
+      if (atlasMetadata) {
+        const col = s.spriteId % atlasMetadata.cols;
+        const row = Math.floor(s.spriteId / atlasMetadata.cols);
+        const cellW = 1 / atlasMetadata.cols;
+        const cellH = 1 / atlasMetadata.rows;
+        // Inset UVs by half a texel to prevent bilinear filtering
+        // from bleeding black pixels from adjacent empty atlas cells.
+        const halfTexelU = 0.5 / atlasMetadata.width;
+        const halfTexelV = 0.5 / atlasMetadata.height;
+        floats[o + 6] = col * cellW + halfTexelU;
+        floats[o + 7] = row * cellH + halfTexelV;
+        floats[o + 8] = cellW - 2 * halfTexelU;
+        floats[o + 9] = cellH - 2 * halfTexelV;
+      } else {
+        floats[o + 6] = 0.0;
+        floats[o + 7] = 0.0;
+        floats[o + 8] = 1.0;
+        floats[o + 9] = 1.0;
+      }
+
+      // flags: bit 0 = horizontal flip (west-facing)
+      const hflip = s.facing === 3 ? 1 : 0;
+      dataView.setUint32((o + 10) * 4, hflip, true);
+
+      // tint: per-slot default from atlas metadata, or opaque white
+      const tint = atlasMetadata?.tints[s.spriteId] ?? 0xffffffff;
+      dataView.setUint32((o + 11) * 4, tint, true);
     }
     update_sprites(floats);
   } else if (msg.type === "light_update") {
     update_lights(msg.data);
+  } else if (msg.type === "sprite_atlas") {
+    update_sprite_atlas(new Uint8Array(msg.data), msg.width, msg.height);
+    atlasMetadata = {
+      cols: msg.cols,
+      rows: msg.rows,
+      width: msg.width,
+      height: msg.height,
+      tints: msg.tints,
+    };
+    // Re-pack sprites with correct UVs/tints now that atlas metadata is available
+    if (lastSpriteUpdate && lastSpriteUpdate.type === "sprite_update") {
+      self.onmessage?.(new MessageEvent("message", { data: lastSpriteUpdate }));
+    }
+  } else if (msg.type === "set_projection") {
+    set_projection(msg.mode, msg.orthoSize);
   } else if (msg.type === "voxel_mutate") {
     const flat = new Int32Array(msg.changes.length * 4);
     for (let i = 0; i < msg.changes.length; i++) {

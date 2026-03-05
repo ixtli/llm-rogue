@@ -17,7 +17,16 @@ export type UIToGameMessage =
       action: "move_n" | "move_s" | "move_e" | "move_w" | "attack" | "pickup" | "wait";
       targetId?: number;
     }
-  | { type: "toggle_free_look" };
+  | { type: "toggle_free_look" }
+  | {
+      type: "sprite_atlas";
+      data: ArrayBuffer;
+      width: number;
+      height: number;
+      cols: number;
+      rows: number;
+      tints: Uint32Array;
+    };
 
 // --- Game Worker → Render Worker ---
 
@@ -78,7 +87,17 @@ export type GameToRenderMessage =
       type: "voxel_mutate";
       changes: { x: number; y: number; z: number; materialId: number }[];
     }
-  | { type: "light_update"; data: Float32Array };
+  | { type: "light_update"; data: Float32Array }
+  | {
+      type: "sprite_atlas";
+      data: ArrayBuffer;
+      width: number;
+      height: number;
+      cols: number;
+      rows: number;
+      tints: Uint32Array;
+    }
+  | { type: "set_projection"; mode: number; orthoSize: number };
 
 // --- Render Worker → Game Worker ---
 

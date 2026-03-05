@@ -160,6 +160,117 @@ describe("FollowCamera", () => {
   });
 });
 
+describe("FollowCamera ortho projection", () => {
+  it("starts in perspective mode", () => {
+    const cam = new FollowCamera();
+    expect(cam.projectionMode).toBe("perspective");
+  });
+
+  it("toggleProjection switches to ortho and back", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    expect(cam.projectionMode).toBe("ortho");
+    cam.toggleProjection();
+    expect(cam.projectionMode).toBe("perspective");
+  });
+
+  it("getProjectionParams returns mode 0 and orthoSize 0 for perspective", () => {
+    const cam = new FollowCamera();
+    const params = cam.getProjectionParams(1080);
+    expect(params.mode).toBe(0);
+    expect(params.orthoSize).toBe(0);
+  });
+
+  it("getProjectionParams returns mode 1 and orthoSize for 32px at default zoom", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    const params = cam.getProjectionParams(1080);
+    expect(params.mode).toBe(1);
+    // ortho_size = screen_height / (2 * 32) = 1080 / 64 = 16.875
+    expect(params.orthoSize).toBeCloseTo(1080 / 64, 5);
+  });
+
+  it("orthoZoomIndex defaults to 0 (32px)", () => {
+    const cam = new FollowCamera();
+    expect(cam.orthoZoomIndex).toBe(0);
+  });
+
+  it("adjustZoom in ortho mode cycles through 3 fixed levels", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    // Default is index 0 (32px)
+    cam.adjustZoom(-1); // zoom in → index 1 (64px)
+    expect(cam.orthoZoomIndex).toBe(1);
+    const params64 = cam.getProjectionParams(1080);
+    expect(params64.orthoSize).toBeCloseTo(1080 / 128, 5);
+
+    cam.adjustZoom(-1); // zoom in → index 2 (92px)
+    expect(cam.orthoZoomIndex).toBe(2);
+    const params92 = cam.getProjectionParams(1080);
+    expect(params92.orthoSize).toBeCloseTo(1080 / 184, 5);
+  });
+
+  it("adjustZoom clamps ortho zoom to min/max index", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    cam.adjustZoom(10); // try to zoom out past index 0
+    expect(cam.orthoZoomIndex).toBe(0);
+
+    cam.adjustZoom(-1);
+    cam.adjustZoom(-1);
+    cam.adjustZoom(-1); // try to zoom in past index 2
+    expect(cam.orthoZoomIndex).toBe(2);
+  });
+
+  it("snapPosition rounds camera position in ortho mode", () => {
+    const cam = new FollowCamera();
+    cam.toggleProjection();
+    const pos = { x: 5.123, y: 24.567, z: 5.789 };
+    const snapped = cam.snapPosition(pos);
+    // ppu = 32 (level 0); snap(v) = round(v * 32) / 32
+    expect(snapped.x).toBeCloseTo(Math.round(5.123 * 32) / 32, 5);
+    expect(snapped.y).toBeCloseTo(Math.round(24.567 * 32) / 32, 5);
+    expect(snapped.z).toBeCloseTo(Math.round(5.789 * 32) / 32, 5);
+  });
+
+  it("toggleProjection resets zoomFactor to 1.0 on ortho entry", () => {
+    const cam = new FollowCamera();
+    cam.adjustZoom(0.5); // zoom in perspective
+    const beforeOrtho = cam.compute({ x: 0, y: 0, z: 0 });
+    cam.toggleProjection(); // enter ortho
+    const inOrtho = cam.compute({ x: 0, y: 0, z: 0 });
+    // In ortho, camera should be at default distance (zoomFactor=1.0)
+    const defaultCam = new FollowCamera();
+    const defaultPos = defaultCam.compute({ x: 0, y: 0, z: 0 });
+    expect(inOrtho.position.x).toBeCloseTo(defaultPos.position.x, 5);
+    expect(inOrtho.position.y).toBeCloseTo(defaultPos.position.y, 5);
+    expect(inOrtho.position.z).toBeCloseTo(defaultPos.position.z, 5);
+    // Sanity: before ortho was different (zoomed)
+    expect(beforeOrtho.position.x).not.toBeCloseTo(defaultPos.position.x, 1);
+  });
+
+  it("toggleProjection restores zoomFactor on return to perspective", () => {
+    const cam = new FollowCamera();
+    cam.adjustZoom(0.5); // zoom in perspective
+    const zoomedPos = cam.compute({ x: 0, y: 0, z: 0 });
+    cam.toggleProjection(); // enter ortho (resets zoom)
+    cam.toggleProjection(); // back to perspective (restores zoom)
+    const restoredPos = cam.compute({ x: 0, y: 0, z: 0 });
+    expect(restoredPos.position.x).toBeCloseTo(zoomedPos.position.x, 5);
+    expect(restoredPos.position.y).toBeCloseTo(zoomedPos.position.y, 5);
+    expect(restoredPos.position.z).toBeCloseTo(zoomedPos.position.z, 5);
+  });
+
+  it("snapPosition is identity in perspective mode", () => {
+    const cam = new FollowCamera();
+    const pos = { x: 5.123, y: 24.567, z: 5.789 };
+    const result = cam.snapPosition(pos);
+    expect(result.x).toBe(5.123);
+    expect(result.y).toBe(24.567);
+    expect(result.z).toBe(5.789);
+  });
+});
+
 describe("buildFlybyWaypoints", () => {
   it("returns 4 waypoints", () => {
     const wps = buildFlybyWaypoints({ x: 5, y: 10, z: 5 });

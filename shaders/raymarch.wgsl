@@ -6,6 +6,8 @@ struct Camera {
     fov: f32,
     width: u32,
     height: u32,
+    projection_mode: u32,
+    ortho_size: f32,
     grid_origin: vec3<i32>,
     max_ray_distance: f32,
     grid_size: vec3<u32>,
@@ -114,13 +116,26 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let half_fov_tan = tan(camera.fov * 0.5);
     let ndc_x = (f32(id.x) + 0.5) / f32(camera.width) * 2.0 - 1.0;
     let ndc_y = 1.0 - (f32(id.y) + 0.5) / f32(camera.height) * 2.0;
-    let ray_dir = normalize(
-        camera.forward
-        + camera.right * ndc_x * half_fov_tan * aspect
-        + camera.up * ndc_y * half_fov_tan
-    );
+    var ray_origin: vec3<f32>;
+    var ray_dir: vec3<f32>;
 
-    let result = ray_march(camera.position, ray_dir);
+    if camera.projection_mode == 1u {
+        // Orthographic: parallel rays from offset origins
+        ray_dir = camera.forward;
+        ray_origin = camera.position
+            + camera.right * ndc_x * camera.ortho_size * aspect
+            + camera.up * ndc_y * camera.ortho_size;
+    } else {
+        // Perspective: diverging rays from camera position
+        ray_dir = normalize(
+            camera.forward
+            + camera.right * ndc_x * half_fov_tan * aspect
+            + camera.up * ndc_y * half_fov_tan
+        );
+        ray_origin = camera.position;
+    }
+
+    let result = ray_march(ray_origin, ray_dir);
     textureStore(output, id.xy, result.color);
     textureStore(depth_output, id.xy, vec4<f32>(result.depth, 0.0, 0.0, 0.0));
 }

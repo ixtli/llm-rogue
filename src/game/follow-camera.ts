@@ -29,6 +29,9 @@ const BASE_OFFSET: Vec3 = { x: -24, y: 31, z: -24 };
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 2.0;
 
+/** Fixed ortho zoom levels: billboard size in pixels at each step. */
+const ORTHO_ZOOM_LEVELS = [32, 64, 92];
+
 const FLYBY_RADIUS = 20;
 const FLYBY_STOPS: { angle: number; height: number; duration: number }[] = [
   { angle: 0, height: 10, duration: 2 },
@@ -56,8 +59,11 @@ export function buildFlybyWaypoints(playerPos: Vec3): CameraWaypoint[] {
 export class FollowCamera {
   private orbitAngle = 0;
   private zoomFactor = 1.0;
+  private savedZoomFactor = 1.0;
   private cinematicQueue: CameraWaypoint[] = [];
   mode: "follow" | "free_look" | "cinematic" = "follow";
+  projectionMode: "perspective" | "ortho" = "perspective";
+  orthoZoomIndex = 0;
 
   orbit(direction: 1 | -1): OrbitArc {
     const fromAngle = this.orbitAngle;
@@ -65,7 +71,28 @@ export class FollowCamera {
     return { fromAngle, toAngle: this.orbitAngle };
   }
 
+  toggleProjection(): void {
+    if (this.projectionMode === "perspective") {
+      this.projectionMode = "ortho";
+      this.savedZoomFactor = this.zoomFactor;
+      this.zoomFactor = 1.0;
+    } else {
+      this.projectionMode = "perspective";
+      this.zoomFactor = this.savedZoomFactor;
+    }
+  }
+
   adjustZoom(delta: number): void {
+    if (this.projectionMode === "ortho") {
+      // delta < 0 = scroll up = zoom in = increase index
+      // delta > 0 = scroll down = zoom out = decrease index
+      const step = delta < 0 ? 1 : -1;
+      this.orthoZoomIndex = Math.max(
+        0,
+        Math.min(ORTHO_ZOOM_LEVELS.length - 1, this.orthoZoomIndex + step),
+      );
+      return;
+    }
     this.zoomFactor = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.zoomFactor - delta));
   }
 
@@ -119,5 +146,21 @@ export class FollowCamera {
 
   compute(playerPos: Vec3): CameraTarget {
     return this.computeAtAngle(playerPos, this.orbitAngle);
+  }
+
+  getProjectionParams(screenHeight: number): { mode: number; orthoSize: number } {
+    if (this.projectionMode === "perspective") {
+      return { mode: 0, orthoSize: 0 };
+    }
+    const targetPx = ORTHO_ZOOM_LEVELS[this.orthoZoomIndex];
+    const orthoSize = screenHeight / (2 * targetPx);
+    return { mode: 1, orthoSize };
+  }
+
+  snapPosition(pos: Vec3): Vec3 {
+    if (this.projectionMode === "perspective") return pos;
+    const ppu = ORTHO_ZOOM_LEVELS[this.orthoZoomIndex];
+    const snap = (v: number) => Math.round(v * ppu) / ppu;
+    return { x: snap(pos.x), y: snap(pos.y), z: snap(pos.z) };
   }
 }

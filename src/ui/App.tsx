@@ -2,13 +2,20 @@ import { type Component, createSignal, onCleanup, onMount, Show } from "solid-js
 import { setupInputHandlers } from "../input";
 import type { GameToUIMessage, UIToGameMessage } from "../messages";
 import { EMPTY_DIGEST } from "../stats";
+import { appMode, toggleAppMode } from "./app-mode";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
+import { loadGlyphFont, rasterizeAtlas } from "./glyph-rasterizer";
+import { GlyphRegistry } from "./glyph-registry";
 import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
 } from "./gpu-check";
+import { SpriteEditorPanel } from "./SpriteEditorPanel";
+import ToolPalette, { activeTool } from "./ToolPalette";
 
 const COMPAT_BROWSERS = "Chrome 113+, Edge 113+, Opera 99+, or Samsung Internet 27+";
+
+let handleAtlasChanged: ((registry: GlyphRegistry, cellSize: number) => void) | undefined;
 
 interface AppProps {
   checkGpu?: () => string | null;
@@ -21,6 +28,7 @@ const App: Component<AppProps> = (props) => {
   const [error, setError] = createSignal<string | null>(null);
   const [diagnostics, setDiagnostics] = createSignal(EMPTY_DIGEST);
   const [cameraMode, setCameraMode] = createSignal<"follow" | "free_look">("follow");
+  const [projectionMode, setProjectionMode] = createSignal<"perspective" | "ortho">("perspective");
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;
@@ -33,13 +41,33 @@ const App: Component<AppProps> = (props) => {
     if (!canvasRef) return;
 
     const offscreen = canvasRef.transferControlToOffscreen();
+    const fontReady = loadGlyphFont();
     const worker = new Worker(new URL("../workers/game.worker.ts", import.meta.url), {
       type: "module",
     });
 
     worker.onmessage = (e: MessageEvent<GameToUIMessage>) => {
       if (e.data.type === "ready") {
-        setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look");
+        setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look | F2 edit");
+
+        // Send default sprite atlas once font is loaded
+        fontReady.then(() => {
+          const defaultRegistry = new GlyphRegistry();
+          const atlas = rasterizeAtlas(defaultRegistry.entries(), defaultRegistry.cellSize);
+          const tints = defaultRegistry.packTints(atlas.cols, atlas.rows);
+          worker.postMessage(
+            {
+              type: "sprite_atlas",
+              data: atlas.data,
+              width: atlas.width,
+              height: atlas.height,
+              cols: atlas.cols,
+              rows: atlas.rows,
+              tints,
+            } satisfies UIToGameMessage,
+            [atlas.data],
+          );
+        });
       } else if (e.data.type === "error") {
         setError(`Engine failed to initialize: ${e.data.message}`);
       } else if (e.data.type === "diagnostics") {
@@ -50,6 +78,23 @@ const App: Component<AppProps> = (props) => {
           document.exitPointerLock();
         }
       }
+    };
+
+    handleAtlasChanged = (registry: GlyphRegistry, cellSize: number) => {
+      const atlas = rasterizeAtlas(registry.entries(), cellSize);
+      const tints = registry.packTints(atlas.cols, atlas.rows);
+      worker.postMessage(
+        {
+          type: "sprite_atlas",
+          data: atlas.data,
+          width: atlas.width,
+          height: atlas.height,
+          cols: atlas.cols,
+          rows: atlas.rows,
+          tints,
+        } satisfies UIToGameMessage,
+        [atlas.data],
+      );
     };
 
     // Render at 1x CSS pixels. The ray-march shader (shadows + AO) is too
@@ -70,9 +115,24 @@ const App: Component<AppProps> = (props) => {
     // Keyboard input
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+      // F2 toggles edit mode
+      if (key === "f2") {
+        toggleAppMode();
+        return;
+      }
+      // F3 toggles ortho/perspective projection (works in both play and edit modes)
+      if (key === "f3") {
+        e.preventDefault();
+        setProjectionMode((m) => (m === "perspective" ? "ortho" : "perspective"));
+        worker.postMessage({ type: "key_down", key: "f3" } satisfies UIToGameMessage);
+        return;
+      }
+      // In edit mode, don't forward input to game worker
+      if (appMode() === "edit") return;
       worker.postMessage({ type: "key_down", key } satisfies UIToGameMessage);
     };
     const onKeyUp = (e: KeyboardEvent) => {
+      if (appMode() === "edit") return;
       const key = e.key.toLowerCase();
       worker.postMessage({ type: "key_up", key } satisfies UIToGameMessage);
     };
@@ -81,7 +141,10 @@ const App: Component<AppProps> = (props) => {
 
     // Pointer / wheel / touch input
     const cleanupInput = setupInputHandlers(canvasRef, {
-      postMessage: (msg) => worker.postMessage(msg),
+      postMessage: (msg) => {
+        if (appMode() === "edit") return;
+        worker.postMessage(msg);
+      },
       onPointerLockChange: (locked) => {
         if (cameraMode() === "free_look") {
           setStatus(
@@ -93,7 +156,7 @@ const App: Component<AppProps> = (props) => {
           setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look");
         }
       },
-      isFreeLookEnabled: () => cameraMode() === "free_look",
+      isFreeLookEnabled: () => appMode() === "play" && cameraMode() === "free_look",
     });
 
     // Debounced resize handler
@@ -202,8 +265,16 @@ const App: Component<AppProps> = (props) => {
           "pointer-events": "none",
         }}
       >
-        {status()}
+        {appMode() === "edit"
+          ? "EDIT MODE | F2 return to play"
+          : `${status()} | F3 ${projectionMode()}`}
       </div>
+      <Show when={appMode() === "edit"}>
+        <ToolPalette />
+      </Show>
+      <Show when={appMode() === "edit" && activeTool() === "sprite-editor"}>
+        <SpriteEditorPanel onAtlasChanged={(reg, size) => handleAtlasChanged?.(reg, size)} />
+      </Show>
       <DiagnosticsOverlay data={diagnostics()} />
     </Show>
   );

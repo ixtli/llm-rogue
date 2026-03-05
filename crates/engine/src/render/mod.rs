@@ -98,6 +98,8 @@ pub struct Renderer {
     preload_position: Option<Vec3>,
     animation_just_completed: bool,
     tick_stats: Option<crate::chunk_manager::TickStats>,
+    projection_mode: u32,
+    ortho_size: f32,
     width: u32,
     height: u32,
     last_time: f32,
@@ -177,6 +179,8 @@ impl Renderer {
             preload_position: None,
             animation_just_completed: false,
             tick_stats: None,
+            projection_mode: 0,
+            ortho_size: 0.0,
             width,
             height,
             last_time: 0.0,
@@ -239,9 +243,11 @@ impl Renderer {
             }
         }
 
-        let camera_uniform = self
+        let mut camera_uniform = self
             .camera
             .to_uniform(self.width, self.height, &self.grid_info);
+        camera_uniform.projection_mode = self.projection_mode;
+        camera_uniform.ortho_size = self.ortho_size;
         self.raymarch_pass
             .update_camera(&self.gpu.queue, &camera_uniform);
 
@@ -314,6 +320,12 @@ impl Renderer {
         self.camera.yaw = yaw;
         self.camera.pitch = pitch;
         self.camera.clamp_pitch();
+    }
+
+    /// Set the projection mode and ortho size for orthographic rendering.
+    pub fn set_projection(&mut self, mode: u32, ortho_size: f32) {
+        self.projection_mode = mode;
+        self.ortho_size = ortho_size;
     }
 
     /// Begin a smooth camera animation from the current pose.
@@ -448,6 +460,19 @@ impl Renderer {
             })
             .collect();
         self.light_buffer.update(&self.gpu.queue, &lights);
+    }
+
+    /// Replaces the sprite atlas texture with new RGBA pixel data.
+    /// Rebuilds the sprite bind group to reference the new texture.
+    pub fn update_sprite_atlas(&mut self, data: &[u8], width: u32, height: u32) {
+        self.sprite_pass.update_atlas(
+            &self.gpu.device,
+            &self.gpu.queue,
+            self.raymarch_pass.camera_buffer(),
+            data,
+            width,
+            height,
+        );
     }
 
     /// Updates sprite instances from a flat f32 slice (12 floats per sprite,

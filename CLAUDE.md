@@ -7,25 +7,33 @@ GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
 Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phases 1–5c and Phase 6a are complete. The game has a
-turn-based game loop with entities, inventory, FOV (with shader dimming +
-desaturation), Y-axis-aware movement, follow camera with orbit/zoom, cinematic
-camera mode with waypoint queue, voxel mutation support, and dynamic local
-lighting (point/spot lights with radius culling, per-pixel budget cap, optional
-shadow rays). The engine renders dynamically-loaded multi-chunk terrain with
-hard shadows, ambient occlusion, and local light sources via three-level DDA
-ray marching through a 3D texture atlas. Per-chunk 64-bit occupancy bitmasks
-skip empty 8×8×8 sub-regions. Chunk loading is budgeted (4/frame),
-distance-prioritized, with trajectory prediction and implicit LRU caching. A
-composable `MapFeature` system generates the play-test terrain. Three-thread
-architecture (UI → game worker → render worker) with a follow camera in the
-game worker and intent-based free-look fallback in the render worker.
+**Current state:** Phases 1–7b are complete. The game has a turn-based game loop
+with entities, inventory, FOV (with shader dimming + desaturation), Y-axis-aware
+movement, follow camera with orbit/zoom, cinematic camera mode with waypoint
+queue, voxel mutation support, and dynamic local lighting (point/spot lights
+with radius culling, per-pixel budget cap, optional shadow rays). Entity sprites
+are rendered as Unicode characters rasterized via browser canvas `fillText()`,
+packed into an 8×8 grid atlas with per-sprite tint (RGBA u32) and horizontal
+flip for facing. A modal edit mode (F2) with tool palette and sprite editor
+panel allows live editing of glyph-to-entity mappings. F3 toggles between
+perspective and orthographic projection with pixel-perfect snap zoom (discrete
+integer levels where atlas texels map to exact screen pixels) and camera
+position snapping for crisp voxel edges. The engine renders dynamically-loaded
+multi-chunk terrain with hard shadows, ambient occlusion, and local light
+sources via three-level DDA ray marching through a 3D texture atlas. Per-chunk
+64-bit occupancy bitmasks skip empty 8×8×8 sub-regions. Chunk loading is
+budgeted (4/frame), distance-prioritized, with trajectory prediction and
+implicit LRU caching. A composable `MapFeature` system generates the play-test
+terrain. Three-thread architecture (UI → game worker → render worker) with a
+follow camera in the game worker and intent-based free-look fallback in the
+render worker.
 
 **Controls:** WASD moves the player (turn-based), Q/E orbits the camera 90°,
 scroll zooms, Tab toggles free-look (WASD/mouse moves camera), C triggers
-cinematic flyby. Space waits.
+cinematic flyby, F2 toggles edit mode, F3 toggles perspective/ortho projection.
+Space waits.
 
-Next milestone: Phase 6b (HUD & combat), Phase 6c (chunk server).
+Next milestone: Phase 8 (HUD & combat UI), Phase 9 (chunk server).
 
 ## Tech Stack
 
@@ -248,6 +256,12 @@ occlusion samples), using the material's palette color.
 | `fov` | `src/game/fov.ts` | Field-of-view computation for entity visibility |
 | `inventory` | `src/game/inventory.ts` | Inventory management with stacking |
 | `light_buffer` | `crates/engine/src/render/light_buffer.rs` | GPU storage buffer for dynamic lights (binding 8), pack/update API |
+| `sprite_pass` | `crates/engine/src/render/sprite_pass.rs` | Billboard sprite rendering: SpriteInstance (48 bytes), atlas texture, h-flip + tint |
+| `glyph-registry` | `src/ui/glyph-registry.ts` | GlyphRegistry: spriteId→char/label/tint mapping, localStorage persistence, tint packing |
+| `glyph-rasterizer` | `src/ui/glyph-rasterizer.ts` | Canvas fillText rasterizer: Unicode glyphs → 8×8 grid atlas RGBA buffer |
+| `app-mode` | `src/ui/app-mode.ts` | Play/edit mode signal, F2 toggle |
+| `ToolPalette` | `src/ui/ToolPalette.tsx` | Edit mode tool bar with sprite editor button |
+| `SpriteEditorPanel` | `src/ui/SpriteEditorPanel.tsx` | Glyph mapping editor: char, label, tint, resolution toggle, live atlas updates |
 | `light-manager` | `src/game/light-manager.ts` | LightManager: point/spot lights, dirty-flag flush, 64-light capacity |
 
 ## Worktree Gotchas
