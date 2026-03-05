@@ -2,8 +2,8 @@ import { type Component, createSignal, onCleanup, onMount, Show } from "solid-js
 import { setupInputHandlers } from "../input";
 import type { GameToUIMessage, UIToGameMessage } from "../messages";
 import { EMPTY_DIGEST } from "../stats";
+import { appMode, toggleAppMode } from "./app-mode";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
-import { editorMode, toggleEditorMode } from "./editor-mode";
 import { rasterizeAtlas } from "./glyph-rasterizer";
 import { GlyphRegistry } from "./glyph-registry";
 import {
@@ -114,7 +114,7 @@ const App: Component<AppProps> = (props) => {
       const key = e.key.toLowerCase();
       // F2 toggles edit mode
       if (key === "f2") {
-        toggleEditorMode();
+        toggleAppMode();
         return;
       }
       // F3 toggles ortho/perspective projection (works in both play and edit modes)
@@ -125,11 +125,11 @@ const App: Component<AppProps> = (props) => {
         return;
       }
       // In edit mode, don't forward input to game worker
-      if (editorMode() === "edit") return;
+      if (appMode() === "edit") return;
       worker.postMessage({ type: "key_down", key } satisfies UIToGameMessage);
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (editorMode() === "edit") return;
+      if (appMode() === "edit") return;
       const key = e.key.toLowerCase();
       worker.postMessage({ type: "key_up", key } satisfies UIToGameMessage);
     };
@@ -139,7 +139,7 @@ const App: Component<AppProps> = (props) => {
     // Pointer / wheel / touch input
     const cleanupInput = setupInputHandlers(canvasRef, {
       postMessage: (msg) => {
-        if (editorMode() === "edit") return;
+        if (appMode() === "edit") return;
         worker.postMessage(msg);
       },
       onPointerLockChange: (locked) => {
@@ -153,7 +153,7 @@ const App: Component<AppProps> = (props) => {
           setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look");
         }
       },
-      isFreeLookEnabled: () => editorMode() === "play" && cameraMode() === "free_look",
+      isFreeLookEnabled: () => appMode() === "play" && cameraMode() === "free_look",
     });
 
     // Debounced resize handler
@@ -262,14 +262,14 @@ const App: Component<AppProps> = (props) => {
           "pointer-events": "none",
         }}
       >
-        {editorMode() === "edit"
+        {appMode() === "edit"
           ? "EDIT MODE | F2 return to play"
           : `${status()} | F3 ${projectionMode()}`}
       </div>
-      <Show when={editorMode() === "edit"}>
+      <Show when={appMode() === "edit"}>
         <ToolPalette />
       </Show>
-      <Show when={editorMode() === "edit" && activeTool() === "sprite-editor"}>
+      <Show when={appMode() === "edit" && activeTool() === "sprite-editor"}>
         <SpriteEditorPanel onAtlasChanged={(reg, size) => handleAtlasChanged?.(reg, size)} />
       </Show>
       <DiagnosticsOverlay data={diagnostics()} />

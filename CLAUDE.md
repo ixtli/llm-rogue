@@ -259,7 +259,7 @@ occlusion samples), using the material's palette color.
 | `sprite_pass` | `crates/engine/src/render/sprite_pass.rs` | Billboard sprite rendering: SpriteInstance (48 bytes), atlas texture, h-flip + tint |
 | `glyph-registry` | `src/ui/glyph-registry.ts` | GlyphRegistry: spriteId→char/label/tint mapping, localStorage persistence, tint packing |
 | `glyph-rasterizer` | `src/ui/glyph-rasterizer.ts` | Canvas fillText rasterizer: Unicode glyphs → 8×8 grid atlas RGBA buffer |
-| `editor-mode` | `src/ui/editor-mode.ts` | Play/edit mode signal, F2 toggle |
+| `app-mode` | `src/ui/app-mode.ts` | Play/edit mode signal, F2 toggle |
 | `ToolPalette` | `src/ui/ToolPalette.tsx` | Edit mode tool bar with sprite editor button |
 | `SpriteEditorPanel` | `src/ui/SpriteEditorPanel.tsx` | Glyph mapping editor: char, label, tint, resolution toggle, live atlas updates |
 | `light-manager` | `src/game/light-manager.ts` | LightManager: point/spot lights, dirty-flag flush, 64-light capacity |
