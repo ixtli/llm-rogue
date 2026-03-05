@@ -7,8 +7,9 @@ if (typeof OffscreenCanvas === "undefined") {
     clearRect: vi.fn(),
     fillText: vi.fn(),
     drawImage: vi.fn(),
+    putImageData: vi.fn(),
     getImageData: (_x: number, _y: number, w: number, h: number) => ({
-      data: { buffer: new ArrayBuffer(w * h * 4) },
+      data: new Uint8ClampedArray(w * h * 4),
     }),
     set font(_: string) {},
     set textAlign(_: string) {},
