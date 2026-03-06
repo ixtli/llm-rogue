@@ -75,6 +75,48 @@ describe("combat stats", () => {
   });
 });
 
+describe("ItemDef combat fields", () => {
+  it("weapon has damage and slot", () => {
+    const sword: ItemDef = {
+      id: "iron_sword",
+      name: "Iron Sword",
+      type: "weapon",
+      stackable: false,
+      maxStack: 1,
+      slot: "weapon",
+      damage: 8,
+    };
+    expect(sword.damage).toBe(8);
+    expect(sword.slot).toBe("weapon");
+  });
+
+  it("armor has defense and slot", () => {
+    const plate: ItemDef = {
+      id: "plate_armor",
+      name: "Plate Armor",
+      type: "armor",
+      stackable: false,
+      maxStack: 1,
+      slot: "armor",
+      defense: 6,
+    };
+    expect(plate.defense).toBe(6);
+    expect(plate.slot).toBe("armor");
+  });
+
+  it("consumable has no combat fields", () => {
+    const potion: ItemDef = {
+      id: "potion",
+      name: "Health Potion",
+      type: "consumable",
+      stackable: true,
+      maxStack: 10,
+    };
+    expect(potion.damage).toBeUndefined();
+    expect(potion.slot).toBeUndefined();
+  });
+});
+
 describe("createItemEntity", () => {
   it("creates an item on the ground", () => {
     const sword: ItemDef = {

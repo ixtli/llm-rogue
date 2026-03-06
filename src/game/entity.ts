@@ -42,6 +42,10 @@ export interface ItemDef {
   type: "weapon" | "armor" | "consumable" | "key" | "misc";
   stackable: boolean;
   maxStack: number;
+  slot?: EquipmentSlot;
+  damage?: number;
+  defense?: number;
+  critBonus?: number;
 }
 
 export interface ItemStack {
