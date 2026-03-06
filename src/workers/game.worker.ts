@@ -265,9 +265,17 @@ function initializeGame(): void {
   const player = createPlayer({ x: 5, y: spawnY(5, 5), z: 5 });
   world.addEntity(player);
 
-  // Spawn test NPCs
-  const npc1 = createNpc({ x: 10, y: spawnY(10, 10), z: 10 }, "hostile");
-  const npc2 = createNpc({ x: 16, y: spawnY(16, 8), z: 8 }, "neutral");
+  // Spawn test NPCs with combat stats
+  const npc1 = createNpc(
+    { x: 10, y: spawnY(10, 10), z: 10 },
+    "hostile",
+    { health: 20, attack: 5, defense: 0 }, // Weak goblin
+  );
+  const npc2 = createNpc(
+    { x: 16, y: spawnY(16, 8), z: 8 },
+    "neutral",
+    { health: 50, attack: 10, defense: 3 }, // Medium skeleton
+  );
   world.addEntity(npc1);
   world.addEntity(npc2);
 
@@ -283,6 +291,21 @@ function initializeGame(): void {
     },
   );
   world.addEntity(item);
+
+  // Spawn an equippable weapon
+  const weapon = createItemEntity(
+    { x: 7, y: spawnY(7, 5), z: 5 },
+    {
+      id: "rusty_sword",
+      name: "Rusty Sword",
+      type: "weapon",
+      stackable: false,
+      maxStack: 1,
+      slot: "weapon",
+      damage: 5,
+    },
+  );
+  world.addEntity(weapon);
 
   turnLoop = new TurnLoop(world, player.id);
   gameInitialized = true;
