@@ -1,6 +1,10 @@
+import type { CombatResult } from "./combat";
+import { resolveCombat } from "./combat";
 import type { Actor, ItemEntity, Position } from "./entity";
 import { getTerrainDef } from "./terrain";
 import type { GameWorld } from "./world";
+
+export type CombatEvent = CombatResult;
 
 export type PlayerAction =
   | { type: "move"; dx: number; dz: number }
@@ -20,9 +24,8 @@ export interface TurnResult {
   npcActions: NpcAction[];
   deaths: number[];
   terrainEffects: { entityId: number; effect: string; amount: number }[];
+  combatEvents: CombatEvent[];
 }
-
-const BASE_DAMAGE = 10;
 
 function attackDistance(attacker: Actor, target: Actor): number {
   const horizontal =
@@ -38,6 +41,7 @@ export class TurnLoop {
   private playerId: number;
   private turnIndex = 0;
   private movementBudget = 0;
+  private pendingCombatEvents: CombatEvent[] = [];
 
   constructor(world: GameWorld, playerId: number) {
     this.world = world;
@@ -69,6 +73,7 @@ export class TurnLoop {
       npcActions: [],
       deaths: [],
       terrainEffects: [],
+      combatEvents: [],
     };
     if (!this.isPlayerTurn()) return result;
     const player = this.world.getEntity(this.playerId) as Actor | undefined;
@@ -108,6 +113,8 @@ export class TurnLoop {
         result.deaths.push(actor.id);
       }
     }
+    result.combatEvents = this.pendingCombatEvents;
+    this.pendingCombatEvents = [];
     this.turnIndex = 0;
     return result;
   }
@@ -145,7 +152,8 @@ export class TurnLoop {
         const target = this.world.getEntity(action.targetId) as Actor | undefined;
         if (!target) return false;
         if (attackDistance(actor, target) > actor.mobility.reach) return false;
-        target.health -= BASE_DAMAGE;
+        const event = resolveCombat(actor, target);
+        this.pendingCombatEvents.push(event);
         return true;
       }
       case "pickup": {
@@ -170,7 +178,8 @@ export class TurnLoop {
       if (player) {
         const dist = attackDistance(npc, player as Actor);
         if (dist <= npc.mobility.reach) {
-          (player as Actor).health -= BASE_DAMAGE;
+          const event = resolveCombat(npc, player as Actor);
+          this.pendingCombatEvents.push(event);
           return { actorId: npc.id, action: "attack", from };
         }
         if (dist > npc.mobility.reach) {

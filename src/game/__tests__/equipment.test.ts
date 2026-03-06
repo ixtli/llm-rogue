@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ItemDef } from "../entity";
 import { _resetIdCounter, createPlayer } from "../entity";
-import { equip, totalAttack, totalDefense, unequip } from "../equipment";
+import { equip, totalAttack, totalCritBonus, totalDefense, unequip } from "../equipment";
 
 const SWORD: ItemDef = {
   id: "iron_sword",
@@ -141,7 +141,12 @@ describe("totalDefense", () => {
 describe("totalCritBonus", () => {
   it("returns 0 with no equipment", () => {
     const player = createPlayer({ x: 0, y: 0, z: 0 });
-    // Use totalCritBonus when implemented
-    expect(player.equipment.ring).toBeNull();
+    expect(totalCritBonus(player)).toBe(0);
+  });
+
+  it("sums crit bonus from ring", () => {
+    const player = createPlayer({ x: 0, y: 0, z: 0 });
+    player.equipment.ring = RING;
+    expect(totalCritBonus(player)).toBe(10);
   });
 });

@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { CombatResult } from "../combat";
 import { resolveCombat } from "../combat";
 import { _resetIdCounter, createNpc, createPlayer } from "../entity";
 
