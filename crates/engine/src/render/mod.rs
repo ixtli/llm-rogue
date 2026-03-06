@@ -3,8 +3,8 @@ pub mod blit_pass;
 pub mod chunk_atlas;
 pub mod gpu;
 pub mod light_buffer;
-pub mod raymarch_pass;
 pub mod particle_pass;
+pub mod raymarch_pass;
 pub mod sprite_pass;
 
 #[cfg(feature = "wasm")]
@@ -12,9 +12,9 @@ use blit_pass::BlitPass;
 #[cfg(feature = "wasm")]
 use gpu::GpuContext;
 #[cfg(feature = "wasm")]
-use raymarch_pass::RaymarchPass;
-#[cfg(feature = "wasm")]
 use particle_pass::ParticlePass;
+#[cfg(feature = "wasm")]
+use raymarch_pass::RaymarchPass;
 #[cfg(feature = "wasm")]
 use sprite_pass::SpritePass;
 #[cfg(feature = "wasm")]
@@ -27,11 +27,11 @@ use crate::camera::{
 #[cfg(feature = "wasm")]
 use crate::chunk_manager::ChunkManager;
 #[cfg(feature = "wasm")]
-use crate::particle_system::ParticleSystem;
-#[cfg(feature = "wasm")]
 use crate::collision::CollisionMap;
 #[cfg(feature = "wasm")]
 use crate::map_features::MapConfig;
+#[cfg(feature = "wasm")]
+use crate::particle_system::ParticleSystem;
 #[cfg(feature = "wasm")]
 use glam::{IVec3, UVec3, Vec3};
 

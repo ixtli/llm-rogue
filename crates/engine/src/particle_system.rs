@@ -56,7 +56,14 @@ impl ParticleTemplate {
         let t = rng();
         let velocity = self.velocity_min.lerp(self.velocity_max, t);
         let lifetime = self.lifetime_min + (self.lifetime_max - self.lifetime_min) * rng();
-        Particle::new(position, velocity, lifetime, self.color, self.size, self.uv_rect)
+        Particle::new(
+            position,
+            velocity,
+            lifetime,
+            self.color,
+            self.size,
+            self.uv_rect,
+        )
     }
 }
 

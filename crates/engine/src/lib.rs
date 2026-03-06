@@ -12,9 +12,9 @@ pub mod camera;
 pub mod chunk_manager;
 pub mod collision;
 pub mod map_features;
+pub mod particle_system;
 pub mod render;
 pub mod terrain_grid;
-pub mod particle_system;
 pub mod voxel;
 
 #[cfg(feature = "wasm")]
@@ -295,15 +295,7 @@ pub fn spawn_burst(x: f32, y: f32, z: f32, data: &[f32]) {
 /// `[vmin xyz, vmax xyz, lt_min, lt_max, rgba, size, uv_rect]`.
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
-pub fn create_emitter(
-    id: u32,
-    x: f32,
-    y: f32,
-    z: f32,
-    rate: f32,
-    duration: f32,
-    template: &[f32],
-) {
+pub fn create_emitter(id: u32, x: f32, y: f32, z: f32, rate: f32, duration: f32, template: &[f32]) {
     RENDERER.with(|r| {
         if let Some(renderer) = r.borrow_mut().as_mut() {
             renderer.create_emitter(id, x, y, z, rate, duration, template);
