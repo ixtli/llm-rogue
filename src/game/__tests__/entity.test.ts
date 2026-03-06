@@ -41,6 +41,40 @@ describe("mobility defaults", () => {
   });
 });
 
+describe("combat stats", () => {
+  it("player has default attack and defense", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    expect(p.attack).toBe(10);
+    expect(p.defense).toBe(5);
+  });
+
+  it("player has empty equipment slots", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    expect(p.equipment).toEqual({
+      weapon: null,
+      armor: null,
+      helmet: null,
+      ring: null,
+    });
+  });
+
+  it("npc has configurable attack and defense", () => {
+    const n = createNpc({ x: 0, y: 0, z: 0 }, "hostile", {
+      health: 50,
+      attack: 15,
+      defense: 3,
+    });
+    expect(n.attack).toBe(15);
+    expect(n.defense).toBe(3);
+  });
+
+  it("npc has default attack and defense when not specified", () => {
+    const n = createNpc({ x: 0, y: 0, z: 0 }, "hostile");
+    expect(n.attack).toBe(8);
+    expect(n.defense).toBe(2);
+  });
+});
+
 describe("createItemEntity", () => {
   it("creates an item on the ground", () => {
     const sword: ItemDef = {
