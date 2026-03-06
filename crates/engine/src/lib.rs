@@ -14,6 +14,7 @@ pub mod collision;
 pub mod map_features;
 pub mod render;
 pub mod terrain_grid;
+pub mod particle_system;
 pub mod voxel;
 
 #[cfg(feature = "wasm")]
