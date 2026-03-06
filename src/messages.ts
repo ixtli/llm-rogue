@@ -97,7 +97,25 @@ export type GameToRenderMessage =
       rows: number;
       tints: Uint32Array;
     }
-  | { type: "set_projection"; mode: number; orthoSize: number };
+  | { type: "set_projection"; mode: number; orthoSize: number }
+  | {
+      type: "spawn_burst";
+      x: number;
+      y: number;
+      z: number;
+      particles: Float32Array; // 13 floats per particle
+    }
+  | {
+      type: "create_emitter";
+      id: number;
+      x: number;
+      y: number;
+      z: number;
+      rate: number;
+      duration: number;
+      template: Float32Array; // 17 floats
+    }
+  | { type: "destroy_emitter"; id: number };
 
 // --- Render Worker → Game Worker ---
 
