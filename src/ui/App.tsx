@@ -1,9 +1,10 @@
-import { type Component, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { type Component, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { setupInputHandlers } from "../input";
 import type { GameToUIMessage, UIToGameMessage } from "../messages";
 import { EMPTY_DIGEST } from "../stats";
 import { appMode, toggleAppMode } from "./app-mode";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
+import EntityTooltip, { type TooltipData } from "./EntityTooltip";
 import { loadGlyphFont, rasterizeAtlas } from "./glyph-rasterizer";
 import { GlyphRegistry } from "./glyph-registry";
 import {
@@ -29,6 +30,15 @@ const App: Component<AppProps> = (props) => {
   const [diagnostics, setDiagnostics] = createSignal(EMPTY_DIGEST);
   const [cameraMode, setCameraMode] = createSignal<"follow" | "free_look">("follow");
   const [projectionMode, setProjectionMode] = createSignal<"perspective" | "ortho">("perspective");
+  const [hoverInfo, setHoverInfo] = createSignal<{
+    entityId: number;
+    screenX: number;
+    screenY: number;
+  } | null>(null);
+  const [lastGameState, setLastGameState] = createSignal<Extract<
+    GameToUIMessage,
+    { type: "game_state" }
+  > | null>(null);
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;
@@ -72,6 +82,18 @@ const App: Component<AppProps> = (props) => {
         setError(`Engine failed to initialize: ${e.data.message}`);
       } else if (e.data.type === "diagnostics") {
         setDiagnostics(e.data);
+      } else if (e.data.type === "game_state") {
+        setLastGameState(e.data);
+      } else if (e.data.type === "entity_hover") {
+        if (e.data.entityId === 0) {
+          setHoverInfo(null);
+        } else {
+          setHoverInfo({
+            entityId: e.data.entityId,
+            screenX: e.data.screenX,
+            screenY: e.data.screenY,
+          });
+        }
       } else if (e.data.type === "camera_mode") {
         setCameraMode(e.data.mode);
         if (e.data.mode === "follow" && document.pointerLockElement) {
@@ -195,14 +217,46 @@ const App: Component<AppProps> = (props) => {
     };
     watchDpr();
 
+    // Throttled mouse tracking for entity hover
+    let lastMouseSendTime = 0;
+    const MOUSE_THROTTLE_MS = 100;
+    const onMouseMove = (e: MouseEvent) => {
+      if (appMode() === "edit") return;
+      const now = performance.now();
+      if (now - lastMouseSendTime < MOUSE_THROTTLE_MS) return;
+      lastMouseSendTime = now;
+      worker.postMessage({
+        type: "mouse_move",
+        screenX: e.clientX,
+        screenY: e.clientY,
+      } satisfies UIToGameMessage);
+    };
+    canvasRef.addEventListener("mousemove", onMouseMove);
+
     onCleanup(() => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("resize", onResize);
       clearTimeout(resizeTimer);
       dprMediaQuery?.removeEventListener("change", onDprChange);
+      canvasRef?.removeEventListener("mousemove", onMouseMove);
       cleanupInput();
     });
+  });
+
+  const tooltipData = createMemo<TooltipData | null>(() => {
+    const hover = hoverInfo();
+    const gs = lastGameState();
+    if (!hover || !gs) return null;
+    const entity = gs.entities.find((e) => e.id === hover.entityId);
+    if (!entity) return null;
+    return {
+      name: entity.name,
+      hostility: entity.hostility,
+      healthTier: entity.healthTier,
+      screenX: hover.screenX,
+      screenY: hover.screenY,
+    };
   });
 
   return (
@@ -276,6 +330,7 @@ const App: Component<AppProps> = (props) => {
         <SpriteEditorPanel onAtlasChanged={(reg, size) => handleAtlasChanged?.(reg, size)} />
       </Show>
       <DiagnosticsOverlay data={diagnostics()} />
+      <Show when={tooltipData()}>{(data) => <EntityTooltip data={data()} />}</Show>
     </Show>
   );
 };
