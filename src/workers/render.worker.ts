@@ -92,6 +92,8 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
         camera_x: s[STAT_CAMERA_X],
         camera_y: s[STAT_CAMERA_Y],
         camera_z: s[STAT_CAMERA_Z],
+        camera_yaw: s[STAT_CAMERA_YAW],
+        camera_pitch: s[STAT_CAMERA_PITCH],
         wasm_memory_bytes: s[STAT_WASM_MEMORY_BYTES],
         pending_chunks: s[STAT_PENDING_CHUNKS],
         streaming_state: s[STAT_STREAMING_STATE],
