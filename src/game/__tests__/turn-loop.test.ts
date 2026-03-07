@@ -214,3 +214,62 @@ describe("elevation combat", () => {
     expect(result.npcActions[0].action).not.toBe("attack");
   });
 });
+
+describe("combat resolution integration", () => {
+  it("player attack uses stat-based damage", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    // Player: atk 10, def 5
+    const npc = createNpc({ x: 6, y: 5, z: 5 }, "hostile", { health: 100, defense: 0 });
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "attack", targetId: npc.id });
+    expect(result.resolved).toBe(true);
+    // Damage should be stat-based (8-12 range with variance), not flat 10
+    expect(npc.health).toBeLessThan(100);
+    expect(npc.health).toBeGreaterThanOrEqual(80); // worst case: floor(10 * 0.8) = 8 → 100-20=80 (crit)
+  });
+
+  it("NPC attack uses stat-based damage", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 0, y: 5, z: 0 });
+    const npc = createNpc({ x: 1, y: 5, z: 0 }, "hostile", { health: 100, attack: 15, defense: 0 });
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    loop.submitAction({ type: "wait" });
+    // NPC atk 15 - player def 5 = 10 raw → 8 to 12 (or 16 to 24 if crit)
+    expect(player.health).toBeLessThan(100);
+  });
+
+  it("combat events are included in turn result", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    const npc = createNpc({ x: 6, y: 5, z: 5 }, "hostile", { health: 100, defense: 0 });
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "attack", targetId: npc.id });
+    expect(result.combatEvents.length).toBeGreaterThanOrEqual(1);
+    const event = result.combatEvents[0];
+    expect(event.attackerId).toBe(player.id);
+    expect(event.defenderId).toBe(npc.id);
+    expect(event.damage).toBeGreaterThan(0);
+  });
+
+  it("NPC attacks generate combat events", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 0, y: 5, z: 0 });
+    const npc = createNpc({ x: 1, y: 5, z: 0 }, "hostile", { health: 100, attack: 10 });
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "wait" });
+    expect(result.combatEvents.some((e) => e.attackerId === npc.id)).toBe(true);
+  });
+});
