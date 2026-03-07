@@ -18,6 +18,7 @@ export type UIToGameMessage =
       targetId?: number;
     }
   | { type: "toggle_free_look" }
+  | { type: "mouse_move"; screenX: number; screenY: number }
   | {
       type: "sprite_atlas";
       data: ArrayBuffer;
@@ -184,6 +185,9 @@ export type GameToUIMessage =
         z: number;
         type: string;
         spriteId: number;
+        name: string;
+        hostility: "friendly" | "neutral" | "hostile";
+        healthTier: string;
       }[];
       turnNumber: number;
     }
@@ -209,4 +213,10 @@ export type GameToUIMessage =
       camera_chunk_y: number;
       camera_chunk_z: number;
     }
-  | { type: "camera_mode"; mode: "follow" | "free_look" | "cinematic" };
+  | { type: "camera_mode"; mode: "follow" | "free_look" | "cinematic" }
+  | {
+      type: "entity_hover";
+      entityId: number;
+      screenX: number;
+      screenY: number;
+    };
