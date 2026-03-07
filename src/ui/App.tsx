@@ -28,7 +28,7 @@ const App: Component<AppProps> = (props) => {
   const [error, setError] = createSignal<string | null>(null);
   const [diagnostics, setDiagnostics] = createSignal(EMPTY_DIGEST);
   const [cameraMode, setCameraMode] = createSignal<"follow" | "free_look">("follow");
-  const [projectionMode, setProjectionMode] = createSignal<"perspective" | "ortho">("perspective");
+  const [projectionMode, setProjectionMode] = createSignal<"perspective" | "ortho">("ortho");
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;

@@ -294,6 +294,7 @@ function initializeGame(): void {
   lightManager.addPoint({ x: 5, y: torchY, z: 8 }, 12, { r: 0, g: 0, b: 1 });
   lightManager.flush(sendToRender);
 
+  sendProjection();
   const playerEntity = world.getEntity(turnLoop?.turnOrder()[0]);
   if (playerEntity) sendFollowCamera(playerEntity.position, false);
 

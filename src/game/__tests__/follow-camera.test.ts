@@ -63,9 +63,11 @@ describe("FollowCamera", () => {
 
   it("zoom adjusts offset magnitude", () => {
     const cam = new FollowCamera();
+    cam.toggleProjection(); // enter perspective for continuous zoom
     cam.adjustZoom(0.1);
     const zoomed = cam.compute({ x: 0, y: 0, z: 0 });
     const cam2 = new FollowCamera();
+    cam2.toggleProjection();
     const base = cam2.compute({ x: 0, y: 0, z: 0 });
     const zoomedDist = Math.hypot(zoomed.position.x, zoomed.position.y, zoomed.position.z);
     const baseDist = Math.hypot(base.position.x, base.position.y, base.position.z);
@@ -74,9 +76,11 @@ describe("FollowCamera", () => {
 
   it("clamps zoom to min/max", () => {
     const cam = new FollowCamera();
+    cam.toggleProjection();
     for (let i = 0; i < 100; i++) cam.adjustZoom(0.1);
     const close = cam.compute({ x: 0, y: 0, z: 0 });
     const cam2 = new FollowCamera();
+    cam2.toggleProjection();
     for (let i = 0; i < 100; i++) cam2.adjustZoom(-0.1);
     const far = cam2.compute({ x: 0, y: 0, z: 0 });
     const closeDist = Math.hypot(close.position.x, close.position.y, close.position.z);
@@ -161,58 +165,61 @@ describe("FollowCamera", () => {
 });
 
 describe("FollowCamera ortho projection", () => {
-  it("starts in perspective mode", () => {
+  it("starts in ortho mode", () => {
     const cam = new FollowCamera();
-    expect(cam.projectionMode).toBe("perspective");
+    expect(cam.projectionMode).toBe("ortho");
   });
 
-  it("toggleProjection switches to ortho and back", () => {
+  it("toggleProjection switches to perspective and back", () => {
     const cam = new FollowCamera();
     cam.toggleProjection();
-    expect(cam.projectionMode).toBe("ortho");
-    cam.toggleProjection();
     expect(cam.projectionMode).toBe("perspective");
+    cam.toggleProjection();
+    expect(cam.projectionMode).toBe("ortho");
   });
 
   it("getProjectionParams returns mode 0 and orthoSize 0 for perspective", () => {
     const cam = new FollowCamera();
+    cam.toggleProjection();
     const params = cam.getProjectionParams(1080);
     expect(params.mode).toBe(0);
     expect(params.orthoSize).toBe(0);
   });
 
-  it("getProjectionParams returns mode 1 and orthoSize for 32px at default zoom", () => {
+  it("getProjectionParams returns mode 1 and orthoSize for 64px at default zoom", () => {
     const cam = new FollowCamera();
-    cam.toggleProjection();
     const params = cam.getProjectionParams(1080);
     expect(params.mode).toBe(1);
-    // ortho_size = screen_height / (2 * 32) = 1080 / 64 = 16.875
-    expect(params.orthoSize).toBeCloseTo(1080 / 64, 5);
+    // ortho_size = screen_height / (2 * 64) = 1080 / 128 = 8.4375
+    expect(params.orthoSize).toBeCloseTo(1080 / 128, 5);
   });
 
-  it("orthoZoomIndex defaults to 0 (32px)", () => {
+  it("orthoZoomIndex defaults to 1 (64px)", () => {
     const cam = new FollowCamera();
-    expect(cam.orthoZoomIndex).toBe(0);
+    expect(cam.orthoZoomIndex).toBe(1);
   });
 
   it("adjustZoom in ortho mode cycles through 3 fixed levels", () => {
     const cam = new FollowCamera();
-    cam.toggleProjection();
-    // Default is index 0 (32px)
-    cam.adjustZoom(-1); // zoom in → index 1 (64px)
-    expect(cam.orthoZoomIndex).toBe(1);
-    const params64 = cam.getProjectionParams(1080);
-    expect(params64.orthoSize).toBeCloseTo(1080 / 128, 5);
-
+    // Default is index 1 (64px)
     cam.adjustZoom(-1); // zoom in → index 2 (92px)
     expect(cam.orthoZoomIndex).toBe(2);
     const params92 = cam.getProjectionParams(1080);
     expect(params92.orthoSize).toBeCloseTo(1080 / 184, 5);
+
+    cam.adjustZoom(1); // zoom out → index 1 (64px)
+    expect(cam.orthoZoomIndex).toBe(1);
+    const params64 = cam.getProjectionParams(1080);
+    expect(params64.orthoSize).toBeCloseTo(1080 / 128, 5);
+
+    cam.adjustZoom(1); // zoom out → index 0 (32px)
+    expect(cam.orthoZoomIndex).toBe(0);
+    const params32 = cam.getProjectionParams(1080);
+    expect(params32.orthoSize).toBeCloseTo(1080 / 64, 5);
   });
 
   it("adjustZoom clamps ortho zoom to min/max index", () => {
     const cam = new FollowCamera();
-    cam.toggleProjection();
     cam.adjustZoom(10); // try to zoom out past index 0
     expect(cam.orthoZoomIndex).toBe(0);
 
@@ -224,17 +231,17 @@ describe("FollowCamera ortho projection", () => {
 
   it("snapPosition rounds camera position in ortho mode", () => {
     const cam = new FollowCamera();
-    cam.toggleProjection();
     const pos = { x: 5.123, y: 24.567, z: 5.789 };
     const snapped = cam.snapPosition(pos);
-    // ppu = 32 (level 0); snap(v) = round(v * 32) / 32
-    expect(snapped.x).toBeCloseTo(Math.round(5.123 * 32) / 32, 5);
-    expect(snapped.y).toBeCloseTo(Math.round(24.567 * 32) / 32, 5);
-    expect(snapped.z).toBeCloseTo(Math.round(5.789 * 32) / 32, 5);
+    // ppu = 64 (level 1); snap(v) = round(v * 64) / 64
+    expect(snapped.x).toBeCloseTo(Math.round(5.123 * 64) / 64, 5);
+    expect(snapped.y).toBeCloseTo(Math.round(24.567 * 64) / 64, 5);
+    expect(snapped.z).toBeCloseTo(Math.round(5.789 * 64) / 64, 5);
   });
 
   it("toggleProjection resets zoomFactor to 1.0 on ortho entry", () => {
     const cam = new FollowCamera();
+    cam.toggleProjection(); // enter perspective
     cam.adjustZoom(0.5); // zoom in perspective
     const beforeOrtho = cam.compute({ x: 0, y: 0, z: 0 });
     cam.toggleProjection(); // enter ortho
@@ -251,6 +258,7 @@ describe("FollowCamera ortho projection", () => {
 
   it("toggleProjection restores zoomFactor on return to perspective", () => {
     const cam = new FollowCamera();
+    cam.toggleProjection(); // enter perspective
     cam.adjustZoom(0.5); // zoom in perspective
     const zoomedPos = cam.compute({ x: 0, y: 0, z: 0 });
     cam.toggleProjection(); // enter ortho (resets zoom)
@@ -263,6 +271,7 @@ describe("FollowCamera ortho projection", () => {
 
   it("snapPosition is identity in perspective mode", () => {
     const cam = new FollowCamera();
+    cam.toggleProjection(); // enter perspective
     const pos = { x: 5.123, y: 24.567, z: 5.789 };
     const result = cam.snapPosition(pos);
     expect(result.x).toBe(5.123);

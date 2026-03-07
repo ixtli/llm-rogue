@@ -62,8 +62,8 @@ export class FollowCamera {
   private savedZoomFactor = 1.0;
   private cinematicQueue: CameraWaypoint[] = [];
   mode: "follow" | "free_look" | "cinematic" = "follow";
-  projectionMode: "perspective" | "ortho" = "perspective";
-  orthoZoomIndex = 0;
+  projectionMode: "perspective" | "ortho" = "ortho";
+  orthoZoomIndex = 1;
 
   orbit(direction: 1 | -1): OrbitArc {
     const fromAngle = this.orbitAngle;
