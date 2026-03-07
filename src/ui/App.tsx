@@ -3,6 +3,7 @@ import { setupInputHandlers } from "../input";
 import type { GameToUIMessage, UIToGameMessage } from "../messages";
 import { EMPTY_DIGEST } from "../stats";
 import { appMode, toggleAppMode } from "./app-mode";
+import CombatLog, { type CombatLogEntry } from "./CombatLog";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
 import EntityTooltip, { type TooltipData } from "./EntityTooltip";
 import { loadGlyphFont, rasterizeAtlas } from "./glyph-rasterizer";
@@ -11,6 +12,7 @@ import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
 } from "./gpu-check";
+import PlayerHUD from "./PlayerHUD";
 import { SpriteEditorPanel } from "./SpriteEditorPanel";
 import ToolPalette, { activeTool } from "./ToolPalette";
 
@@ -39,6 +41,7 @@ const App: Component<AppProps> = (props) => {
     GameToUIMessage,
     { type: "game_state" }
   > | null>(null);
+  const [combatLogEntries, setCombatLogEntries] = createSignal<CombatLogEntry[]>([]);
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;
@@ -94,6 +97,8 @@ const App: Component<AppProps> = (props) => {
             screenY: e.data.screenY,
           });
         }
+      } else if (e.data.type === "combat_log") {
+        setCombatLogEntries((prev) => [...prev, ...e.data.entries].slice(-32));
       } else if (e.data.type === "camera_mode") {
         setCameraMode(e.data.mode);
         if (e.data.mode === "follow" && document.pointerLockElement) {
@@ -330,6 +335,21 @@ const App: Component<AppProps> = (props) => {
         <SpriteEditorPanel onAtlasChanged={(reg, size) => handleAtlasChanged?.(reg, size)} />
       </Show>
       <DiagnosticsOverlay data={diagnostics()} />
+      <Show when={appMode() === "play" && lastGameState()}>
+        {(gs) => (
+          <>
+            <PlayerHUD
+              data={{
+                health: gs().player.health,
+                maxHealth: gs().player.maxHealth,
+                attack: gs().player.attack,
+                defense: gs().player.defense,
+              }}
+            />
+            <CombatLog entries={combatLogEntries()} />
+          </>
+        )}
+      </Show>
       <Show when={tooltipData()}>{(data) => <EntityTooltip data={data()} />}</Show>
     </Show>
   );
