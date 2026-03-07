@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { _resetIdCounter, createNpc, createPlayer } from "../entity";
+import { _resetIdCounter, createItemEntity, createNpc, createPlayer } from "../entity";
 import type { ChunkTerrainGrid, TileSurface } from "../terrain";
 import { TurnLoop } from "../turn-loop";
 import { GameWorld } from "../world";
@@ -80,6 +80,25 @@ describe("TurnLoop", () => {
     const loop = new TurnLoop(world, player.id);
     loop.submitAction({ type: "attack", targetId: npc.id });
     expect(world.getEntity(npc.id)).toBeUndefined();
+  });
+
+  it("records pickup in result", () => {
+    const world = new GameWorld();
+    const player = createPlayer({ x: 5, y: 0, z: 5 });
+    world.addEntity(player);
+    const item = createItemEntity({ x: 5, y: 0, z: 5 }, {
+      id: "potion",
+      name: "Health Potion",
+      type: "consumable",
+      stackable: true,
+      maxStack: 10,
+    });
+    world.addEntity(item);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "pickup" });
+    expect(result.resolved).toBe(true);
+    expect(result.pickups).toHaveLength(1);
+    expect(result.pickups[0]).toBe("Health Potion");
   });
 });
 

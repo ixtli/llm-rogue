@@ -25,6 +25,7 @@ export interface TurnResult {
   deaths: number[];
   terrainEffects: { entityId: number; effect: string; amount: number }[];
   combatEvents: CombatEvent[];
+  pickups: string[];
 }
 
 function attackDistance(attacker: Actor, target: Actor): number {
@@ -42,6 +43,7 @@ export class TurnLoop {
   private turnIndex = 0;
   private movementBudget = 0;
   private pendingCombatEvents: CombatEvent[] = [];
+  private pendingPickups: string[] = [];
 
   constructor(world: GameWorld, playerId: number) {
     this.world = world;
@@ -74,6 +76,7 @@ export class TurnLoop {
       deaths: [],
       terrainEffects: [],
       combatEvents: [],
+      pickups: [],
     };
     if (!this.isPlayerTurn()) return result;
     const player = this.world.getEntity(this.playerId) as Actor | undefined;
@@ -115,6 +118,8 @@ export class TurnLoop {
     }
     result.combatEvents = this.pendingCombatEvents;
     this.pendingCombatEvents = [];
+    result.pickups = this.pendingPickups;
+    this.pendingPickups = [];
     this.turnIndex = 0;
     return result;
   }
@@ -163,6 +168,7 @@ export class TurnLoop {
         if (items.length === 0) return false;
         const ie = items[0] as ItemEntity;
         actor.inventory.push({ item: ie.item, quantity: 1 });
+        this.pendingPickups.push(ie.item.name);
         this.world.removeEntity(ie.id);
         return true;
       }
