@@ -68,7 +68,11 @@ let lastCamYaw = 0;
 let lastCamPitch = 0;
 
 const DEFAULT_FOV = (60 * Math.PI) / 180; // matches camera.rs default
-const HIT_RADIUS = 30; // pixels
+const HIT_RADIUS = 30;
+/** Offset to center projection on the voxel (position is the corner). */
+const VOXEL_CENTER_OFFSET = 0.5;
+/** Offset to project from the top of the voxel where the sprite anchors. */
+const SPRITE_ANCHOR_Y_OFFSET = 1; // pixels
 
 const FACING_MAP: Record<string, number> = { s: 0, e: 1, n: 2, w: 3 };
 
@@ -387,9 +391,9 @@ function handleMouseMove(screenX: number, screenY: number): void {
   const projected = [];
   for (const entity of [...world.actors(), ...world.items()] as Entity[]) {
     const result = projectToScreen(
-      entity.position.x + 0.5,
-      entity.position.y + 1,
-      entity.position.z + 0.5,
+      entity.position.x + VOXEL_CENTER_OFFSET,
+      entity.position.y + SPRITE_ANCHOR_Y_OFFSET,
+      entity.position.z + VOXEL_CENTER_OFFSET,
       cam,
     );
     if (result) {
