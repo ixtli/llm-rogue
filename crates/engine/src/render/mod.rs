@@ -3,6 +3,7 @@ pub mod blit_pass;
 pub mod chunk_atlas;
 pub mod gpu;
 pub mod light_buffer;
+pub mod particle_pass;
 pub mod raymarch_pass;
 pub mod sprite_pass;
 
@@ -10,6 +11,8 @@ pub mod sprite_pass;
 use blit_pass::BlitPass;
 #[cfg(feature = "wasm")]
 use gpu::GpuContext;
+#[cfg(feature = "wasm")]
+use particle_pass::ParticlePass;
 #[cfg(feature = "wasm")]
 use raymarch_pass::RaymarchPass;
 #[cfg(feature = "wasm")]
@@ -27,6 +30,8 @@ use crate::chunk_manager::ChunkManager;
 use crate::collision::CollisionMap;
 #[cfg(feature = "wasm")]
 use crate::map_features::MapConfig;
+#[cfg(feature = "wasm")]
+use crate::particle_system::ParticleSystem;
 #[cfg(feature = "wasm")]
 use glam::{IVec3, UVec3, Vec3};
 
@@ -88,6 +93,8 @@ pub struct Renderer {
     raymarch_pass: RaymarchPass,
     blit_pass: BlitPass,
     sprite_pass: SpritePass,
+    particle_pass: ParticlePass,
+    particle_system: ParticleSystem,
     _storage_texture: wgpu::Texture,
     chunk_manager: ChunkManager,
     light_buffer: light_buffer::LightBuffer,
@@ -162,6 +169,14 @@ impl Renderer {
             surface_config.format,
         );
 
+        let particle_pass = ParticlePass::new(
+            &gpu.device,
+            &gpu.queue,
+            raymarch_pass.camera_buffer(),
+            surface_config.format,
+        );
+        let particle_system = ParticleSystem::new(256, 32);
+
         Self {
             gpu,
             surface,
@@ -169,6 +184,8 @@ impl Renderer {
             raymarch_pass,
             blit_pass,
             sprite_pass,
+            particle_pass,
+            particle_system,
             _storage_texture: storage_texture,
             chunk_manager,
             light_buffer,
@@ -269,6 +286,14 @@ impl Renderer {
         self.raymarch_pass.encode(&mut encoder);
         self.blit_pass.encode(&mut encoder, &view);
         self.sprite_pass
+            .encode(&mut encoder, &view, self.blit_pass.depth_stencil_view());
+
+        // Advance particles and upload to GPU
+        self.particle_system.advance(dt);
+        let vertices = self.particle_system.build_vertices();
+        self.particle_pass
+            .update_particles(&self.gpu.queue, &vertices);
+        self.particle_pass
             .encode(&mut encoder, &view, self.blit_pass.depth_stencil_view());
 
         self.gpu.queue.submit(std::iter::once(encoder.finish()));
@@ -463,7 +488,7 @@ impl Renderer {
     }
 
     /// Replaces the sprite atlas texture with new RGBA pixel data.
-    /// Rebuilds the sprite bind group to reference the new texture.
+    /// Rebuilds the sprite and particle bind groups to reference the new texture.
     pub fn update_sprite_atlas(&mut self, data: &[u8], width: u32, height: u32) {
         self.sprite_pass.update_atlas(
             &self.gpu.device,
@@ -473,6 +498,67 @@ impl Renderer {
             width,
             height,
         );
+        self.particle_pass.update_atlas(
+            &self.gpu.device,
+            &self.gpu.queue,
+            self.raymarch_pass.camera_buffer(),
+            data,
+            width,
+            height,
+        );
+    }
+
+    /// Spawn a burst of particles at `(x, y, z)`.
+    /// `particles` layout: 13 floats per particle:
+    /// `[vx, vy, vz, lifetime, r, g, b, a, size, uv0, uv1, uv2, uv3]`.
+    pub fn spawn_burst(&mut self, x: f32, y: f32, z: f32, particles: &[f32]) {
+        let pos = Vec3::new(x, y, z);
+        for chunk in particles.chunks_exact(13) {
+            let p = crate::particle_system::Particle::new(
+                pos,
+                Vec3::new(chunk[0], chunk[1], chunk[2]),
+                chunk[3],
+                [chunk[4], chunk[5], chunk[6], chunk[7]],
+                chunk[8],
+                [chunk[9], chunk[10], chunk[11], chunk[12]],
+            );
+            self.particle_system.spawn_one(p);
+        }
+    }
+
+    /// Create a persistent particle emitter.
+    /// `template` layout: 17 floats:
+    /// `[vmin_x, vmin_y, vmin_z, vmax_x, vmax_y, vmax_z,
+    ///   lt_min, lt_max, r, g, b, a, size, uv0, uv1, uv2, uv3]`.
+    pub fn create_emitter(
+        &mut self,
+        id: u32,
+        x: f32,
+        y: f32,
+        z: f32,
+        rate: f32,
+        duration: f32,
+        template: &[f32],
+    ) {
+        if template.len() < 17 {
+            return;
+        }
+        let tmpl = crate::particle_system::ParticleTemplate {
+            velocity_min: Vec3::new(template[0], template[1], template[2]),
+            velocity_max: Vec3::new(template[3], template[4], template[5]),
+            lifetime_min: template[6],
+            lifetime_max: template[7],
+            color: [template[8], template[9], template[10], template[11]],
+            size: template[12],
+            uv_rect: [template[13], template[14], template[15], template[16]],
+        };
+        self.particle_system
+            .create_emitter(id, Vec3::new(x, y, z), rate, duration, tmpl);
+    }
+
+    /// Destroy a particle emitter by ID.
+    pub fn destroy_emitter(&mut self, id: u32) {
+        self.particle_system.destroy_emitter(id);
     }
 
     /// Updates sprite instances from a flat f32 slice (12 floats per sprite,

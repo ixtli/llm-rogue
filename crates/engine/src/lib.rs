@@ -12,6 +12,7 @@ pub mod camera;
 pub mod chunk_manager;
 pub mod collision;
 pub mod map_features;
+pub mod particle_system;
 pub mod render;
 pub mod terrain_grid;
 pub mod voxel;
@@ -272,6 +273,43 @@ pub fn update_sprites(data: &[f32]) {
     RENDERER.with(|r| {
         if let Some(renderer) = r.borrow_mut().as_mut() {
             renderer.update_sprites_from_flat(data);
+        }
+    });
+}
+
+/// Spawn a burst of particles at the given world position.
+/// `data` is a flat f32 slice: each particle is 13 floats:
+/// `[vx, vy, vz, lifetime, r, g, b, a, size, uv0, uv1, uv2, uv3]`.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn spawn_burst(x: f32, y: f32, z: f32, data: &[f32]) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.spawn_burst(x, y, z, data);
+        }
+    });
+}
+
+/// Create a persistent particle emitter.
+/// `template` is 17 floats:
+/// `[vmin xyz, vmax xyz, lt_min, lt_max, rgba, size, uv_rect]`.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn create_emitter(id: u32, x: f32, y: f32, z: f32, rate: f32, duration: f32, template: &[f32]) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.create_emitter(id, x, y, z, rate, duration, template);
+        }
+    });
+}
+
+/// Destroy a particle emitter by ID.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn destroy_emitter(id: u32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.destroy_emitter(id);
         }
     });
 }

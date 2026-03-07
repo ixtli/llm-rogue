@@ -2,6 +2,8 @@ import init, {
   animate_camera,
   begin_intent,
   collect_frame_stats,
+  create_emitter,
+  destroy_emitter,
   end_intent,
   get_terrain_grid,
   init_renderer,
@@ -16,6 +18,7 @@ import init, {
   set_dolly,
   set_look_delta,
   set_projection,
+  spawn_burst,
   take_animation_completed,
   update_lights,
   update_sprite_atlas,
@@ -243,6 +246,12 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     }
   } else if (msg.type === "set_projection") {
     set_projection(msg.mode, msg.orthoSize);
+  } else if (msg.type === "spawn_burst") {
+    spawn_burst(msg.x, msg.y, msg.z, msg.particles);
+  } else if (msg.type === "create_emitter") {
+    create_emitter(msg.id, msg.x, msg.y, msg.z, msg.rate, msg.duration, msg.template);
+  } else if (msg.type === "destroy_emitter") {
+    destroy_emitter(msg.id);
   } else if (msg.type === "voxel_mutate") {
     const flat = new Int32Array(msg.changes.length * 4);
     for (let i = 0; i < msg.changes.length; i++) {
