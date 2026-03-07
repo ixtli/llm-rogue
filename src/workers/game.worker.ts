@@ -1,9 +1,10 @@
 // CameraIntent is exported from Rust via #[wasm_bindgen] — single source of truth.
 import { CameraIntent } from "../../crates/engine/pkg/engine";
-import type { Actor, Entity } from "../game/entity";
+import type { Actor, Entity, ItemEntity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
 import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
+import { healthTier } from "../game/health-tier";
 import { LightManager } from "../game/light-manager";
 import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
@@ -139,8 +140,14 @@ function sendGameState(): void {
     z: number;
     type: string;
     spriteId: number;
+    name: string;
+    hostility: "friendly" | "neutral" | "hostile";
+    healthTier: string;
   }[] = [];
   for (const entity of [...world.actors(), ...world.items()] as Entity[]) {
+    const isActor = entity.type === "player" || entity.type === "npc";
+    const actor = isActor ? (entity as Actor) : undefined;
+    const itemEntity = entity.type === "item" ? (entity as ItemEntity) : undefined;
     entities.push({
       id: entity.id,
       x: entity.position.x,
@@ -148,6 +155,9 @@ function sendGameState(): void {
       z: entity.position.z,
       type: entity.type,
       spriteId: entity.type === "player" ? 0 : entity.type === "npc" ? 1 : 2,
+      name: actor?.name ?? itemEntity?.name ?? "",
+      hostility: actor?.hostility ?? "neutral",
+      healthTier: actor ? healthTier(actor.health, actor.maxHealth) : "",
     });
   }
 
@@ -269,12 +279,14 @@ function initializeGame(): void {
   const npc1 = createNpc(
     { x: 10, y: spawnY(10, 10), z: 10 },
     "hostile",
-    { health: 20, attack: 5, defense: 0 }, // Weak goblin
+    { health: 20, attack: 5, defense: 0 },
+    "Goblin",
   );
   const npc2 = createNpc(
     { x: 16, y: spawnY(16, 8), z: 8 },
     "neutral",
-    { health: 50, attack: 10, defense: 3 }, // Medium skeleton
+    { health: 50, attack: 10, defense: 3 },
+    "Skeleton",
   );
   world.addEntity(npc1);
   world.addEntity(npc2);

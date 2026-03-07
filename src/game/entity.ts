@@ -26,6 +26,7 @@ export const EMPTY_EQUIPMENT: Equipment = {
 
 export interface Actor extends Entity {
   type: "player" | "npc";
+  name: string;
   health: number;
   maxHealth: number;
   attack: number;
@@ -62,6 +63,7 @@ export interface Mobility {
 
 export interface ItemEntity extends Entity {
   type: "item";
+  name: string;
   item: ItemDef;
 }
 
@@ -71,6 +73,7 @@ export function createPlayer(position: Position): Actor {
   return {
     id: nextId++,
     type: "player",
+    name: "Player",
     position: { ...position },
     facing: "s",
     health: 100,
@@ -94,6 +97,7 @@ export function createNpc(
   position: Position,
   hostility: Hostility,
   stats: NpcStats | number = {},
+  name = "NPC",
 ): Actor {
   // Support legacy numeric health argument
   const s: NpcStats = typeof stats === "number" ? { health: stats } : stats;
@@ -101,6 +105,7 @@ export function createNpc(
   return {
     id: nextId++,
     type: "npc",
+    name,
     position: { ...position },
     facing: "s",
     health,
@@ -118,6 +123,7 @@ export function createItemEntity(position: Position, item: ItemDef): ItemEntity 
   return {
     id: nextId++,
     type: "item",
+    name: item.name,
     position: { ...position },
     facing: "s",
     item,
