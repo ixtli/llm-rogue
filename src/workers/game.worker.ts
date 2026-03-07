@@ -2,7 +2,7 @@
 import { CameraIntent } from "../../crates/engine/pkg/engine";
 import type { Actor, Entity, ItemEntity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
-import { findHoveredEntity } from "../game/entity-hit-test";
+import { pickNearest } from "../game/entity-hit-test";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
 import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { healthTier } from "../game/health-tier";
@@ -397,7 +397,7 @@ function handleMouseMove(screenX: number, screenY: number): void {
     }
   }
 
-  const hit = findHoveredEntity(screenX, screenY, projected, HIT_RADIUS);
+  const hit = pickNearest(screenX, screenY, projected, HIT_RADIUS);
   const entityId = hit?.id ?? 0;
 
   if (entityId !== lastHoveredEntityId) {
