@@ -19,8 +19,8 @@ const EntityTooltip: Component<{ data: TooltipData }> = (props) => {
     <div
       style={{
         position: "absolute",
-        left: `${props.data.screenX + 16}px`,
-        top: `${props.data.screenY - 16}px`,
+        left: `${props.data.screenX}px`,
+        top: `${props.data.screenY}px`,
         background: "rgba(0, 0, 0, 0.85)",
         color: "#e0e0e0",
         "font-family": "monospace",

@@ -71,8 +71,8 @@ const DEFAULT_FOV = (60 * Math.PI) / 180; // matches camera.rs default
 const HIT_RADIUS = 30;
 /** Offset to center projection on the voxel (position is the corner). */
 const VOXEL_CENTER_OFFSET = 0.5;
-/** Offset to project from the top of the voxel where the sprite anchors. */
-const SPRITE_ANCHOR_Y_OFFSET = 1; // pixels
+/** Offset to the visual center of the sprite (bottom at y+1, size 1, center at y+1.5). */
+const SPRITE_CENTER_Y_OFFSET = 1.5; // pixels
 
 const FACING_MAP: Record<string, number> = { s: 0, e: 1, n: 2, w: 3 };
 
@@ -392,7 +392,7 @@ function handleMouseMove(screenX: number, screenY: number): void {
   for (const entity of [...world.actors(), ...world.items()] as Entity[]) {
     const result = projectToScreen(
       entity.position.x + VOXEL_CENTER_OFFSET,
-      entity.position.y + SPRITE_ANCHOR_Y_OFFSET,
+      entity.position.y + SPRITE_CENTER_Y_OFFSET,
       entity.position.z + VOXEL_CENTER_OFFSET,
       cam,
     );
@@ -406,7 +406,29 @@ function handleMouseMove(screenX: number, screenY: number): void {
 
   if (entityId !== lastHoveredEntityId) {
     lastHoveredEntityId = entityId;
-    sendToUI({ type: "entity_hover", entityId, screenX, screenY });
+
+    // Compute tooltip anchor at 2/3 of the way from sprite center to its
+    // bottom-right corner so the tooltip sits snugly beside the glyph.
+    let anchorX = screenX;
+    let anchorY = screenY;
+    if (hit) {
+      const aspect = cam.width / cam.height;
+      const SPRITE_HALF = 0.5; // half of 1×1 world-unit sprite
+      let halfW: number;
+      let halfH: number;
+      if (cam.projectionMode === 1) {
+        halfW = (SPRITE_HALF / (cam.orthoSize * aspect)) * (cam.width / 2);
+        halfH = (SPRITE_HALF / cam.orthoSize) * (cam.height / 2);
+      } else {
+        const tanHalf = Math.tan(cam.fov * 0.5);
+        halfW = (SPRITE_HALF / (hit.depth * tanHalf * aspect)) * (cam.width / 2);
+        halfH = (SPRITE_HALF / (hit.depth * tanHalf)) * (cam.height / 2);
+      }
+      anchorX = hit.screenX + halfW * (2 / 3);
+      anchorY = hit.screenY + halfH * (2 / 3);
+    }
+
+    sendToUI({ type: "entity_hover", entityId, screenX: anchorX, screenY: anchorY });
   }
 }
 
@@ -451,6 +473,7 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
     // Initialize game entities once we have the origin chunk
     if (msg.cx === 0 && msg.cy === 0 && msg.cz === 0) {
       initializeGame();
+      sendProjection();
       sendSpriteUpdate();
       sendGameState();
     }

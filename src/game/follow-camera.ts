@@ -62,7 +62,7 @@ export class FollowCamera {
   private savedZoomFactor = 1.0;
   private cinematicQueue: CameraWaypoint[] = [];
   mode: "follow" | "free_look" | "cinematic" = "follow";
-  projectionMode: "perspective" | "ortho" = "perspective";
+  projectionMode: "perspective" | "ortho" = "ortho";
   orthoZoomIndex = 0;
 
   orbit(direction: 1 | -1): OrbitArc {

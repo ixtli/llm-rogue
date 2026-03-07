@@ -28,20 +28,21 @@ export function projectToScreen(
   const cosPitch = Math.cos(cam.pitch);
   const sinPitch = Math.sin(cam.pitch);
 
+  // Must match Rust camera.rs orientation_vectors() exactly.
+  // Forward vector (into screen)
+  const fx = -sinYaw * cosPitch;
+  const fy = sinPitch;
+  const fz = -cosYaw * cosPitch;
+
   // Right vector
   const rx = cosYaw;
   const ry = 0;
   const rz = -sinYaw;
 
-  // Forward vector (into screen)
-  const fx = -sinYaw * cosPitch;
-  const fy = -sinPitch;
-  const fz = -cosYaw * cosPitch;
-
-  // Up vector (right x forward)
-  const ux = ry * fz - rz * fy;
-  const uy = rz * fx - rx * fz;
-  const uz = rx * fy - ry * fx;
+  // Up vector
+  const ux = sinYaw * sinPitch;
+  const uy = cosPitch;
+  const uz = cosYaw * sinPitch;
 
   // World-space delta
   const dx = wx - cam.x;
