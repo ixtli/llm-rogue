@@ -2,10 +2,12 @@
 import { CameraIntent } from "../../crates/engine/pkg/engine";
 import type { Actor, Entity, ItemEntity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
+import { findHoveredEntity } from "../game/entity-hit-test";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
 import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { healthTier } from "../game/health-tier";
 import { LightManager } from "../game/light-manager";
+import { type CameraParams, projectToScreen } from "../game/screen-projection";
 import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
 import { TurnLoop } from "../game/turn-loop";
@@ -54,8 +56,19 @@ const lightManager = new LightManager();
 let turnLoop: TurnLoop | null = null;
 let turnNumber = 0;
 let gameInitialized = false;
-let _screenWidth = 0;
+let screenWidth = 0;
 let screenHeight = 0;
+let lastHoveredEntityId = 0;
+
+// Camera state from render worker stats (used for entity hover projection)
+let lastCamX = 0;
+let lastCamY = 0;
+let lastCamZ = 0;
+let lastCamYaw = 0;
+let lastCamPitch = 0;
+
+const DEFAULT_FOV = (60 * Math.PI) / 180; // matches camera.rs default
+const HIT_RADIUS = 30; // pixels
 
 const FACING_MAP: Record<string, number> = { s: 0, e: 1, n: 2, w: 3 };
 
@@ -242,6 +255,11 @@ function sendFollowCamera(
     while (yaw - lastSentYaw < -Math.PI) yaw += 2 * Math.PI;
   }
   lastSentYaw = yaw;
+  lastCamX = snappedPos.x;
+  lastCamY = snappedPos.y;
+  lastCamZ = snappedPos.z;
+  lastCamYaw = yaw;
+  lastCamPitch = target.pitch;
 
   if (animate) {
     sendToRender({
@@ -350,6 +368,44 @@ function handlePlayerAction(action: PlayerAction): void {
   }
 }
 
+function handleMouseMove(screenX: number, screenY: number): void {
+  if (!gameInitialized) return;
+
+  const cam: CameraParams = {
+    x: lastCamX,
+    y: lastCamY,
+    z: lastCamZ,
+    yaw: lastCamYaw,
+    pitch: lastCamPitch,
+    fov: DEFAULT_FOV,
+    width: screenWidth,
+    height: screenHeight,
+    projectionMode: followCamera.projectionMode === "ortho" ? 1 : 0,
+    orthoSize: followCamera.getProjectionParams(screenHeight).orthoSize,
+  };
+
+  const projected = [];
+  for (const entity of [...world.actors(), ...world.items()] as Entity[]) {
+    const result = projectToScreen(
+      entity.position.x + 0.5,
+      entity.position.y + 1,
+      entity.position.z + 0.5,
+      cam,
+    );
+    if (result) {
+      projected.push({ id: entity.id, ...result });
+    }
+  }
+
+  const hit = findHoveredEntity(screenX, screenY, projected, HIT_RADIUS);
+  const entityId = hit?.id ?? 0;
+
+  if (entityId !== lastHoveredEntityId) {
+    lastHoveredEntityId = entityId;
+    sendToUI({ type: "entity_hover", entityId, screenX, screenY });
+  }
+}
+
 // --- Handle messages from render worker ---
 
 function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
@@ -378,6 +434,12 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
       camera_chunk_y: msg.camera_chunk_y,
       camera_chunk_z: msg.camera_chunk_z,
     });
+    // Track camera state for entity hover projection (esp. free-look mode)
+    lastCamX = msg.camera_x;
+    lastCamY = msg.camera_y;
+    lastCamZ = msg.camera_z;
+    lastCamYaw = msg.camera_yaw;
+    lastCamPitch = msg.camera_pitch;
   } else if (msg.type === "chunk_terrain") {
     const grid = deserializeTerrainGrid(msg.cx, msg.cy, msg.cz, msg.data);
     world.loadTerrain(grid);
@@ -432,7 +494,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       width: msg.width,
       height: msg.height,
     });
-    _screenWidth = msg.width;
+    screenWidth = msg.width;
     screenHeight = msg.height;
     if (digestTimer) clearInterval(digestTimer);
     digestTimer = setInterval(() => {
@@ -621,10 +683,12 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
   } else if (msg.type === "pan") {
     // Pan is currently not mapped to a stage direction.
   } else if (msg.type === "resize") {
-    _screenWidth = msg.width;
+    screenWidth = msg.width;
     screenHeight = msg.height;
     sendToRender({ type: "resize", width: msg.width, height: msg.height });
   } else if (msg.type === "sprite_atlas") {
     sendToRender(msg);
+  } else if (msg.type === "mouse_move") {
+    handleMouseMove(msg.screenX, msg.screenY);
   }
 };

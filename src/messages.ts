@@ -144,6 +144,8 @@ export type RenderToGameMessage =
       camera_x: number;
       camera_y: number;
       camera_z: number;
+      camera_yaw: number;
+      camera_pitch: number;
       wasm_memory_bytes: number;
       pending_chunks: number;
       streaming_state: number;
