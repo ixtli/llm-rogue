@@ -63,19 +63,13 @@ describe("formatCombatLog", () => {
       (id) => (id === 1 ? "Player" : "Goblin"),
     );
     expect(entries).toHaveLength(1);
-    expect(entries[0].text).toBe(
-      "Critical hit! You deal 24 damage to the Goblin.",
-    );
+    expect(entries[0].text).toBe("Critical hit! You deal 24 damage to the Goblin.");
     expect(entries[0].color).toBe("#facc15");
   });
 
   it("formats death", () => {
-    const entries = formatCombatLog(
-      PLAYER_ID,
-      [],
-      [2],
-      [],
-      (id) => (id === 2 ? "Goblin" : "Unknown"),
+    const entries = formatCombatLog(PLAYER_ID, [], [2], [], (id) =>
+      id === 2 ? "Goblin" : "Unknown",
     );
     expect(entries).toHaveLength(1);
     expect(entries[0].text).toBe("The Goblin dies.");
@@ -83,13 +77,7 @@ describe("formatCombatLog", () => {
   });
 
   it("formats pickup", () => {
-    const entries = formatCombatLog(
-      PLAYER_ID,
-      [],
-      [],
-      ["Health Potion"],
-      () => "",
-    );
+    const entries = formatCombatLog(PLAYER_ID, [], [], ["Health Potion"], () => "");
     expect(entries).toHaveLength(1);
     expect(entries[0].text).toBe("You pick up a Health Potion.");
     expect(entries[0].color).toBe("#22d3ee");

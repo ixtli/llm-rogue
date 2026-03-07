@@ -86,13 +86,16 @@ describe("TurnLoop", () => {
     const world = new GameWorld();
     const player = createPlayer({ x: 5, y: 0, z: 5 });
     world.addEntity(player);
-    const item = createItemEntity({ x: 5, y: 0, z: 5 }, {
-      id: "potion",
-      name: "Health Potion",
-      type: "consumable",
-      stackable: true,
-      maxStack: 10,
-    });
+    const item = createItemEntity(
+      { x: 5, y: 0, z: 5 },
+      {
+        id: "potion",
+        name: "Health Potion",
+        type: "consumable",
+        stackable: true,
+        maxStack: 10,
+      },
+    );
     world.addEntity(item);
     const loop = new TurnLoop(world, player.id);
     const result = loop.submitAction({ type: "pickup" });
