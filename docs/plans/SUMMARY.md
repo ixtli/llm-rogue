@@ -24,7 +24,8 @@ Living index of project phases. Detailed plans are in `archive/`.
 
 | Phase | Summary | Notes |
 |-------|---------|-------|
-| Phase 8e | Wire combat events to particles | 8c complete, needs game worker integration |
+| Phase 8e | Combat particle effects: hit/crit/death bursts via general particle builder API | Design ready |
+| Phase 8g | Floating damage numbers: digit atlas rasterization + number particles | Design needed |
 | Phase 8f | Item management UI: inventory display, equipment slots | Design needed |
 | Phase 8 (death) | Death/game over screen, respawn | Design needed |
 | Phase 9: Chunk server | LLM/MCP integration, compression codec, chunk worker thread, HTTP endpoints | Replaces procedural generation |
