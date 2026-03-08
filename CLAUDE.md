@@ -7,33 +7,38 @@ GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
 Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phases 1–7b are complete. The game has a turn-based game loop
-with entities, inventory, FOV (with shader dimming + desaturation), Y-axis-aware
-movement, follow camera with orbit/zoom, cinematic camera mode with waypoint
-queue, voxel mutation support, and dynamic local lighting (point/spot lights
-with radius culling, per-pixel budget cap, optional shadow rays). Entity sprites
-are rendered as Unicode characters rasterized via browser canvas `fillText()`,
-packed into an 8×8 grid atlas with per-sprite tint (RGBA u32) and horizontal
-flip for facing. A modal edit mode (F2) with tool palette and sprite editor
-panel allows live editing of glyph-to-entity mappings. F3 toggles between
-perspective and orthographic projection with pixel-perfect snap zoom (discrete
-integer levels where atlas texels map to exact screen pixels) and camera
-position snapping for crisp voxel edges. The engine renders dynamically-loaded
-multi-chunk terrain with hard shadows, ambient occlusion, and local light
-sources via three-level DDA ray marching through a 3D texture atlas. Per-chunk
-64-bit occupancy bitmasks skip empty 8×8×8 sub-regions. Chunk loading is
-budgeted (4/frame), distance-prioritized, with trajectory prediction and
-implicit LRU caching. A composable `MapFeature` system generates the play-test
-terrain. Three-thread architecture (UI → game worker → render worker) with a
-follow camera in the game worker and intent-based free-look fallback in the
-render worker.
+**Current state:** Phases 1–7b and 8a/8b/8d are complete. The game has a
+turn-based game loop with stat-based combat (attack/defense/crit), equipment
+slots, inventory, FOV (with shader dimming + desaturation), Y-axis-aware
+movement, bump-to-attack, follow camera with orbit/zoom, cinematic camera mode
+with waypoint queue, voxel mutation support, and dynamic local lighting
+(point/spot lights with radius culling, per-pixel budget cap, optional shadow
+rays). A player HUD shows HP bar, ATK/DEF stats, and a scrolling combat log
+displays color-coded combat events. Entity tooltips appear on hover with name,
+hostility, and health tier. Entity sprites are rendered as Unicode characters
+rasterized via browser canvas `fillText()`, packed into an 8×8 grid atlas with
+per-sprite tint (RGBA u32) and horizontal flip for facing. A modal edit mode
+(F2) with tool palette and sprite editor panel allows live editing of
+glyph-to-entity mappings. F3 toggles between perspective and orthographic
+projection (ortho default) with pixel-perfect snap zoom (discrete integer levels
+where atlas texels map to exact screen pixels) and camera position snapping for
+crisp voxel edges. The engine renders dynamically-loaded multi-chunk terrain with
+hard shadows, ambient occlusion, and local light sources via three-level DDA ray
+marching through a 3D texture atlas. Per-chunk 64-bit occupancy bitmasks skip
+empty 8×8×8 sub-regions. Chunk loading is budgeted (4/frame),
+distance-prioritized, with trajectory prediction and implicit LRU caching. A
+composable `MapFeature` system generates the play-test terrain. Three-thread
+architecture (UI → game worker → render worker) with a follow camera in the game
+worker and intent-based free-look fallback in the render worker. Rust error
+handling uses `EngineError` with `Result` propagation across the WASM boundary.
 
-**Controls:** WASD moves the player (turn-based), Q/E orbits the camera 90°,
-scroll zooms, Tab toggles free-look (WASD/mouse moves camera), C triggers
-cinematic flyby, F2 toggles edit mode, F3 toggles perspective/ortho projection.
-Space waits.
+**Controls:** WASD moves the player (turn-based, bump-to-attack hostile NPCs),
+Q/E orbits the camera 90°, scroll zooms, Tab toggles free-look (WASD/mouse
+moves camera), C triggers cinematic flyby, F2 toggles edit mode, F3 toggles
+perspective/ortho projection. Space waits.
 
-Next milestone: Phase 8 (HUD & combat UI), Phase 9 (chunk server).
+Next milestone: Phase 8 (remaining: 8c particles, 8e wire particles, 8f item
+management UI, death/game over), Phase 9 (chunk server).
 
 ## Tech Stack
 
@@ -249,8 +254,14 @@ occlusion samples), using the material's palette color.
 | `map_features` | `crates/engine/src/map_features.rs` | MapFeature trait, MapConfig, FlattenNearOrigin, PlaceWalls |
 | `DiagnosticsOverlay` | `src/ui/DiagnosticsOverlay.tsx` | Toggle-able overlay: FPS sparkline, frame time, chunks, camera, WASM memory |
 | `follow-camera` | `src/game/follow-camera.ts` | FollowCamera: offset-based follow, 4-step orbit, zoom, follow/free-look toggle |
-| `turn-loop` | `src/game/turn-loop.ts` | TurnLoop: turn-based game loop, Y-aware movement with step/jump budgets, attack range |
+| `turn-loop` | `src/game/turn-loop.ts` | TurnLoop: turn-based game loop, Y-aware movement with step/jump budgets, attack range, bump-to-attack |
+| `combat` | `src/game/combat.ts` | Stat-based combat resolution: attack/defense, variance, critical hits |
+| `combat-log` | `src/game/combat-log.ts` | Pure formatter: CombatResult[] → colored log entries for UI |
+| `equipment` | `src/game/equipment.ts` | Equipment slots, totalAttack/totalDefense with gear bonuses |
 | `entity` | `src/game/entity.ts` | Entity types (Actor, ItemEntity), Mobility interface, factory functions |
+| `entity-hit-test` | `src/game/entity-hit-test.ts` | Nearest-entity picking from screen-projected positions |
+| `screen-projection` | `src/game/screen-projection.ts` | World→screen projection matching Rust camera model (perspective + ortho) |
+| `health-tier` | `src/game/health-tier.ts` | HP ratio → descriptive tier string for tooltips |
 | `world` | `src/game/world.ts` | GameWorld: entity registry, terrain grid storage, surface lookup |
 | `terrain` | `src/game/terrain.ts` | TerrainGrid/TileSurface deserialization from chunk_terrain messages |
 | `fov` | `src/game/fov.ts` | Field-of-view computation for entity visibility |
@@ -263,6 +274,10 @@ occlusion samples), using the material's palette color.
 | `ToolPalette` | `src/ui/ToolPalette.tsx` | Edit mode tool bar with sprite editor button |
 | `SpriteEditorPanel` | `src/ui/SpriteEditorPanel.tsx` | Glyph mapping editor: char, label, tint, resolution toggle, live atlas updates |
 | `light-manager` | `src/game/light-manager.ts` | LightManager: point/spot lights, dirty-flag flush, 64-light capacity |
+| `error` | `crates/engine/src/error.rs` | EngineError enum with Result propagation across WASM boundary |
+| `PlayerHUD` | `src/ui/PlayerHUD.tsx` | HP bar (green/yellow/red), ATK/DEF stats overlay |
+| `CombatLog` | `src/ui/CombatLog.tsx` | Scrolling combat log (last 8 entries), color-coded by event type |
+| `EntityTooltip` | `src/ui/EntityTooltip.tsx` | Hover tooltip showing entity name, hostility, health tier |
 
 ## Worktree Gotchas
 
