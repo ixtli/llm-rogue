@@ -1,6 +1,7 @@
 // CameraIntent is exported from Rust via #[wasm_bindgen] — single source of truth.
 import { CameraIntent } from "../../crates/engine/pkg/engine";
 import { formatCombatLog } from "../game/combat-log";
+import { buildCombatParticles } from "../game/combat-particles";
 import type { Actor, Entity, ItemEntity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import { pickNearest } from "../game/entity-hit-test";
@@ -84,6 +85,7 @@ function sendToRender(msg: GameToRenderMessage) {
   if (msg.type === "visibility_mask") transfers.push(msg.data);
   if (msg.type === "light_update") transfers.push(msg.data.buffer);
   if (msg.type === "sprite_atlas") transfers.push(msg.data);
+  if (msg.type === "spawn_burst") transfers.push(msg.particles.buffer);
   renderWorker?.postMessage(msg, transfers);
 }
 
@@ -365,10 +367,12 @@ function handlePlayerAction(action: PlayerAction): void {
   if (!turnLoop) return;
   if (followCamera.mode !== "follow") return;
   cancelOrbitAnimation();
-  // Snapshot entity names before the turn resolves (dead entities get removed).
+  // Snapshot entity names and positions before the turn resolves (dead entities get removed).
   const nameMap = new Map<number, string>();
+  const posMap = new Map<number, { x: number; y: number; z: number }>();
   for (const a of world.actors()) {
     nameMap.set(a.id, a.name);
+    posMap.set(a.id, { ...a.position });
   }
   const result = turnLoop.submitAction(action);
   if (result.resolved) {
@@ -385,6 +389,22 @@ function handlePlayerAction(action: PlayerAction): void {
     );
     if (logEntries.length > 0) {
       sendToUI({ type: "combat_log", entries: logEntries });
+    }
+    const getPos = (id: number) => posMap.get(id);
+    const bursts = buildCombatParticles(
+      turnLoop.turnOrder()[0],
+      result.combatEvents,
+      result.deaths,
+      getPos,
+    );
+    for (const burst of bursts) {
+      sendToRender({
+        type: "spawn_burst",
+        x: burst.x,
+        y: burst.y,
+        z: burst.z,
+        particles: burst.particles,
+      });
     }
     sendVisibilityMask();
     const player = world.getEntity(turnLoop.turnOrder()[0]);
