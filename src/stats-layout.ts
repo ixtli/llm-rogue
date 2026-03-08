@@ -19,3 +19,5 @@ export const STAT_CACHED_CHUNKS = 15;
 export const STAT_CAMERA_CHUNK_X = 16;
 export const STAT_CAMERA_CHUNK_Y = 17;
 export const STAT_CAMERA_CHUNK_Z = 18;
+export const STAT_ALIVE_PARTICLES = 19;
+export const STAT_ACTIVE_EMITTERS = 20;

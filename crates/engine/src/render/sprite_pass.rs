@@ -157,7 +157,7 @@ impl SpritePass {
                 view: depth_stencil_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Discard, // read-only: sprites don't write depth
+                    store: wgpu::StoreOp::Store, // preserve for particle pass
                 }),
                 stencil_ops: None,
             }),

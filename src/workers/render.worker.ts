@@ -27,6 +27,8 @@ import init, {
 } from "../../crates/engine/pkg/engine";
 import type { GameToRenderMessage } from "../messages";
 import {
+  STAT_ACTIVE_EMITTERS,
+  STAT_ALIVE_PARTICLES,
   STAT_ATLAS_TOTAL,
   STAT_ATLAS_USED,
   STAT_CACHED_CHUNKS,
@@ -104,6 +106,8 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
         camera_chunk_x: s[STAT_CAMERA_CHUNK_X],
         camera_chunk_y: s[STAT_CAMERA_CHUNK_Y],
         camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
+        alive_particles: s[STAT_ALIVE_PARTICLES],
+        active_emitters: s[STAT_ACTIVE_EMITTERS],
       });
 
       // Emit terrain grids for newly loaded chunks, or on first frame

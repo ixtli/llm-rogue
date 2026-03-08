@@ -56,7 +56,9 @@ pub const STAT_CACHED_CHUNKS: usize = 15;
 pub const STAT_CAMERA_CHUNK_X: usize = 16;
 pub const STAT_CAMERA_CHUNK_Y: usize = 17;
 pub const STAT_CAMERA_CHUNK_Z: usize = 18;
-pub const STAT_VEC_LEN: usize = 19;
+pub const STAT_ALIVE_PARTICLES: usize = 19;
+pub const STAT_ACTIVE_EMITTERS: usize = 20;
+pub const STAT_VEC_LEN: usize = 21;
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
@@ -639,6 +641,8 @@ impl Renderer {
         v[STAT_CAMERA_CHUNK_X] = (self.camera.position.x / chunk_size).floor();
         v[STAT_CAMERA_CHUNK_Y] = (self.camera.position.y / chunk_size).floor();
         v[STAT_CAMERA_CHUNK_Z] = (self.camera.position.z / chunk_size).floor();
+        v[STAT_ALIVE_PARTICLES] = self.particle_system.alive_count() as f32;
+        v[STAT_ACTIVE_EMITTERS] = self.particle_system.active_emitter_count() as f32;
         v
     }
 }

@@ -16,6 +16,8 @@ export interface StatsSample {
   camera_chunk_x: number;
   camera_chunk_y: number;
   camera_chunk_z: number;
+  alive_particles: number;
+  active_emitters: number;
 }
 
 export interface DiagnosticsDigest {
@@ -38,6 +40,8 @@ export interface DiagnosticsDigest {
   camera_chunk_x: number;
   camera_chunk_y: number;
   camera_chunk_z: number;
+  alive_particles: number;
+  active_emitters: number;
 }
 
 export const EMPTY_DIGEST: DiagnosticsDigest = {
@@ -60,6 +64,8 @@ export const EMPTY_DIGEST: DiagnosticsDigest = {
   camera_chunk_x: 0,
   camera_chunk_y: 0,
   camera_chunk_z: 0,
+  alive_particles: 0,
+  active_emitters: 0,
 };
 
 /**
@@ -125,6 +131,8 @@ export class StatsAggregator {
       camera_chunk_x: s?.camera_chunk_x ?? 0,
       camera_chunk_y: s?.camera_chunk_y ?? 0,
       camera_chunk_z: s?.camera_chunk_z ?? 0,
+      alive_particles: s?.alive_particles ?? 0,
+      active_emitters: s?.active_emitters ?? 0,
     };
   }
 }

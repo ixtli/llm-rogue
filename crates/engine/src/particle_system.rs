@@ -154,6 +154,12 @@ impl ParticleSystem {
         self.particles.iter().filter(|p| p.alive).count()
     }
 
+    /// Number of active emitters.
+    #[must_use]
+    pub fn active_emitter_count(&self) -> usize {
+        self.emitters.iter().filter(|e| e.active).count()
+    }
+
     /// Build GPU vertex data for all alive particles.
     #[must_use]
     pub fn build_vertices(&self) -> Vec<ParticleVertex> {

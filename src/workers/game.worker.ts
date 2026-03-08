@@ -372,7 +372,11 @@ function handlePlayerAction(action: PlayerAction): void {
   const posMap = new Map<number, { x: number; y: number; z: number }>();
   for (const a of world.actors()) {
     nameMap.set(a.id, a.name);
-    posMap.set(a.id, { ...a.position });
+    posMap.set(a.id, {
+      x: a.position.x + 0.5,
+      y: a.position.y + 1,
+      z: a.position.z + 0.5,
+    });
   }
   const result = turnLoop.submitAction(action);
   if (result.resolved) {
@@ -499,6 +503,8 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
       camera_chunk_x: msg.camera_chunk_x,
       camera_chunk_y: msg.camera_chunk_y,
       camera_chunk_z: msg.camera_chunk_z,
+      alive_particles: msg.alive_particles,
+      active_emitters: msg.active_emitters,
     });
     // Track camera state for entity hover projection (esp. free-look mode)
     lastCamX = msg.camera_x;
