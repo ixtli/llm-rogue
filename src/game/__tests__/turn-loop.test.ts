@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { _resetIdCounter, createNpc, createPlayer } from "../entity";
+import { _resetIdCounter, createItemEntity, createNpc, createPlayer } from "../entity";
 import type { ChunkTerrainGrid, TileSurface } from "../terrain";
 import { TurnLoop } from "../turn-loop";
 import { GameWorld } from "../world";
@@ -80,6 +80,58 @@ describe("TurnLoop", () => {
     const loop = new TurnLoop(world, player.id);
     loop.submitAction({ type: "attack", targetId: npc.id });
     expect(world.getEntity(npc.id)).toBeUndefined();
+  });
+
+  it("bump-to-attack hostile blocker", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    const npc = createNpc({ x: 6, y: 5, z: 5 }, "hostile", 50);
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    // Move into hostile NPC → should auto-attack instead
+    const result = loop.submitAction({ type: "move", dx: 1, dz: 0 });
+    expect(result.resolved).toBe(true);
+    expect(player.position.x).toBe(5); // didn't move
+    expect(result.combatEvents.length).toBeGreaterThanOrEqual(1);
+    expect(result.combatEvents[0].attackerId).toBe(player.id);
+    expect(result.combatEvents[0].defenderId).toBe(npc.id);
+  });
+
+  it("bump into non-hostile does not attack", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    const npc = createNpc({ x: 6, y: 5, z: 5 }, "neutral", 50);
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "move", dx: 1, dz: 0 });
+    expect(result.resolved).toBe(false);
+    expect(result.combatEvents).toHaveLength(0);
+  });
+
+  it("records pickup in result", () => {
+    const world = new GameWorld();
+    const player = createPlayer({ x: 5, y: 0, z: 5 });
+    world.addEntity(player);
+    const item = createItemEntity(
+      { x: 5, y: 0, z: 5 },
+      {
+        id: "potion",
+        name: "Health Potion",
+        type: "consumable",
+        stackable: true,
+        maxStack: 10,
+      },
+    );
+    world.addEntity(item);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "pickup" });
+    expect(result.resolved).toBe(true);
+    expect(result.pickups).toHaveLength(1);
+    expect(result.pickups[0]).toBe("Health Potion");
   });
 });
 
@@ -212,6 +264,25 @@ describe("elevation combat", () => {
     const result = loop.submitAction({ type: "wait" });
     // NPC is adjacent horizontally but 2 voxels below — can't attack uphill
     expect(result.npcActions[0].action).not.toBe("attack");
+  });
+});
+
+describe("dead NPC skipping", () => {
+  it("dead NPC does not attack after lethal player hit", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    // NPC with 1 HP — will die from any hit
+    const npc = createNpc({ x: 6, y: 5, z: 5 }, "hostile", 1);
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "attack", targetId: npc.id });
+    expect(result.resolved).toBe(true);
+    expect(result.deaths).toContain(npc.id);
+    // Dead NPC should NOT have attacked back
+    const npcAttacks = result.combatEvents.filter((e) => e.attackerId === npc.id);
+    expect(npcAttacks).toHaveLength(0);
   });
 });
 

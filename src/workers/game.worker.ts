@@ -1,8 +1,10 @@
 // CameraIntent is exported from Rust via #[wasm_bindgen] — single source of truth.
 import { CameraIntent } from "../../crates/engine/pkg/engine";
+import { formatCombatLog } from "../game/combat-log";
 import type { Actor, Entity, ItemEntity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import { pickNearest } from "../game/entity-hit-test";
+import { totalAttack, totalDefense } from "../game/equipment";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
 import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { healthTier } from "../game/health-tier";
@@ -186,6 +188,8 @@ function sendGameState(): void {
       z: player.position.z,
       health: player.health,
       maxHealth: player.maxHealth,
+      attack: totalAttack(player),
+      defense: totalDefense(player),
     },
     entities,
     turnNumber,
@@ -361,11 +365,27 @@ function handlePlayerAction(action: PlayerAction): void {
   if (!turnLoop) return;
   if (followCamera.mode !== "follow") return;
   cancelOrbitAnimation();
+  // Snapshot entity names before the turn resolves (dead entities get removed).
+  const nameMap = new Map<number, string>();
+  for (const a of world.actors()) {
+    nameMap.set(a.id, a.name);
+  }
   const result = turnLoop.submitAction(action);
   if (result.resolved) {
     turnNumber++;
     sendSpriteUpdate();
     sendGameState();
+    const getName = (id: number) => nameMap.get(id) ?? "unknown";
+    const logEntries = formatCombatLog(
+      turnLoop.turnOrder()[0],
+      result.combatEvents,
+      result.deaths,
+      result.pickups,
+      getName,
+    );
+    if (logEntries.length > 0) {
+      sendToUI({ type: "combat_log", entries: logEntries });
+    }
     sendVisibilityMask();
     const player = world.getEntity(turnLoop.turnOrder()[0]);
     if (player) sendFollowCamera(player.position, true);

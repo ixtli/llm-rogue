@@ -179,6 +179,8 @@ export type GameToUIMessage =
         z: number;
         health: number;
         maxHealth: number;
+        attack: number;
+        defense: number;
       };
       entities: {
         id: number;
@@ -221,4 +223,8 @@ export type GameToUIMessage =
       entityId: number;
       screenX: number;
       screenY: number;
+    }
+  | {
+      type: "combat_log";
+      entries: { text: string; color: string }[];
     };

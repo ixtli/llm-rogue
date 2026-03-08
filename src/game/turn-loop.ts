@@ -25,6 +25,7 @@ export interface TurnResult {
   deaths: number[];
   terrainEffects: { entityId: number; effect: string; amount: number }[];
   combatEvents: CombatEvent[];
+  pickups: string[];
 }
 
 function attackDistance(attacker: Actor, target: Actor): number {
@@ -42,6 +43,7 @@ export class TurnLoop {
   private turnIndex = 0;
   private movementBudget = 0;
   private pendingCombatEvents: CombatEvent[] = [];
+  private pendingPickups: string[] = [];
 
   constructor(world: GameWorld, playerId: number) {
     this.world = world;
@@ -74,6 +76,7 @@ export class TurnLoop {
       deaths: [],
       terrainEffects: [],
       combatEvents: [],
+      pickups: [],
     };
     if (!this.isPlayerTurn()) return result;
     const player = this.world.getEntity(this.playerId) as Actor | undefined;
@@ -86,7 +89,20 @@ export class TurnLoop {
 
     if (action.type === "move") {
       if (this.movementBudget <= 0) return result;
-      if (!this.resolveMove(player, action)) return result;
+      if (!this.resolveMove(player, action)) {
+        // Bump-to-attack: if a hostile actor blocks the tile, auto-attack it
+        const nx = player.position.x + action.dx;
+        const nz = player.position.z + action.dz;
+        const blocker = this.world
+          .entitiesAt(nx, player.position.y, nz)
+          .find((e) => e.type === "npc" && (e as Actor).hostility === "hostile");
+        if (blocker) {
+          this.movementBudget = 0;
+          this.resolveAction(player, { type: "attack", targetId: blocker.id });
+        } else {
+          return result;
+        }
+      }
       result.resolved = true;
       // If budget remains, stay in move phase — don't run NPC turns yet
       if (this.movementBudget > 0) return result;
@@ -102,7 +118,7 @@ export class TurnLoop {
     const order = this.turnOrder();
     for (let i = 1; i < order.length; i++) {
       const npc = this.world.getEntity(order[i]) as Actor | undefined;
-      if (!npc) continue;
+      if (!npc || npc.health <= 0) continue;
       result.npcActions.push(this.resolveNpcTurn(npc));
       this.applyTerrainEffects(npc, result);
     }
@@ -115,6 +131,8 @@ export class TurnLoop {
     }
     result.combatEvents = this.pendingCombatEvents;
     this.pendingCombatEvents = [];
+    result.pickups = this.pendingPickups;
+    this.pendingPickups = [];
     this.turnIndex = 0;
     return result;
   }
@@ -163,6 +181,7 @@ export class TurnLoop {
         if (items.length === 0) return false;
         const ie = items[0] as ItemEntity;
         actor.inventory.push({ item: ie.item, quantity: 1 });
+        this.pendingPickups.push(ie.item.name);
         this.world.removeEntity(ie.id);
         return true;
       }
