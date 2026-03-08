@@ -36,6 +36,7 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
+    @location(2) uv_size: vec2<f32>,
 };
 
 @vertex
@@ -75,6 +76,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
         out.clip_position = vec4<f32>(0.0, 0.0, -1.0, 1.0);
         out.uv = vec2<f32>(0.0, 0.0);
         out.color = vec4<f32>(0.0);
+        out.uv_size = vec2<f32>(0.0, 0.0);
         return out;
     }
 
@@ -102,13 +104,20 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.clip_position = vec4<f32>(proj_x, proj_y, depth, 1.0);
     out.uv = in.uv_offset + quad_uvs[in.vertex_index] * in.uv_size;
     out.color = in.color;
+    out.uv_size = in.uv_size;
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let tex = textureSample(particle_atlas, particle_sampler, in.uv);
-    let final_color = tex * in.color;
+    var final_color: vec4<f32>;
+    if (in.uv_size.x < 0.001 && in.uv_size.y < 0.001) {
+        // Solid-color particle: no texture, use vertex color directly.
+        final_color = in.color;
+    } else {
+        let tex = textureSampleLevel(particle_atlas, particle_sampler, in.uv, 0.0);
+        final_color = tex * in.color;
+    }
     if (final_color.a < 0.01) {
         discard;
     }

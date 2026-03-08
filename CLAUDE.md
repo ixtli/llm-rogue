@@ -37,7 +37,7 @@ Q/E orbits the camera 90°, scroll zooms, Tab toggles free-look (WASD/mouse
 moves camera), C triggers cinematic flyby, F2 toggles edit mode, F3 toggles
 perspective/ortho projection. Space waits.
 
-Next milestone: Phase 8 (remaining: 8c particles, 8e wire particles, 8f item
+Next milestone: Phase 8 (remaining: 8g floating damage numbers, 8f item
 management UI, death/game over), Phase 9 (chunk server).
 
 ## Tech Stack
@@ -278,6 +278,8 @@ occlusion samples), using the material's palette color.
 | `PlayerHUD` | `src/ui/PlayerHUD.tsx` | HP bar (green/yellow/red), ATK/DEF stats overlay |
 | `CombatLog` | `src/ui/CombatLog.tsx` | Scrolling combat log (last 8 entries), color-coded by event type |
 | `EntityTooltip` | `src/ui/EntityTooltip.tsx` | Hover tooltip showing entity name, hostility, health tier |
+| `particle-effects` | `src/game/particle-effects.ts` | General particle builder: BurstConfig, buildBurst(), preset configs (hit/crit/death) |
+| `combat-particles` | `src/game/combat-particles.ts` | Maps CombatResult[] + deaths[] → ParticleBurst[] using presets and position lookup |
 
 ## Worktree Gotchas
 

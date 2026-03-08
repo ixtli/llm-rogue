@@ -18,13 +18,13 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Phase 8b | HUD & combat log: PlayerHUD (HP bar, ATK/DEF), CombatLog (color-coded scrolling), combat_log message, bump-to-attack, dead NPC turn skip | `archive/2026-03-07-phase8b-hud-combat-log-*.md` |
 | Phase 8c | Particle system: GPU particle pass, CPU ring buffer, emitters, burst API, WASM exports, TS message wiring | `archive/2026-03-05-phase8c-particle-system-impl.md` |
 | Phase 8d | Entity hover tooltips: screen projection, entity hit-test, EntityTooltip component, health tier | `archive/2026-03-06-phase8d-entity-hover-impl.md` |
+| Phase 8e | Combat particle effects: shader solid-color fallback, general buildBurst API, preset configs, combat event mapper, game worker wiring | `archive/2026-03-08-phase8e-combat-particles-*.md` |
 | Misc | Glam migration, app error screens, visual diagnostics, debounced resize, legacy cleanup, EngineError WASM boundary | `archive/2026-02-15-glam-migration-*.md`, `archive/2026-02-15-app-error-screen-tests*.md`, `archive/2026-02-24-visual-diagnostics-*.md`, `archive/2026-02-24-debounced-resize-*.md`, `archive/2026-02-24-legacy-cleanup-is-solid-*.md` |
 
 ## Not yet planned
 
 | Phase | Summary | Notes |
 |-------|---------|-------|
-| Phase 8e | Combat particle effects: hit/crit/death bursts via general particle builder API | Design ready |
 | Phase 8g | Floating damage numbers: digit atlas rasterization + number particles | Design needed |
 | Phase 8f | Item management UI: inventory display, equipment slots | Design needed |
 | Phase 8 (death) | Death/game over screen, respawn | Design needed |

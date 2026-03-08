@@ -137,6 +137,9 @@ const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
           Chunk: ({props.data.camera_chunk_x}, {props.data.camera_chunk_y},{" "}
           {props.data.camera_chunk_z})
         </div>
+        <div>
+          Particles: {props.data.alive_particles} Emitters: {props.data.active_emitters}
+        </div>
       </div>
     </Show>
   );

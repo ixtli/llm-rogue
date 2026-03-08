@@ -156,6 +156,8 @@ export type RenderToGameMessage =
       camera_chunk_x: number;
       camera_chunk_y: number;
       camera_chunk_z: number;
+      alive_particles: number;
+      active_emitters: number;
     }
   | {
       type: "chunk_terrain";
@@ -216,6 +218,8 @@ export type GameToUIMessage =
       camera_chunk_x: number;
       camera_chunk_y: number;
       camera_chunk_z: number;
+      alive_particles: number;
+      active_emitters: number;
     }
   | { type: "camera_mode"; mode: "follow" | "free_look" | "cinematic" }
   | {
