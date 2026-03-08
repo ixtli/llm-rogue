@@ -82,6 +82,36 @@ describe("TurnLoop", () => {
     expect(world.getEntity(npc.id)).toBeUndefined();
   });
 
+  it("bump-to-attack hostile blocker", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    const npc = createNpc({ x: 6, y: 5, z: 5 }, "hostile", 50);
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    // Move into hostile NPC → should auto-attack instead
+    const result = loop.submitAction({ type: "move", dx: 1, dz: 0 });
+    expect(result.resolved).toBe(true);
+    expect(player.position.x).toBe(5); // didn't move
+    expect(result.combatEvents.length).toBeGreaterThanOrEqual(1);
+    expect(result.combatEvents[0].attackerId).toBe(player.id);
+    expect(result.combatEvents[0].defenderId).toBe(npc.id);
+  });
+
+  it("bump into non-hostile does not attack", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    const npc = createNpc({ x: 6, y: 5, z: 5 }, "neutral", 50);
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "move", dx: 1, dz: 0 });
+    expect(result.resolved).toBe(false);
+    expect(result.combatEvents).toHaveLength(0);
+  });
+
   it("records pickup in result", () => {
     const world = new GameWorld();
     const player = createPlayer({ x: 5, y: 0, z: 5 });

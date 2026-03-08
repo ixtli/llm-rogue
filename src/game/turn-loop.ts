@@ -89,7 +89,20 @@ export class TurnLoop {
 
     if (action.type === "move") {
       if (this.movementBudget <= 0) return result;
-      if (!this.resolveMove(player, action)) return result;
+      if (!this.resolveMove(player, action)) {
+        // Bump-to-attack: if a hostile actor blocks the tile, auto-attack it
+        const nx = player.position.x + action.dx;
+        const nz = player.position.z + action.dz;
+        const blocker = this.world
+          .entitiesAt(nx, player.position.y, nz)
+          .find((e) => e.type === "npc" && (e as Actor).hostility === "hostile");
+        if (blocker) {
+          this.movementBudget = 0;
+          this.resolveAction(player, { type: "attack", targetId: blocker.id });
+        } else {
+          return result;
+        }
+      }
       result.resolved = true;
       // If budget remains, stay in move phase — don't run NPC turns yet
       if (this.movementBudget > 0) return result;
