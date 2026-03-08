@@ -337,7 +337,17 @@ const App: Component<AppProps> = (props) => {
       <DiagnosticsOverlay data={diagnostics()} />
       <Show when={appMode() === "play" && lastGameState()}>
         {(gs) => (
-          <>
+          <div
+            style={{
+              position: "absolute",
+              bottom: "10px",
+              left: "10px",
+              display: "flex",
+              "flex-direction": "column-reverse",
+              gap: "5px",
+              "pointer-events": "none",
+            }}
+          >
             <PlayerHUD
               data={{
                 health: gs().player.health,
@@ -347,7 +357,7 @@ const App: Component<AppProps> = (props) => {
               }}
             />
             <CombatLog entries={combatLogEntries()} />
-          </>
+          </div>
         )}
       </Show>
       <Show when={tooltipData()}>{(data) => <EntityTooltip data={data()} />}</Show>

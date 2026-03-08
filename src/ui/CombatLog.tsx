@@ -13,9 +13,6 @@ const CombatLog: Component<{ entries: CombatLogEntry[] }> = (props) => {
   return (
     <div
       style={{
-        position: "absolute",
-        bottom: "70px",
-        left: "10px",
         background: "rgba(0, 0, 0, 0.6)",
         color: "#e0e0e0",
         "font-family": "monospace",

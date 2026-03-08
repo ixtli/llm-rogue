@@ -19,9 +19,6 @@ const PlayerHUD: Component<{ data: PlayerHUDData }> = (props) => {
   return (
     <div
       style={{
-        position: "absolute",
-        bottom: "10px",
-        left: "10px",
         background: "rgba(0, 0, 0, 0.75)",
         color: "#e0e0e0",
         "font-family": "monospace",
