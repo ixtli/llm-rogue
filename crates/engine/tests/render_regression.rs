@@ -123,7 +123,7 @@ struct HeadlessRenderer {
 
 impl HeadlessRenderer {
     fn new() -> Self {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
 
         let storage_texture = create_storage_texture(&gpu.device, WIDTH, HEIGHT);
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());

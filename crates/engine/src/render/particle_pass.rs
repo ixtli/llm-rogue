@@ -395,7 +395,8 @@ mod tests {
 
     #[test]
     fn particle_pass_creates_without_panic() {
-        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let gpu =
+            pollster::block_on(crate::render::gpu::GpuContext::new_headless()).expect("GPU init");
         let camera_buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("test camera"),
             size: 128,

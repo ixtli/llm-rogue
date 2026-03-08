@@ -11,6 +11,7 @@ use camera::{CameraIntent, EasingKind};
 pub mod camera;
 pub mod chunk_manager;
 pub mod collision;
+pub mod error;
 pub mod map_features;
 pub mod particle_system;
 pub mod render;
@@ -29,11 +30,21 @@ fn main() {
 }
 
 /// Initializes the WebGPU renderer from the given [`OffscreenCanvas`].
+///
+/// # Errors
+///
+/// Returns a `JsValue` error if GPU initialization fails (no adapter,
+/// device creation error, or unsupported surface configuration).
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
-pub async fn init_renderer(canvas: OffscreenCanvas, width: u32, height: u32) {
-    let renderer = render::Renderer::new(canvas, width, height).await;
+pub async fn init_renderer(
+    canvas: OffscreenCanvas,
+    width: u32,
+    height: u32,
+) -> Result<(), JsValue> {
+    let renderer = render::Renderer::new(canvas, width, height).await?;
     RENDERER.with(|r| *r.borrow_mut() = Some(renderer));
+    Ok(())
 }
 
 /// Renders a single frame at the given timestamp (seconds).

@@ -301,14 +301,16 @@ mod tests {
 
     #[test]
     fn used_count_empty_atlas() {
-        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let gpu =
+            pollster::block_on(crate::render::gpu::GpuContext::new_headless()).expect("GPU init");
         let atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
         assert_eq!(atlas.used_count(), 0);
     }
 
     #[test]
     fn used_count_after_upload() {
-        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let gpu =
+            pollster::block_on(crate::render::gpu::GpuContext::new_headless()).expect("GPU init");
         let mut atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
         let grid = build_test_grid();
         let (coord, chunk) = &grid[0];
@@ -319,14 +321,16 @@ mod tests {
 
     #[test]
     fn occupancy_buffer_exists() {
-        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let gpu =
+            pollster::block_on(crate::render::gpu::GpuContext::new_headless()).expect("GPU init");
         let atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
         let _buf = atlas.occupancy_buffer();
     }
 
     #[test]
     fn occupancy_updated_on_upload() {
-        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let gpu =
+            pollster::block_on(crate::render::gpu::GpuContext::new_headless()).expect("GPU init");
         let mut atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
         let grid = build_test_grid();
         let (coord, chunk) = &grid[0];
@@ -337,7 +341,8 @@ mod tests {
 
     #[test]
     fn occupancy_cleared_on_clear_slot() {
-        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let gpu =
+            pollster::block_on(crate::render::gpu::GpuContext::new_headless()).expect("GPU init");
         let mut atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
         let grid = build_test_grid();
         let (coord, chunk) = &grid[0];
@@ -348,7 +353,8 @@ mod tests {
 
     #[test]
     fn atlas_upload_populates_index() {
-        let gpu = pollster::block_on(crate::render::gpu::GpuContext::new_headless());
+        let gpu =
+            pollster::block_on(crate::render::gpu::GpuContext::new_headless()).expect("GPU init");
         let mut atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
 
         let grid = build_test_grid();
