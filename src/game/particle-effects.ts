@@ -61,3 +61,50 @@ export function buildBurst(
 
   return { x, y, z, particles };
 }
+
+// --- Preset configs ---
+// Hex conversions: divide each channel by 255.
+
+/** Green #4ade80 — player dealt damage */
+export const BURST_HIT_DEALT: BurstConfig = {
+  color: [0.29, 0.87, 0.5, 1],
+  size: 0.15,
+  lifetimeMin: 0.4,
+  lifetimeMax: 0.6,
+  speed: 1.5,
+  upwardBias: 1.0,
+  spread: 0.3,
+};
+
+/** Red #f87171 — player took damage */
+export const BURST_HIT_TAKEN: BurstConfig = {
+  color: [0.97, 0.44, 0.44, 1],
+  size: 0.15,
+  lifetimeMin: 0.4,
+  lifetimeMax: 0.6,
+  speed: 1.5,
+  upwardBias: 1.0,
+  spread: 0.3,
+};
+
+/** Yellow #facc15 — critical hit */
+export const BURST_CRIT: BurstConfig = {
+  color: [0.98, 0.8, 0.08, 1],
+  size: 0.2,
+  lifetimeMin: 0.5,
+  lifetimeMax: 0.8,
+  speed: 2.0,
+  upwardBias: 1.5,
+  spread: 0.5,
+};
+
+/** Gray #9ca3af — entity death */
+export const BURST_DEATH: BurstConfig = {
+  color: [0.61, 0.64, 0.69, 1],
+  size: 0.25,
+  lifetimeMin: 0.6,
+  lifetimeMax: 1.0,
+  speed: 2.5,
+  upwardBias: 2.0,
+  spread: 0.8,
+};

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { type BurstConfig, buildBurst } from "../particle-effects";
+import {
+  BURST_CRIT,
+  BURST_DEATH,
+  BURST_HIT_DEALT,
+  BURST_HIT_TAKEN,
+  type BurstConfig,
+  buildBurst,
+} from "../particle-effects";
 
 const TEST_CONFIG: BurstConfig = {
   color: [1, 0, 0, 1],
@@ -72,5 +79,38 @@ describe("buildBurst", () => {
   it("returns zero particles when count is 0", () => {
     const burst = buildBurst(0, 0, 0, 0, TEST_CONFIG);
     expect(burst.particles.length).toBe(0);
+  });
+});
+
+describe("preset configs", () => {
+  it("BURST_HIT_DEALT has green color", () => {
+    expect(BURST_HIT_DEALT.color[1]).toBeGreaterThan(0.5); // green channel
+  });
+
+  it("BURST_HIT_TAKEN has red color", () => {
+    expect(BURST_HIT_TAKEN.color[0]).toBeGreaterThan(0.5); // red channel
+  });
+
+  it("BURST_CRIT has yellow color", () => {
+    expect(BURST_CRIT.color[0]).toBeGreaterThan(0.5); // red
+    expect(BURST_CRIT.color[1]).toBeGreaterThan(0.5); // green
+  });
+
+  it("BURST_DEATH has gray color", () => {
+    const [r, g, b] = BURST_DEATH.color;
+    expect(Math.abs(r - g)).toBeLessThan(0.1);
+    expect(Math.abs(g - b)).toBeLessThan(0.1);
+  });
+
+  it("BURST_CRIT is bigger and faster than BURST_HIT_DEALT", () => {
+    expect(BURST_CRIT.size).toBeGreaterThan(BURST_HIT_DEALT.size);
+    expect(BURST_CRIT.speed).toBeGreaterThan(BURST_HIT_DEALT.speed);
+  });
+
+  it("all presets produce valid bursts", () => {
+    for (const preset of [BURST_HIT_DEALT, BURST_HIT_TAKEN, BURST_CRIT, BURST_DEATH]) {
+      const burst = buildBurst(0, 0, 0, 4, preset);
+      expect(burst.particles.length).toBe(4 * 13);
+    }
   });
 });
