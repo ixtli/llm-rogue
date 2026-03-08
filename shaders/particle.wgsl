@@ -115,7 +115,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // Solid-color particle: no texture, use vertex color directly.
         final_color = in.color;
     } else {
-        let tex = textureSample(particle_atlas, particle_sampler, in.uv);
+        let tex = textureSampleLevel(particle_atlas, particle_sampler, in.uv, 0.0);
         final_color = tex * in.color;
     }
     if (final_color.a < 0.01) {
