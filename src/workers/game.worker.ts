@@ -365,15 +365,17 @@ function handlePlayerAction(action: PlayerAction): void {
   if (!turnLoop) return;
   if (followCamera.mode !== "follow") return;
   cancelOrbitAnimation();
+  // Snapshot entity names before the turn resolves (dead entities get removed).
+  const nameMap = new Map<number, string>();
+  for (const a of world.actors()) {
+    nameMap.set(a.id, a.name);
+  }
   const result = turnLoop.submitAction(action);
   if (result.resolved) {
     turnNumber++;
     sendSpriteUpdate();
     sendGameState();
-    const getName = (id: number) => {
-      const e = world.getEntity(id);
-      return (e && "name" in e ? e.name : "unknown") as string;
-    };
+    const getName = (id: number) => nameMap.get(id) ?? "unknown";
     const logEntries = formatCombatLog(
       turnLoop.turnOrder()[0],
       result.combatEvents,

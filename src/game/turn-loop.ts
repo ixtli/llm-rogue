@@ -118,7 +118,7 @@ export class TurnLoop {
     const order = this.turnOrder();
     for (let i = 1; i < order.length; i++) {
       const npc = this.world.getEntity(order[i]) as Actor | undefined;
-      if (!npc) continue;
+      if (!npc || npc.health <= 0) continue;
       result.npcActions.push(this.resolveNpcTurn(npc));
       this.applyTerrainEffects(npc, result);
     }

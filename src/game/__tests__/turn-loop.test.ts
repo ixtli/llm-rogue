@@ -267,6 +267,25 @@ describe("elevation combat", () => {
   });
 });
 
+describe("dead NPC skipping", () => {
+  it("dead NPC does not attack after lethal player hit", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    // NPC with 1 HP — will die from any hit
+    const npc = createNpc({ x: 6, y: 5, z: 5 }, "hostile", 1);
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "attack", targetId: npc.id });
+    expect(result.resolved).toBe(true);
+    expect(result.deaths).toContain(npc.id);
+    // Dead NPC should NOT have attacked back
+    const npcAttacks = result.combatEvents.filter((e) => e.attackerId === npc.id);
+    expect(npcAttacks).toHaveLength(0);
+  });
+});
+
 describe("combat resolution integration", () => {
   it("player attack uses stat-based damage", () => {
     const world = new GameWorld();
