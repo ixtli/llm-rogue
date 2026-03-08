@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn empty_buffer_has_zero_count() {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         let buf = LightBuffer::new(&gpu.device, 64);
         // Pack empty lights and verify count = 0
         let data = buf.pack(&[]);
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn pack_single_point_light() {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         let buf = LightBuffer::new(&gpu.device, 64);
         let light = Light {
             position: Vec3::new(1.0, 2.0, 3.0),
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn buffer_is_created() {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         let buf = LightBuffer::new(&gpu.device, 64);
         // Should not panic — buffer exists
         let _ = buf.buffer();

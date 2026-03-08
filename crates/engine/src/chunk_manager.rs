@@ -458,7 +458,7 @@ mod tests {
     use crate::render::gpu::GpuContext;
 
     fn make_manager(seed: u32, view_distance: u32) -> (GpuContext, ChunkManager) {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         let atlas_slots = UVec3::new(8, 8, 8);
         let mgr = ChunkManager::new(&gpu.device, seed, view_distance, atlas_slots);
         (gpu, mgr)
@@ -568,7 +568,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "must be >= 2*view_distance+1")]
     fn new_panics_on_undersized_atlas() {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         // vd=3 needs at least 7 per axis; (8, 4, 8) is too small on Y
         let _mgr = ChunkManager::new(&gpu.device, 42, 3, UVec3::new(8, 4, 8));
     }
@@ -747,7 +747,7 @@ mod tests {
 
     #[test]
     fn mutate_voxel_updates_collision_and_terrain() {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         let slots = UVec3::splat(7);
         // All-stone chunk: every voxel is deterministically solid.
         let mut mgr = ChunkManager::with_chunk_gen(
@@ -776,7 +776,7 @@ mod tests {
 
     #[test]
     fn custom_chunk_generator_is_used() {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         let slots = UVec3::splat(7);
         let mut mgr = ChunkManager::with_chunk_gen(
             &gpu.device,

@@ -118,11 +118,16 @@ pub struct Renderer {
 impl Renderer {
     /// Creates a new `Renderer` from the given [`OffscreenCanvas`] and dimensions.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if GPU initialization or resource creation fails.
-    pub async fn new(canvas: OffscreenCanvas, width: u32, height: u32) -> Self {
-        let (gpu, surface, surface_config) = GpuContext::new(canvas, width, height).await;
+    /// Returns [`EngineError`] if GPU initialization fails (no adapter,
+    /// device creation error, or unsupported surface).
+    pub async fn new(
+        canvas: OffscreenCanvas,
+        width: u32,
+        height: u32,
+    ) -> Result<Self, crate::error::EngineError> {
+        let (gpu, surface, surface_config) = GpuContext::new(canvas, width, height).await?;
 
         let storage_texture = create_storage_texture(&gpu.device, width, height);
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -177,7 +182,7 @@ impl Renderer {
         );
         let particle_system = ParticleSystem::new(256, 32);
 
-        Self {
+        Ok(Self {
             gpu,
             surface,
             surface_config,
@@ -203,7 +208,7 @@ impl Renderer {
             last_time: 0.0,
             last_dt: 1.0 / 60.0,
             last_wall_dt: 1.0 / 60.0,
-        }
+        })
     }
 
     /// Renders a single frame. Updates camera from current input state.

@@ -421,7 +421,7 @@ mod tests {
 
     #[test]
     fn raymarch_pass_accepts_occupancy_binding() {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         let slots = UVec3::new(4, 2, 4);
         let atlas = ChunkAtlas::new(&gpu.device, slots);
         let palette = build_palette();
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn rebuild_for_resize_updates_dimensions() {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         let slots = UVec3::new(4, 2, 4);
         let atlas = ChunkAtlas::new(&gpu.device, slots);
         let palette = build_palette();
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     fn update_visibility_mask_does_not_panic() {
-        let gpu = pollster::block_on(GpuContext::new_headless());
+        let gpu = pollster::block_on(GpuContext::new_headless()).expect("GPU init");
         let slots = UVec3::new(4, 2, 4);
         let atlas = ChunkAtlas::new(&gpu.device, slots);
         let palette = build_palette();
