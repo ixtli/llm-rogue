@@ -26,7 +26,6 @@ Living index of project phases. Detailed plans are in `archive/`.
 
 | Phase | Summary | Notes |
 |-------|---------|-------|
-| Phase 8g | Floating damage numbers: digit atlas + text particles | Completed |
 | Phase 8f | Item management UI: inventory display, equipment slots | Design needed |
 | Phase 8 (death) | Death/game over screen, respawn | Design needed |
 | Phase 9: Chunk server | LLM/MCP integration, compression codec, chunk worker thread, HTTP endpoints | Replaces procedural generation |

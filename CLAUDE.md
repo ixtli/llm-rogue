@@ -7,38 +7,42 @@ GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
 Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phases 1–7b and 8a/8b/8d are complete. The game has a
-turn-based game loop with stat-based combat (attack/defense/crit), equipment
+**Current state:** Phases 1–7b and 8a–8g are complete (except 8f). The game has
+a turn-based game loop with stat-based combat (attack/defense/crit), equipment
 slots, inventory, FOV (with shader dimming + desaturation), Y-axis-aware
 movement, bump-to-attack, follow camera with orbit/zoom, cinematic camera mode
 with waypoint queue, voxel mutation support, and dynamic local lighting
 (point/spot lights with radius culling, per-pixel budget cap, optional shadow
 rays). A player HUD shows HP bar, ATK/DEF stats, and a scrolling combat log
 displays color-coded combat events. Entity tooltips appear on hover with name,
-hostility, and health tier. Entity sprites are rendered as Unicode characters
-rasterized via browser canvas `fillText()`, packed into an 8×8 grid atlas with
-per-sprite tint (RGBA u32) and horizontal flip for facing. A modal edit mode
-(F2) with tool palette and sprite editor panel allows live editing of
-glyph-to-entity mappings. F3 toggles between perspective and orthographic
-projection (ortho default) with pixel-perfect snap zoom (discrete integer levels
-where atlas texels map to exact screen pixels) and camera position snapping for
-crisp voxel edges. The engine renders dynamically-loaded multi-chunk terrain with
-hard shadows, ambient occlusion, and local light sources via three-level DDA ray
-marching through a 3D texture atlas. Per-chunk 64-bit occupancy bitmasks skip
-empty 8×8×8 sub-regions. Chunk loading is budgeted (4/frame),
-distance-prioritized, with trajectory prediction and implicit LRU caching. A
-composable `MapFeature` system generates the play-test terrain. Three-thread
-architecture (UI → game worker → render worker) with a follow camera in the game
-worker and intent-based free-look fallback in the render worker. Rust error
-handling uses `EngineError` with `Result` propagation across the WASM boundary.
+hostility, and health tier. Combat produces GPU particle bursts (color-coded
+hit/crit/death) and floating damage numbers that track the camera orientation.
+Entity sprites are rendered as Unicode characters rasterized via browser canvas
+`fillText()`, packed into a 16×16 grid atlas (256 slots: 0–63 entity sprites,
+190–255 ASCII particle glyphs) with per-sprite tint (RGBA u32) and horizontal
+flip for facing. Half-width glyph detection narrows billboard size while
+preserving full UV sampling. A modal edit mode (F2) with tool palette and sprite
+editor panel allows live editing of glyph-to-entity mappings. F3 toggles between
+perspective and orthographic projection (ortho default) with pixel-perfect snap
+zoom (discrete integer levels where atlas texels map to exact screen pixels) and
+camera position snapping for crisp voxel edges. The engine renders
+dynamically-loaded multi-chunk terrain with hard shadows, ambient occlusion, and
+local light sources via three-level DDA ray marching through a 3D texture atlas.
+Per-chunk 64-bit occupancy bitmasks skip empty 8×8×8 sub-regions. Chunk loading
+is budgeted (4/frame), distance-prioritized, with trajectory prediction and
+implicit LRU caching. A composable `MapFeature` system generates the play-test
+terrain. Three-thread architecture (UI → game worker → render worker) with a
+follow camera in the game worker and intent-based free-look fallback in the
+render worker. Rust error handling uses `EngineError` with `Result` propagation
+across the WASM boundary.
 
 **Controls:** WASD moves the player (turn-based, bump-to-attack hostile NPCs),
 Q/E orbits the camera 90°, scroll zooms, Tab toggles free-look (WASD/mouse
 moves camera), C triggers cinematic flyby, F2 toggles edit mode, F3 toggles
 perspective/ortho projection. Space waits.
 
-Next milestone: Phase 8 (remaining: 8g floating damage numbers, 8f item
-management UI, death/game over), Phase 9 (chunk server).
+Next milestone: Phase 8 (remaining: 8f item management UI, death/game over),
+Phase 9 (chunk server).
 
 ## Tech Stack
 
@@ -268,8 +272,8 @@ occlusion samples), using the material's palette color.
 | `inventory` | `src/game/inventory.ts` | Inventory management with stacking |
 | `light_buffer` | `crates/engine/src/render/light_buffer.rs` | GPU storage buffer for dynamic lights (binding 8), pack/update API |
 | `sprite_pass` | `crates/engine/src/render/sprite_pass.rs` | Billboard sprite rendering: SpriteInstance (48 bytes), atlas texture, h-flip + tint |
-| `glyph-registry` | `src/ui/glyph-registry.ts` | GlyphRegistry: spriteId→char/label/tint mapping, localStorage persistence, tint packing |
-| `glyph-rasterizer` | `src/ui/glyph-rasterizer.ts` | Canvas fillText rasterizer: Unicode glyphs → 8×8 grid atlas RGBA buffer |
+| `glyph-registry` | `src/ui/glyph-registry.ts` | GlyphRegistry: spriteId→char/label/tint/halfWidth mapping, charToSlot for particle glyphs, localStorage persistence |
+| `glyph-rasterizer` | `src/ui/glyph-rasterizer.ts` | Canvas fillText rasterizer: Unicode glyphs → 16×16 grid atlas RGBA buffer, probeHalfWidth detection |
 | `app-mode` | `src/ui/app-mode.ts` | Play/edit mode signal, F2 toggle |
 | `ToolPalette` | `src/ui/ToolPalette.tsx` | Edit mode tool bar with sprite editor button |
 | `SpriteEditorPanel` | `src/ui/SpriteEditorPanel.tsx` | Glyph mapping editor: char, label, tint, resolution toggle, live atlas updates |
@@ -278,8 +282,9 @@ occlusion samples), using the material's palette color.
 | `PlayerHUD` | `src/ui/PlayerHUD.tsx` | HP bar (green/yellow/red), ATK/DEF stats overlay |
 | `CombatLog` | `src/ui/CombatLog.tsx` | Scrolling combat log (last 8 entries), color-coded by event type |
 | `EntityTooltip` | `src/ui/EntityTooltip.tsx` | Hover tooltip showing entity name, hostility, health tier |
-| `particle-effects` | `src/game/particle-effects.ts` | General particle builder: BurstConfig, buildBurst(), preset configs (hit/crit/death) |
-| `combat-particles` | `src/game/combat-particles.ts` | Maps CombatResult[] + deaths[] → ParticleBurst[] using presets and position lookup |
+| `particle_system` | `crates/engine/src/particle_system.rs` | CPU particle sim: Particle, ParticleTemplate, Emitter, ParticleSystem (advance/spawn/burst), delayed textured fadeout |
+| `particle-effects` | `src/game/particle-effects.ts` | Particle builders: BurstConfig, buildBurst(), buildTextParticles() (camera-relative text spread), preset configs |
+| `combat-particles` | `src/game/combat-particles.ts` | Maps CombatResult[] + deaths[] → ParticleBurst[] with color bursts + floating damage numbers |
 
 ## Worktree Gotchas
 
