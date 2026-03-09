@@ -179,11 +179,19 @@ describe("buildTextParticles", () => {
     expect(p[10]).toBeCloseTo(row / 16, 3);
   });
 
-  it("narrows UV width for half-width glyphs", () => {
+  it("uses full UV width for half-width glyphs (billboard size handles narrowing)", () => {
     const bursts = buildTextParticles("A", 0, 0, 0, TEXT_CONFIG, ATLAS);
     expect(bursts.length).toBe(1);
     const uvW = bursts[0].particles[11];
-    expect(uvW).toBeCloseTo(0.5 / 16, 3);
+    // Full cell UV width regardless of half-width; only billboard size narrows
+    expect(uvW).toBeCloseTo(1 / 16, 3);
+  });
+
+  it("narrows billboard size for half-width glyphs", () => {
+    const bursts = buildTextParticles("A", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(1);
+    // Size should be half of config.size for half-width
+    expect(bursts[0].particles[8]).toBeCloseTo(0.4, 3);
   });
 
   it("uses full UV width for full-width glyphs", () => {

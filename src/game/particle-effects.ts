@@ -68,7 +68,7 @@ export function buildTextParticles(
     const row = Math.floor(slot / cols);
     particles[9] = col * cellW;
     particles[10] = row * cellH;
-    particles[11] = hw ? cellW * 0.5 : cellW;
+    particles[11] = cellW; // full cell UV width; billboard size handles narrowing
     particles[12] = cellH;
 
     bursts.push({ x: charX, y, z, particles });
