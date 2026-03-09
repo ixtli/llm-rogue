@@ -1,3 +1,79 @@
+import { charToSlot } from "../ui/glyph-registry";
+
+export interface TextParticleConfig {
+  size: number; // world units for full-width glyph billboard
+  lifetime: number; // seconds
+  upwardSpeed: number; // world units/sec upward velocity
+  color: [number, number, number, number]; // RGBA 0-1
+}
+
+export interface AtlasInfo {
+  cols: number;
+  rows: number;
+  halfWidths: boolean[];
+}
+
+/**
+ * Build a particle burst where each character in `text` becomes a billboard
+ * particle textured from the atlas. Characters are laid out side-by-side,
+ * centered on (x, y, z). Returns null if no characters map to atlas slots.
+ */
+export function buildTextParticles(
+  text: string,
+  x: number,
+  y: number,
+  z: number,
+  config: TextParticleConfig,
+  atlas: AtlasInfo,
+): ParticleBurst | null {
+  const { cols, rows, halfWidths } = atlas;
+  const [r, g, b, a] = config.color;
+  const cellW = 1 / cols;
+  const cellH = 1 / rows;
+
+  // Resolve characters to slots
+  const chars: { slot: number; hw: boolean }[] = [];
+  for (const ch of text) {
+    const slot = charToSlot(ch);
+    if (slot === undefined) continue;
+    chars.push({ slot, hw: halfWidths[slot] ?? false });
+  }
+
+  if (chars.length === 0) return null;
+
+  const particles = new Float32Array(chars.length * 13);
+
+  for (let i = 0; i < chars.length; i++) {
+    const { slot, hw } = chars[i];
+    const off = i * 13;
+
+    // Velocity: straight up
+    particles[off + 0] = 0;
+    particles[off + 1] = config.upwardSpeed;
+    particles[off + 2] = 0;
+    particles[off + 3] = config.lifetime;
+
+    // Color
+    particles[off + 4] = r;
+    particles[off + 5] = g;
+    particles[off + 6] = b;
+    particles[off + 7] = a;
+
+    // Size: narrow for half-width
+    particles[off + 8] = hw ? config.size * 0.5 : config.size;
+
+    // UV rect from atlas grid
+    const col = slot % cols;
+    const row = Math.floor(slot / cols);
+    particles[off + 9] = col * cellW;
+    particles[off + 10] = row * cellH;
+    particles[off + 11] = hw ? cellW * 0.5 : cellW;
+    particles[off + 12] = cellH;
+  }
+
+  return { x, y, z, particles };
+}
+
 export interface BurstConfig {
   color: [number, number, number, number]; // RGBA 0-1
   size: number;
