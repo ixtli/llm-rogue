@@ -1,7 +1,7 @@
 import type { GlyphEntry } from "./glyph-registry";
 
-const ATLAS_COLS = 8;
-const ATLAS_ROWS = 8;
+const ATLAS_COLS = 16;
+const ATLAS_ROWS = 16;
 const FONT_FAMILY = "Unifont";
 
 const fontUrl = new URL("../../assets/ui/fonts/unifont.otf", import.meta.url).href;
