@@ -37,6 +37,25 @@ function isColorGlyph(data: Uint8ClampedArray): boolean {
   return false;
 }
 
+/**
+ * Probe whether a glyph is half-width (8×16) by checking if all pixels in the
+ * right half of a 16×16 native-size render are empty.
+ */
+export function probeHalfWidth(char: string): boolean {
+  const canvas = new OffscreenCanvas(NATIVE_SIZE, NATIVE_SIZE);
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = `${NATIVE_SIZE}px ${FONT_FAMILY}, sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "white";
+  ctx.fillText(char, 0, 0);
+  const data = ctx.getImageData(NATIVE_SIZE / 2, 0, NATIVE_SIZE / 2, NATIVE_SIZE).data;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] > 0) return false;
+  }
+  return true;
+}
+
 export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number): AtlasResult {
   const width = ATLAS_COLS * cellSize;
   const height = ATLAS_ROWS * cellSize;
