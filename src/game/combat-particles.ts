@@ -22,6 +22,7 @@ const DAMAGE_TEXT_CONFIG = {
   size: 0.8,
   lifetime: 1.0,
   upwardSpeed: 2.0,
+  tracking: 0.6,
 };
 
 /**
@@ -33,6 +34,7 @@ const DAMAGE_TEXT_CONFIG = {
  *                     Must return position for dead entities too
  *                     (use a snapshot taken before the turn resolves).
  * @param atlas  Optional atlas info for text damage number particles.
+ * @param cameraYaw  Camera yaw for text character spread direction.
  */
 export function buildCombatParticles(
   playerId: number,
@@ -40,6 +42,7 @@ export function buildCombatParticles(
   deaths: number[],
   getPosition: (id: number) => { x: number; y: number; z: number } | undefined,
   atlas?: AtlasInfo,
+  cameraYaw = 0,
 ): ParticleBurst[] {
   const bursts: ParticleBurst[] = [];
 
@@ -67,6 +70,7 @@ export function buildCombatParticles(
         pos.z,
         { ...DAMAGE_TEXT_CONFIG, color: burstConfig.color },
         atlas,
+        cameraYaw,
       );
       bursts.push(...textBursts);
     }

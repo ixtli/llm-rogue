@@ -125,7 +125,11 @@ const TEXT_CONFIG: TextParticleConfig = {
   lifetime: 1.0,
   upwardSpeed: 2.0,
   color: [1, 0, 0, 1],
+  tracking: 1.0,
 };
+
+// Camera yaw = PI means looking toward +Z, right vector is -X → +X (screen left to right)
+const CAM_YAW = Math.PI;
 
 const HALF_WIDTHS: boolean[] = new Array(256).fill(false);
 for (let i = 190; i < 256; i++) HALF_WIDTHS[i] = true;
@@ -138,14 +142,14 @@ const ATLAS: { cols: number; rows: number; halfWidths: boolean[] } = {
 
 describe("buildTextParticles", () => {
   it("returns correct position for single character", () => {
-    const bursts = buildTextParticles("5", 10, 20, 30, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("5", 10, 20, 30, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(1);
     expect(bursts[0].y).toBe(20);
     expect(bursts[0].z).toBe(30);
   });
 
   it("creates one burst per valid character", () => {
-    const bursts = buildTextParticles("123", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("123", 0, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(3);
     for (const burst of bursts) {
       expect(burst.particles.length).toBe(13);
@@ -153,17 +157,17 @@ describe("buildTextParticles", () => {
   });
 
   it("skips unmapped characters", () => {
-    const bursts = buildTextParticles("1\u20AC2", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("1\u20AC2", 0, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(2);
   });
 
   it("returns empty array for all-unmapped text", () => {
-    const bursts = buildTextParticles("\u20AC\u00A5\u00A3", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("\u20AC\u00A5\u00A3", 0, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts).toEqual([]);
   });
 
   it("sets UV rect from atlas grid", () => {
-    const bursts = buildTextParticles("0", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("0", 0, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(1);
     const p = bursts[0].particles;
     const uvW = p[11];
@@ -180,7 +184,7 @@ describe("buildTextParticles", () => {
   });
 
   it("uses full UV width for half-width glyphs (billboard size handles narrowing)", () => {
-    const bursts = buildTextParticles("A", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("A", 0, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(1);
     const uvW = bursts[0].particles[11];
     // Full cell UV width regardless of half-width; only billboard size narrows
@@ -188,7 +192,7 @@ describe("buildTextParticles", () => {
   });
 
   it("narrows billboard size for half-width glyphs", () => {
-    const bursts = buildTextParticles("A", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("A", 0, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(1);
     // Size should be half of config.size for half-width
     expect(bursts[0].particles[8]).toBeCloseTo(0.4, 3);
@@ -201,14 +205,14 @@ describe("buildTextParticles", () => {
       rows: 16,
       halfWidths: new Array(256).fill(false),
     };
-    const bursts = buildTextParticles("a", 0, 0, 0, TEXT_CONFIG, fullWidthAtlas);
+    const bursts = buildTextParticles("a", 0, 0, 0, TEXT_CONFIG, fullWidthAtlas, CAM_YAW);
     expect(bursts.length).toBe(1);
     const uvW = bursts[0].particles[11];
     expect(uvW).toBeCloseTo(1 / 16, 3);
   });
 
   it("assigns color from config", () => {
-    const bursts = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(1);
     const p = bursts[0].particles;
     expect(p[4]).toBe(1);
@@ -218,27 +222,39 @@ describe("buildTextParticles", () => {
   });
 
   it("assigns upward velocity", () => {
-    const bursts = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(1);
     expect(bursts[0].particles[1]).toBeCloseTo(2.0, 3);
   });
 
   it("sets zero horizontal velocity", () => {
-    const bursts = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    const bursts = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(1);
     expect(bursts[0].particles[0]).toBe(0);
     expect(bursts[0].particles[2]).toBe(0);
   });
 
-  it("positions characters with horizontal spread centered on origin", () => {
-    const bursts = buildTextParticles("12", 5, 0, 0, TEXT_CONFIG, ATLAS);
+  it("positions characters along camera right vector centered on origin", () => {
+    // cameraYaw = PI → right vector = (1, 0, 0), so characters spread along +X
+    const bursts = buildTextParticles("12", 5, 0, 3, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(2);
     // Characters should have different X positions
     expect(bursts[0].x).not.toBe(bursts[1].x);
     // They should be centered around x=5
     const avgX = (bursts[0].x + bursts[1].x) / 2;
-    expect(avgX).toBeCloseTo(5, 3);
-    // First character should be to the left
+    expect(avgX).toBeCloseTo(5, 2);
+    // First character ('1') should be to the left (lower X with right=(1,0,0))
     expect(bursts[0].x).toBeLessThan(bursts[1].x);
+    // Z should remain unchanged (spread is only along right vector)
+    expect(bursts[0].z).toBeCloseTo(3, 3);
+    expect(bursts[1].z).toBeCloseTo(3, 3);
+  });
+
+  it("reverses character order when camera faces opposite direction", () => {
+    // cameraYaw = 0 → right vector = (-1, 0, 0), characters spread along -X
+    const bursts = buildTextParticles("12", 5, 0, 0, TEXT_CONFIG, ATLAS, 0);
+    expect(bursts.length).toBe(2);
+    // '1' should be at higher X (to the right of camera = -X direction)
+    expect(bursts[0].x).toBeGreaterThan(bursts[1].x);
   });
 });

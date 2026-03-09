@@ -403,6 +403,7 @@ function handlePlayerAction(action: PlayerAction): void {
       result.deaths,
       getPos,
       atlasInfo,
+      lastSentYaw,
     );
     for (const burst of bursts) {
       sendToRender({

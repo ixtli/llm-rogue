@@ -5,6 +5,7 @@ export interface TextParticleConfig {
   lifetime: number; // seconds
   upwardSpeed: number; // world units/sec upward velocity
   color: [number, number, number, number]; // RGBA 0-1
+  tracking: number; // character spacing multiplier (1.0 = default, <1 = tighter)
 }
 
 export interface AtlasInfo {
@@ -15,9 +16,12 @@ export interface AtlasInfo {
 
 /**
  * Build particle bursts where each character in `text` becomes a separate
- * billboard burst at the correct horizontal offset. Characters are laid out
- * side-by-side, centered on (x, y, z). Returns empty array if no characters
- * map to atlas slots.
+ * billboard burst at the correct horizontal offset along the camera's right
+ * vector. Characters are laid out side-by-side, centered on (x, y, z).
+ * Returns empty array if no characters map to atlas slots.
+ *
+ * @param cameraYaw  Camera yaw in radians (atan2(-dir.x, -dir.z) convention).
+ *                   Used to compute the camera right vector for character spread.
  */
 export function buildTextParticles(
   text: string,
@@ -26,11 +30,17 @@ export function buildTextParticles(
   z: number,
   config: TextParticleConfig,
   atlas: AtlasInfo,
+  cameraYaw: number,
 ): ParticleBurst[] {
   const { cols, rows, halfWidths } = atlas;
   const [r, g, b, a] = config.color;
   const cellW = 1 / cols;
   const cellH = 1 / rows;
+  const tracking = config.tracking;
+
+  // Camera right vector from yaw (matches Rust convention)
+  const rightX = -Math.cos(cameraYaw);
+  const rightZ = Math.sin(cameraYaw);
 
   // Resolve characters to slots
   const chars: { slot: number; hw: boolean }[] = [];
@@ -42,16 +52,16 @@ export function buildTextParticles(
 
   if (chars.length === 0) return [];
 
-  const charWidths = chars.map((c) => (c.hw ? config.size * 0.5 : config.size));
+  const charWidths = chars.map((c) => (c.hw ? config.size * 0.5 : config.size) * tracking);
   const totalWidth = charWidths.reduce((sum, w) => sum + w, 0);
 
   const bursts: ParticleBurst[] = [];
-  let offsetX = -totalWidth / 2;
+  let offset = -totalWidth / 2;
 
   for (let i = 0; i < chars.length; i++) {
     const { slot, hw } = chars[i];
     const w = charWidths[i];
-    const charX = x + offsetX + w / 2; // center of this character
+    const center = offset + w / 2;
 
     const particles = new Float32Array(13);
     particles[0] = 0; // vx
@@ -68,11 +78,16 @@ export function buildTextParticles(
     const row = Math.floor(slot / cols);
     particles[9] = col * cellW;
     particles[10] = row * cellH;
-    particles[11] = cellW; // full cell UV width; billboard size handles narrowing
+    particles[11] = cellW;
     particles[12] = cellH;
 
-    bursts.push({ x: charX, y, z, particles });
-    offsetX += w;
+    bursts.push({
+      x: x + rightX * center,
+      y,
+      z: z + rightZ * center,
+      particles,
+    });
+    offset += w;
   }
 
   return bursts;
