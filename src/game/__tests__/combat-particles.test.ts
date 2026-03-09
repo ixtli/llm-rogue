@@ -86,3 +86,56 @@ describe("buildCombatParticles", () => {
     expect(bursts.length).toBe(2);
   });
 });
+
+const ATLAS_INFO = {
+  cols: 16,
+  rows: 16,
+  halfWidths: new Array(256).fill(false).map((_, i) => i >= 190),
+};
+
+describe("buildCombatParticles with damage numbers", () => {
+  it("includes text particle burst for damage dealt", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 5, crit: false, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
+    expect(bursts.length).toBe(2);
+  });
+
+  it("text burst has correct Y offset above entity", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 5, crit: false, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
+    const colorBurst = bursts[0];
+    const textBurst = bursts[1];
+    expect(textBurst.y).toBeGreaterThan(colorBurst.y);
+  });
+
+  it("text burst contains particles for each damage digit", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 12, crit: false, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
+    const textBurst = bursts[1];
+    // "12" = 2 chars × 13 floats
+    expect(textBurst.particles.length).toBe(2 * 13);
+  });
+
+  it("works without atlas info (backward compatible)", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 5, crit: false, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos);
+    expect(bursts.length).toBe(1);
+  });
+
+  it("crit damage includes text burst", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 10, crit: true, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
+    // 1 color burst (crit) + 1 text burst
+    expect(bursts.length).toBe(2);
+  });
+});
