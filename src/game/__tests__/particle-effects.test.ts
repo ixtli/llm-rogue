@@ -235,26 +235,24 @@ describe("buildTextParticles", () => {
   });
 
   it("positions characters along camera right vector centered on origin", () => {
-    // cameraYaw = PI → right vector = (1, 0, 0), so characters spread along +X
-    const bursts = buildTextParticles("12", 5, 0, 3, TEXT_CONFIG, ATLAS, CAM_YAW);
+    // cameraYaw = 0 → right = (1, 0, 0), characters spread along +X
+    const bursts = buildTextParticles("12", 5, 0, 3, TEXT_CONFIG, ATLAS, 0);
     expect(bursts.length).toBe(2);
-    // Characters should have different X positions
     expect(bursts[0].x).not.toBe(bursts[1].x);
-    // They should be centered around x=5
     const avgX = (bursts[0].x + bursts[1].x) / 2;
     expect(avgX).toBeCloseTo(5, 2);
-    // First character ('1') should be to the left (lower X with right=(1,0,0))
+    // '1' at lower X, '2' at higher X (left-to-right from camera)
     expect(bursts[0].x).toBeLessThan(bursts[1].x);
-    // Z should remain unchanged (spread is only along right vector)
+    // Z unchanged (right vector has no Z component at yaw=0)
     expect(bursts[0].z).toBeCloseTo(3, 3);
     expect(bursts[1].z).toBeCloseTo(3, 3);
   });
 
-  it("reverses character order when camera faces opposite direction", () => {
-    // cameraYaw = 0 → right vector = (-1, 0, 0), characters spread along -X
-    const bursts = buildTextParticles("12", 5, 0, 0, TEXT_CONFIG, ATLAS, 0);
+  it("flips spread direction when camera faces opposite way", () => {
+    // cameraYaw = PI → right = (-1, 0, 0), characters spread along -X
+    const bursts = buildTextParticles("12", 5, 0, 0, TEXT_CONFIG, ATLAS, CAM_YAW);
     expect(bursts.length).toBe(2);
-    // '1' should be at higher X (to the right of camera = -X direction)
+    // '1' at higher X, '2' at lower X (still left-to-right from camera's POV)
     expect(bursts[0].x).toBeGreaterThan(bursts[1].x);
   });
 });

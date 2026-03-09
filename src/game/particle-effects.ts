@@ -38,9 +38,9 @@ export function buildTextParticles(
   const cellH = 1 / rows;
   const tracking = config.tracking;
 
-  // Camera right vector from yaw (matches Rust convention)
-  const rightX = -Math.cos(cameraYaw);
-  const rightZ = Math.sin(cameraYaw);
+  // Camera right vector from yaw (matches Rust: right = (cos(yaw), 0, -sin(yaw)))
+  const rightX = Math.cos(cameraYaw);
+  const rightZ = -Math.sin(cameraYaw);
 
   // Resolve characters to slots
   const chars: { slot: number; hw: boolean }[] = [];
