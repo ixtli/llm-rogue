@@ -77,6 +77,7 @@ const App: Component<AppProps> = (props) => {
               cols: atlas.cols,
               rows: atlas.rows,
               tints,
+              halfWidths: atlas.halfWidths,
             } satisfies UIToGameMessage,
             [atlas.data],
           );
@@ -119,6 +120,7 @@ const App: Component<AppProps> = (props) => {
           cols: atlas.cols,
           rows: atlas.rows,
           tints,
+          halfWidths: atlas.halfWidths,
         } satisfies UIToGameMessage,
         [atlas.data],
       );

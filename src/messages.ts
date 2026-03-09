@@ -27,6 +27,7 @@ export type UIToGameMessage =
       cols: number;
       rows: number;
       tints: Uint32Array;
+      halfWidths: boolean[];
     };
 
 // --- Game Worker → Render Worker ---
@@ -97,6 +98,7 @@ export type GameToRenderMessage =
       cols: number;
       rows: number;
       tints: Uint32Array;
+      halfWidths: boolean[];
     }
   | { type: "set_projection"; mode: number; orthoSize: number }
   | {
