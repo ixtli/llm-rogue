@@ -14,9 +14,10 @@ export interface AtlasInfo {
 }
 
 /**
- * Build a particle burst where each character in `text` becomes a billboard
- * particle textured from the atlas. Characters are laid out side-by-side,
- * centered on (x, y, z). Returns null if no characters map to atlas slots.
+ * Build particle bursts where each character in `text` becomes a separate
+ * billboard burst at the correct horizontal offset. Characters are laid out
+ * side-by-side, centered on (x, y, z). Returns empty array if no characters
+ * map to atlas slots.
  */
 export function buildTextParticles(
   text: string,
@@ -25,7 +26,7 @@ export function buildTextParticles(
   z: number,
   config: TextParticleConfig,
   atlas: AtlasInfo,
-): ParticleBurst | null {
+): ParticleBurst[] {
   const { cols, rows, halfWidths } = atlas;
   const [r, g, b, a] = config.color;
   const cellW = 1 / cols;
@@ -39,39 +40,42 @@ export function buildTextParticles(
     chars.push({ slot, hw: halfWidths[slot] ?? false });
   }
 
-  if (chars.length === 0) return null;
+  if (chars.length === 0) return [];
 
-  const particles = new Float32Array(chars.length * 13);
+  const charWidths = chars.map((c) => (c.hw ? config.size * 0.5 : config.size));
+  const totalWidth = charWidths.reduce((sum, w) => sum + w, 0);
+
+  const bursts: ParticleBurst[] = [];
+  let offsetX = -totalWidth / 2;
 
   for (let i = 0; i < chars.length; i++) {
     const { slot, hw } = chars[i];
-    const off = i * 13;
+    const w = charWidths[i];
+    const charX = x + offsetX + w / 2; // center of this character
 
-    // Velocity: straight up
-    particles[off + 0] = 0;
-    particles[off + 1] = config.upwardSpeed;
-    particles[off + 2] = 0;
-    particles[off + 3] = config.lifetime;
+    const particles = new Float32Array(13);
+    particles[0] = 0; // vx
+    particles[1] = config.upwardSpeed; // vy
+    particles[2] = 0; // vz
+    particles[3] = config.lifetime;
+    particles[4] = r;
+    particles[5] = g;
+    particles[6] = b;
+    particles[7] = a;
+    particles[8] = hw ? config.size * 0.5 : config.size;
 
-    // Color
-    particles[off + 4] = r;
-    particles[off + 5] = g;
-    particles[off + 6] = b;
-    particles[off + 7] = a;
-
-    // Size: narrow for half-width
-    particles[off + 8] = hw ? config.size * 0.5 : config.size;
-
-    // UV rect from atlas grid
     const col = slot % cols;
     const row = Math.floor(slot / cols);
-    particles[off + 9] = col * cellW;
-    particles[off + 10] = row * cellH;
-    particles[off + 11] = hw ? cellW * 0.5 : cellW;
-    particles[off + 12] = cellH;
+    particles[9] = col * cellW;
+    particles[10] = row * cellH;
+    particles[11] = hw ? cellW * 0.5 : cellW;
+    particles[12] = cellH;
+
+    bursts.push({ x: charX, y, z, particles });
+    offsetX += w;
   }
 
-  return { x, y, z, particles };
+  return bursts;
 }
 
 export interface BurstConfig {

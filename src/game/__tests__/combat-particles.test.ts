@@ -99,6 +99,7 @@ describe("buildCombatParticles with damage numbers", () => {
       { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 5, crit: false, killed: false },
     ];
     const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
+    // 1 color burst + 1 text burst (single digit "5")
     expect(bursts.length).toBe(2);
   });
 
@@ -112,14 +113,16 @@ describe("buildCombatParticles with damage numbers", () => {
     expect(textBurst.y).toBeGreaterThan(colorBurst.y);
   });
 
-  it("text burst contains particles for each damage digit", () => {
+  it("text burst contains one burst per damage digit", () => {
     const events: CombatResult[] = [
       { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 12, crit: false, killed: false },
     ];
     const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
-    const textBurst = bursts[1];
-    // "12" = 2 chars × 13 floats
-    expect(textBurst.particles.length).toBe(2 * 13);
+    // 1 color burst + 2 text bursts (one per digit of "12")
+    expect(bursts.length).toBe(3);
+    // Each text burst has 13 floats (one particle)
+    expect(bursts[1].particles.length).toBe(13);
+    expect(bursts[2].particles.length).toBe(13);
   });
 
   it("works without atlas info (backward compatible)", () => {
@@ -130,12 +133,12 @@ describe("buildCombatParticles with damage numbers", () => {
     expect(bursts.length).toBe(1);
   });
 
-  it("crit damage includes text burst", () => {
+  it("crit damage includes text bursts", () => {
     const events: CombatResult[] = [
       { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 10, crit: true, killed: false },
     ];
     const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
-    // 1 color burst (crit) + 1 text burst
-    expect(bursts.length).toBe(2);
+    // 1 color burst (crit) + 2 text bursts (one per digit of "10")
+    expect(bursts.length).toBe(3);
   });
 });

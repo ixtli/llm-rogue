@@ -137,35 +137,35 @@ const ATLAS: { cols: number; rows: number; halfWidths: boolean[] } = {
 };
 
 describe("buildTextParticles", () => {
-  it("returns correct position", () => {
-    const burst = buildTextParticles("5", 10, 20, 30, TEXT_CONFIG, ATLAS);
-    expect(burst).not.toBeNull();
-    expect(burst?.x).toBe(10);
-    expect(burst?.y).toBe(20);
-    expect(burst?.z).toBe(30);
+  it("returns correct position for single character", () => {
+    const bursts = buildTextParticles("5", 10, 20, 30, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(1);
+    expect(bursts[0].y).toBe(20);
+    expect(bursts[0].z).toBe(30);
   });
 
-  it("creates one particle per valid character", () => {
-    const burst = buildTextParticles("123", 0, 0, 0, TEXT_CONFIG, ATLAS);
-    expect(burst).not.toBeNull();
-    expect(burst?.particles.length).toBe(3 * 13);
+  it("creates one burst per valid character", () => {
+    const bursts = buildTextParticles("123", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(3);
+    for (const burst of bursts) {
+      expect(burst.particles.length).toBe(13);
+    }
   });
 
   it("skips unmapped characters", () => {
-    const burst = buildTextParticles("1€2", 0, 0, 0, TEXT_CONFIG, ATLAS);
-    expect(burst).not.toBeNull();
-    expect(burst?.particles.length).toBe(2 * 13);
+    const bursts = buildTextParticles("1\u20AC2", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(2);
   });
 
-  it("returns null for all-unmapped text", () => {
-    const burst = buildTextParticles("€¥£", 0, 0, 0, TEXT_CONFIG, ATLAS);
-    expect(burst).toBeNull();
+  it("returns empty array for all-unmapped text", () => {
+    const bursts = buildTextParticles("\u20AC\u00A5\u00A3", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts).toEqual([]);
   });
 
   it("sets UV rect from atlas grid", () => {
-    const burst = buildTextParticles("0", 0, 0, 0, TEXT_CONFIG, ATLAS);
-    expect(burst).not.toBeNull();
-    const p = burst?.particles;
+    const bursts = buildTextParticles("0", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(1);
+    const p = bursts[0].particles;
     const uvW = p[11];
     const uvH = p[12];
     expect(uvW).toBeGreaterThan(0);
@@ -180,9 +180,9 @@ describe("buildTextParticles", () => {
   });
 
   it("narrows UV width for half-width glyphs", () => {
-    const burst = buildTextParticles("A", 0, 0, 0, TEXT_CONFIG, ATLAS);
-    expect(burst).not.toBeNull();
-    const uvW = burst?.particles[11];
+    const bursts = buildTextParticles("A", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(1);
+    const uvW = bursts[0].particles[11];
     expect(uvW).toBeCloseTo(0.5 / 16, 3);
   });
 
@@ -193,16 +193,16 @@ describe("buildTextParticles", () => {
       rows: 16,
       halfWidths: new Array(256).fill(false),
     };
-    const burst = buildTextParticles("a", 0, 0, 0, TEXT_CONFIG, fullWidthAtlas);
-    expect(burst).not.toBeNull();
-    const uvW = burst?.particles[11];
+    const bursts = buildTextParticles("a", 0, 0, 0, TEXT_CONFIG, fullWidthAtlas);
+    expect(bursts.length).toBe(1);
+    const uvW = bursts[0].particles[11];
     expect(uvW).toBeCloseTo(1 / 16, 3);
   });
 
   it("assigns color from config", () => {
-    const burst = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS);
-    expect(burst).not.toBeNull();
-    const p = burst?.particles;
+    const bursts = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(1);
+    const p = bursts[0].particles;
     expect(p[4]).toBe(1);
     expect(p[5]).toBe(0);
     expect(p[6]).toBe(0);
@@ -210,15 +210,27 @@ describe("buildTextParticles", () => {
   });
 
   it("assigns upward velocity", () => {
-    const burst = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS);
-    expect(burst).not.toBeNull();
-    expect(burst?.particles[1]).toBeCloseTo(2.0, 3);
+    const bursts = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(1);
+    expect(bursts[0].particles[1]).toBeCloseTo(2.0, 3);
   });
 
   it("sets zero horizontal velocity", () => {
-    const burst = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS);
-    expect(burst).not.toBeNull();
-    expect(burst?.particles[0]).toBe(0);
-    expect(burst?.particles[2]).toBe(0);
+    const bursts = buildTextParticles("1", 0, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(1);
+    expect(bursts[0].particles[0]).toBe(0);
+    expect(bursts[0].particles[2]).toBe(0);
+  });
+
+  it("positions characters with horizontal spread centered on origin", () => {
+    const bursts = buildTextParticles("12", 5, 0, 0, TEXT_CONFIG, ATLAS);
+    expect(bursts.length).toBe(2);
+    // Characters should have different X positions
+    expect(bursts[0].x).not.toBe(bursts[1].x);
+    // They should be centered around x=5
+    const avgX = (bursts[0].x + bursts[1].x) / 2;
+    expect(avgX).toBeCloseTo(5, 3);
+    // First character should be to the left
+    expect(bursts[0].x).toBeLessThan(bursts[1].x);
   });
 });

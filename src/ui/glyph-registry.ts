@@ -50,6 +50,12 @@ export class GlyphRegistry {
     if (raw) {
       try {
         this._entries = JSON.parse(raw);
+        // Migration: entries persisted before halfWidth was added
+        for (const entry of this._entries) {
+          if ((entry as Record<string, unknown>).halfWidth === undefined) {
+            entry.halfWidth = false;
+          }
+        }
       } catch {
         this._entries = [...DEFAULT_ENTRIES];
       }
@@ -85,7 +91,7 @@ export class GlyphRegistry {
     if (idx >= 0) {
       this._entries[idx] = { ...this._entries[idx], ...update };
     } else {
-      this._entries.push({ spriteId, ...update });
+      this._entries.push({ spriteId, halfWidth: false, ...update });
     }
     this.persist();
   }

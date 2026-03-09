@@ -60,7 +60,7 @@ export function buildCombatParticles(
     }
 
     if (atlas) {
-      const textBurst = buildTextParticles(
+      const textBursts = buildTextParticles(
         event.damage.toString(),
         pos.x,
         pos.y + TEXT_Y_OFFSET,
@@ -68,7 +68,7 @@ export function buildCombatParticles(
         { ...DAMAGE_TEXT_CONFIG, color: burstConfig.color },
         atlas,
       );
-      if (textBurst) bursts.push(textBurst);
+      bursts.push(...textBursts);
     }
   }
 
