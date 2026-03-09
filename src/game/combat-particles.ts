@@ -22,7 +22,7 @@ const DAMAGE_TEXT_CONFIG = {
   size: 0.8,
   lifetime: 1.0,
   upwardSpeed: 2.0,
-  tracking: 0.6,
+  tracking: 0.35,
 };
 
 /**
