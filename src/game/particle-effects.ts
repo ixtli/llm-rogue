@@ -1,3 +1,98 @@
+import { charToSlot } from "../ui/glyph-registry";
+
+export interface TextParticleConfig {
+  size: number; // world units for full-width glyph billboard
+  lifetime: number; // seconds
+  upwardSpeed: number; // world units/sec upward velocity
+  color: [number, number, number, number]; // RGBA 0-1
+  tracking: number; // character spacing multiplier (1.0 = default, <1 = tighter)
+}
+
+export interface AtlasInfo {
+  cols: number;
+  rows: number;
+  halfWidths: boolean[];
+}
+
+/**
+ * Build particle bursts where each character in `text` becomes a separate
+ * billboard burst at the correct horizontal offset along the camera's right
+ * vector. Characters are laid out side-by-side, centered on (x, y, z).
+ * Returns empty array if no characters map to atlas slots.
+ *
+ * @param cameraYaw  Camera yaw in radians (atan2(-dir.x, -dir.z) convention).
+ *                   Used to compute the camera right vector for character spread.
+ */
+export function buildTextParticles(
+  text: string,
+  x: number,
+  y: number,
+  z: number,
+  config: TextParticleConfig,
+  atlas: AtlasInfo,
+  cameraYaw: number,
+): ParticleBurst[] {
+  const { cols, rows, halfWidths } = atlas;
+  const [r, g, b, a] = config.color;
+  const cellW = 1 / cols;
+  const cellH = 1 / rows;
+  const tracking = config.tracking;
+
+  // Camera right vector from yaw (matches Rust: right = (cos(yaw), 0, -sin(yaw)))
+  const rightX = Math.cos(cameraYaw);
+  const rightZ = -Math.sin(cameraYaw);
+
+  // Resolve characters to slots
+  const chars: { slot: number; hw: boolean }[] = [];
+  for (const ch of text) {
+    const slot = charToSlot(ch);
+    if (slot === undefined) continue;
+    chars.push({ slot, hw: halfWidths[slot] ?? false });
+  }
+
+  if (chars.length === 0) return [];
+
+  const charWidths = chars.map((c) => (c.hw ? config.size * 0.5 : config.size) * tracking);
+  const totalWidth = charWidths.reduce((sum, w) => sum + w, 0);
+
+  const bursts: ParticleBurst[] = [];
+  let offset = -totalWidth / 2;
+
+  for (let i = 0; i < chars.length; i++) {
+    const { slot, hw } = chars[i];
+    const w = charWidths[i];
+    const center = offset + w / 2;
+
+    const particles = new Float32Array(13);
+    particles[0] = 0; // vx
+    particles[1] = config.upwardSpeed; // vy
+    particles[2] = 0; // vz
+    particles[3] = config.lifetime;
+    particles[4] = r;
+    particles[5] = g;
+    particles[6] = b;
+    particles[7] = a;
+    particles[8] = hw ? config.size * 0.5 : config.size;
+
+    const col = slot % cols;
+    const row = Math.floor(slot / cols);
+    particles[9] = col * cellW;
+    particles[10] = row * cellH;
+    particles[11] = cellW;
+    particles[12] = cellH;
+
+    bursts.push({
+      x: x + rightX * center,
+      y,
+      z: z + rightZ * center,
+      particles,
+    });
+    offset += w;
+  }
+
+  return bursts;
+}
+
 export interface BurstConfig {
   color: [number, number, number, number]; // RGBA 0-1
   size: number;

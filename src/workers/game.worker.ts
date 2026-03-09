@@ -10,6 +10,7 @@ import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
 import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { healthTier } from "../game/health-tier";
 import { LightManager } from "../game/light-manager";
+import type { AtlasInfo } from "../game/particle-effects";
 import { type CameraParams, projectToScreen } from "../game/screen-projection";
 import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
@@ -62,6 +63,7 @@ let gameInitialized = false;
 let screenWidth = 0;
 let screenHeight = 0;
 let lastHoveredEntityId = 0;
+let atlasInfo: AtlasInfo | undefined;
 
 // Camera state from render worker stats (used for entity hover projection)
 let lastCamX = 0;
@@ -400,6 +402,8 @@ function handlePlayerAction(action: PlayerAction): void {
       result.combatEvents,
       result.deaths,
       getPos,
+      atlasInfo,
+      lastSentYaw,
     );
     for (const burst of bursts) {
       sendToRender({
@@ -760,6 +764,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     screenHeight = msg.height;
     sendToRender({ type: "resize", width: msg.width, height: msg.height });
   } else if (msg.type === "sprite_atlas") {
+    atlasInfo = { cols: msg.cols, rows: msg.rows, halfWidths: msg.halfWidths };
     sendToRender(msg);
   } else if (msg.type === "mouse_move") {
     handleMouseMove(msg.screenX, msg.screenY);

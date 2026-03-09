@@ -1,7 +1,7 @@
-import type { GlyphEntry } from "./glyph-registry";
+import { ASCII_PARTICLE_GLYPHS, type GlyphEntry, PARTICLE_GLYPH_START } from "./glyph-registry";
 
-const ATLAS_COLS = 8;
-const ATLAS_ROWS = 8;
+const ATLAS_COLS = 16;
+const ATLAS_ROWS = 16;
 const FONT_FAMILY = "Unifont";
 
 const fontUrl = new URL("../../assets/ui/fonts/unifont.otf", import.meta.url).href;
@@ -23,6 +23,7 @@ export interface AtlasResult {
   height: number;
   cols: number;
   rows: number;
+  halfWidths: boolean[];
 }
 
 /** Unifont native glyph height in pixels. */
@@ -37,13 +38,31 @@ function isColorGlyph(data: Uint8ClampedArray): boolean {
   return false;
 }
 
+/**
+ * Probe whether a glyph is half-width (8×16) by checking if all pixels in the
+ * right half of a 16×16 native-size render are empty.
+ */
+export function probeHalfWidth(char: string): boolean {
+  const canvas = new OffscreenCanvas(NATIVE_SIZE, NATIVE_SIZE);
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = `${NATIVE_SIZE}px ${FONT_FAMILY}, sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "white";
+  ctx.fillText(char, 0, 0);
+  const data = ctx.getImageData(NATIVE_SIZE / 2, 0, NATIVE_SIZE / 2, NATIVE_SIZE).data;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] > 0) return false;
+  }
+  return true;
+}
+
 export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number): AtlasResult {
   const width = ATLAS_COLS * cellSize;
   const height = ATLAS_ROWS * cellSize;
+  const totalSlots = ATLAS_COLS * ATLAS_ROWS;
+  const halfWidths: boolean[] = new Array(totalSlots).fill(false);
 
-  // Small canvas for probing whether a glyph is a color emoji or a
-  // monochrome bitmap glyph. Monochrome glyphs get the 1-bit pipeline
-  // (threshold + nearest-neighbor upscale); color emojis render normally.
   const glyphCanvas = new OffscreenCanvas(NATIVE_SIZE, NATIVE_SIZE);
   const glyphCtx = glyphCanvas.getContext("2d")!;
   glyphCtx.font = `${NATIVE_SIZE}px ${FONT_FAMILY}, sans-serif`;
@@ -54,28 +73,25 @@ export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number)
   const atlas = new OffscreenCanvas(width, height);
   const ctx = atlas.getContext("2d")!;
 
-  for (const entry of entries) {
-    if (entry.spriteId >= ATLAS_COLS * ATLAS_ROWS) continue;
-    const col = entry.spriteId % ATLAS_COLS;
-    const row = Math.floor(entry.spriteId / ATLAS_COLS);
+  const renderGlyph = (char: string, spriteId: number) => {
+    if (spriteId >= totalSlots) return;
+    const col = spriteId % ATLAS_COLS;
+    const row = Math.floor(spriteId / ATLAS_COLS);
     const dx = col * cellSize;
     const dy = row * cellSize;
 
-    // Probe: render at native size to detect color vs monochrome
     glyphCtx.clearRect(0, 0, NATIVE_SIZE, NATIVE_SIZE);
-    glyphCtx.fillText(entry.char, NATIVE_SIZE / 2, NATIVE_SIZE / 2);
+    glyphCtx.fillText(char, NATIVE_SIZE / 2, NATIVE_SIZE / 2);
     const gd = glyphCtx.getImageData(0, 0, NATIVE_SIZE, NATIVE_SIZE);
 
     if (isColorGlyph(gd.data)) {
-      // Color emoji — render at full cell size with normal AA
       ctx.imageSmoothingEnabled = true;
       const fontSize = Math.floor(cellSize * 0.8);
       ctx.font = `${fontSize}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(entry.char, dx + cellSize / 2, dy + cellSize / 2);
+      ctx.fillText(char, dx + cellSize / 2, dy + cellSize / 2);
     } else {
-      // Monochrome bitmap — threshold alpha to 1-bit, nearest-neighbor upscale
       const px = gd.data;
       for (let i = 3; i < px.length; i += 4) {
         px[i] = px[i] >= 250 ? 255 : 0;
@@ -84,6 +100,18 @@ export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number)
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(glyphCanvas, dx, dy, cellSize, cellSize);
     }
+  };
+
+  for (const entry of entries) {
+    renderGlyph(entry.char, entry.spriteId);
+    halfWidths[entry.spriteId] = entry.halfWidth;
+  }
+
+  for (let i = 0; i < ASCII_PARTICLE_GLYPHS.length; i++) {
+    const char = ASCII_PARTICLE_GLYPHS[i];
+    const spriteId = PARTICLE_GLYPH_START + i;
+    renderGlyph(char, spriteId);
+    halfWidths[spriteId] = probeHalfWidth(char);
   }
 
   const imageData = ctx.getImageData(0, 0, width, height);
@@ -93,5 +121,6 @@ export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number)
     height,
     cols: ATLAS_COLS,
     rows: ATLAS_ROWS,
+    halfWidths,
   };
 }

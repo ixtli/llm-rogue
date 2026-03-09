@@ -56,6 +56,7 @@ let atlasMetadata: {
   width: number;
   height: number;
   tints: Uint32Array;
+  halfWidths: boolean[];
 } | null = null;
 let lastSpriteUpdate: GameToRenderMessage | null = null;
 
@@ -245,6 +246,7 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
       width: msg.width,
       height: msg.height,
       tints: msg.tints,
+      halfWidths: msg.halfWidths,
     };
     // Re-pack sprites with correct UVs/tints now that atlas metadata is available
     if (lastSpriteUpdate && lastSpriteUpdate.type === "sprite_update") {

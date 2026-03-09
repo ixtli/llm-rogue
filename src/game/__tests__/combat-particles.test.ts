@@ -86,3 +86,59 @@ describe("buildCombatParticles", () => {
     expect(bursts.length).toBe(2);
   });
 });
+
+const ATLAS_INFO = {
+  cols: 16,
+  rows: 16,
+  halfWidths: new Array(256).fill(false).map((_, i) => i >= 190),
+};
+
+describe("buildCombatParticles with damage numbers", () => {
+  it("includes text particle burst for damage dealt", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 5, crit: false, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
+    // 1 color burst + 1 text burst (single digit "5")
+    expect(bursts.length).toBe(2);
+  });
+
+  it("text burst has correct Y offset above entity", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 5, crit: false, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
+    const colorBurst = bursts[0];
+    const textBurst = bursts[1];
+    expect(textBurst.y).toBeGreaterThan(colorBurst.y);
+  });
+
+  it("text burst contains one burst per damage digit", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 12, crit: false, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
+    // 1 color burst + 2 text bursts (one per digit of "12")
+    expect(bursts.length).toBe(3);
+    // Each text burst has 13 floats (one particle)
+    expect(bursts[1].particles.length).toBe(13);
+    expect(bursts[2].particles.length).toBe(13);
+  });
+
+  it("works without atlas info (backward compatible)", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 5, crit: false, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos);
+    expect(bursts.length).toBe(1);
+  });
+
+  it("crit damage includes text bursts", () => {
+    const events: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 10, crit: true, killed: false },
+    ];
+    const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
+    // 1 color burst (crit) + 2 text bursts (one per digit of "10")
+    expect(bursts.length).toBe(3);
+  });
+});

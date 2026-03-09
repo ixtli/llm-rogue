@@ -167,7 +167,16 @@ impl ParticleSystem {
             .iter()
             .filter(|p| p.alive)
             .map(|p| {
-                let alpha = 1.0 - (p.age / p.lifetime);
+                let t = p.age / p.lifetime;
+                let is_textured = p.uv_rect[2] > 0.001 || p.uv_rect[3] > 0.001;
+                // Textured particles (text): hold full alpha for 60% of
+                // lifetime, then fade over the remaining 40%.
+                // Solid-color particles: linear fade from birth.
+                let alpha = if is_textured {
+                    if t < 0.6 { 1.0 } else { 1.0 - (t - 0.6) / 0.4 }
+                } else {
+                    1.0 - t
+                };
                 ParticleVertex {
                     position: p.position.into(),
                     size: p.size,
@@ -318,6 +327,49 @@ mod tests {
         sys.advance(0.5);
         let verts = sys.build_vertices();
         assert!((verts[0].color[3] - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn textured_particle_holds_alpha_then_fades() {
+        let mut sys = ParticleSystem::new(256, 32);
+        // Textured particle: non-zero uv_rect
+        sys.spawn_one(Particle::new(
+            Vec3::ZERO,
+            Vec3::ZERO,
+            1.0,
+            [1.0, 0.0, 0.0, 1.0],
+            0.3,
+            [0.0, 0.0, 0.0625, 0.0625], // non-zero UV = textured
+        ));
+        // At 50% lifetime (within hold period): alpha should be 1.0
+        sys.advance(0.5);
+        let verts = sys.build_vertices();
+        assert!(
+            (verts[0].color[3] - 1.0).abs() < 0.01,
+            "textured alpha at t=0.5 should be ~1.0, got {}",
+            verts[0].color[3]
+        );
+    }
+
+    #[test]
+    fn textured_particle_fades_after_hold() {
+        let mut sys = ParticleSystem::new(256, 32);
+        sys.spawn_one(Particle::new(
+            Vec3::ZERO,
+            Vec3::ZERO,
+            1.0,
+            [1.0, 0.0, 0.0, 1.0],
+            0.3,
+            [0.0, 0.0, 0.0625, 0.0625],
+        ));
+        // At 80% lifetime (in fade period): alpha should be ~0.5
+        sys.advance(0.8);
+        let verts = sys.build_vertices();
+        assert!(
+            (verts[0].color[3] - 0.5).abs() < 0.05,
+            "textured alpha at t=0.8 should be ~0.5, got {}",
+            verts[0].color[3]
+        );
     }
 
     #[test]
