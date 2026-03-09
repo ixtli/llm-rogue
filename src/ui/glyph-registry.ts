@@ -6,12 +6,13 @@ export interface GlyphEntry {
   char: string;
   label: string;
   tint: string | null;
+  halfWidth: boolean;
 }
 
 export const DEFAULT_ENTRIES: GlyphEntry[] = [
-  { spriteId: 0, char: "@", label: "Player", tint: "#00FF00" },
-  { spriteId: 1, char: "r", label: "Rat", tint: "#CC6666" },
-  { spriteId: 2, char: "\u2020", label: "Sword", tint: "#CCCCCC" },
+  { spriteId: 0, char: "@", label: "Player", tint: "#00FF00", halfWidth: false },
+  { spriteId: 1, char: "r", label: "Rat", tint: "#CC6666", halfWidth: false },
+  { spriteId: 2, char: "\u2020", label: "Sword", tint: "#CCCCCC", halfWidth: false },
 ];
 
 export function hexToRgbaU32(hex: string): number {
@@ -22,6 +23,23 @@ export function hexToRgbaU32(hex: string): number {
 }
 
 const OPAQUE_WHITE = 0xffffffff;
+
+/** First atlas slot for ASCII particle glyphs. */
+export const PARTICLE_GLYPH_START = 190;
+
+/** Characters assigned to particle glyph slots, in order from PARTICLE_GLYPH_START. */
+export const ASCII_PARTICLE_GLYPHS =
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?+-";
+
+const _charToSlotMap = new Map<string, number>();
+for (let i = 0; i < ASCII_PARTICLE_GLYPHS.length; i++) {
+  _charToSlotMap.set(ASCII_PARTICLE_GLYPHS[i], PARTICLE_GLYPH_START + i);
+}
+
+/** Look up the atlas slot for a particle glyph character. */
+export function charToSlot(char: string): number | undefined {
+  return _charToSlotMap.get(char);
+}
 
 export class GlyphRegistry {
   private _entries: GlyphEntry[];
@@ -59,7 +77,10 @@ export class GlyphRegistry {
     return this._entries.find((e) => e.spriteId === spriteId);
   }
 
-  set(spriteId: number, update: { char: string; label: string; tint: string | null }): void {
+  set(
+    spriteId: number,
+    update: { char: string; label: string; tint: string | null; halfWidth?: boolean },
+  ): void {
     const idx = this._entries.findIndex((e) => e.spriteId === spriteId);
     if (idx >= 0) {
       this._entries[idx] = { ...this._entries[idx], ...update };
@@ -69,10 +90,10 @@ export class GlyphRegistry {
     this.persist();
   }
 
-  add(entry: { char: string; label: string; tint: string | null }): number {
+  add(entry: { char: string; label: string; tint: string | null; halfWidth?: boolean }): number {
     const maxId = this._entries.reduce((max, e) => Math.max(max, e.spriteId), -1);
     const spriteId = maxId + 1;
-    this._entries.push({ spriteId, ...entry });
+    this._entries.push({ spriteId, halfWidth: false, ...entry });
     this.persist();
     return spriteId;
   }
