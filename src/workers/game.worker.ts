@@ -5,7 +5,7 @@ import { buildCombatParticles } from "../game/combat-particles";
 import type { Actor, Entity, ItemEntity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import { pickNearest } from "../game/entity-hit-test";
-import { totalAttack, totalDefense } from "../game/equipment";
+import { equip, totalAttack, totalDefense, unequip } from "../game/equipment";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
 import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { healthTier } from "../game/health-tier";
@@ -184,6 +184,32 @@ function sendGameState(): void {
     });
   }
 
+  const inventory = player.inventory.slots
+    .filter((s): s is NonNullable<typeof s> => s !== null)
+    .map((s) => ({
+      itemId: s.item.id,
+      name: s.item.name,
+      type: s.item.type,
+      quantity: s.quantity,
+      slot: s.item.slot,
+      damage: s.item.damage,
+      defense: s.item.defense,
+      critBonus: s.item.critBonus,
+      stackable: s.item.stackable,
+    }));
+
+  const serializeSlot = (slot: "weapon" | "armor" | "helmet" | "ring") => {
+    const item = player.equipment[slot];
+    if (!item) return null;
+    return {
+      itemId: item.id,
+      name: item.name,
+      damage: item.damage,
+      defense: item.defense,
+      critBonus: item.critBonus,
+    };
+  };
+
   sendToUI({
     type: "game_state",
     player: {
@@ -196,6 +222,13 @@ function sendGameState(): void {
       defense: totalDefense(player),
     },
     entities,
+    inventory,
+    equipment: {
+      weapon: serializeSlot("weapon"),
+      armor: serializeSlot("armor"),
+      helmet: serializeSlot("helmet"),
+      ring: serializeSlot("ring"),
+    },
     turnNumber,
   });
 }
@@ -714,7 +747,62 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       }
     }
   } else if (msg.type === "player_action") {
-    // Explicit player action from UI
+    // Free actions (don't consume a turn)
+    if (msg.action === "equip") {
+      if (!turnLoop) return;
+      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      if (!player) return;
+      equip(player, msg.inventoryIndex);
+      sendGameState();
+      sendSpriteUpdate();
+      return;
+    }
+    if (msg.action === "unequip") {
+      if (!turnLoop) return;
+      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      if (!player) return;
+      unequip(player, msg.slot);
+      sendGameState();
+      return;
+    }
+    if (msg.action === "use_item") {
+      if (!turnLoop) return;
+      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      if (!player) return;
+      const stack = player.inventory.slots[msg.inventoryIndex];
+      if (!stack) return;
+      if (stack.item.type !== "consumable") return;
+      const itemName = stack.item.name;
+      player.health = Math.min(player.health + 25, player.maxHealth);
+      player.inventory.removeAt(msg.inventoryIndex, 1);
+      sendToUI({
+        type: "combat_log",
+        entries: [{ text: `You use a ${itemName}.`, color: "#22d3ee" }],
+      });
+      sendGameState();
+      return;
+    }
+    if (msg.action === "drop") {
+      if (!turnLoop) return;
+      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      if (!player) return;
+      const removed = player.inventory.removeAt(msg.inventoryIndex, 1);
+      if (!removed) return;
+      const itemEntity = createItemEntity(
+        { x: player.position.x, y: player.position.y, z: player.position.z },
+        removed.item,
+      );
+      world.addEntity(itemEntity);
+      sendToUI({
+        type: "combat_log",
+        entries: [{ text: `You drop a ${removed.item.name}.`, color: "#9ca3af" }],
+      });
+      sendSpriteUpdate();
+      sendGameState();
+      return;
+    }
+
+    // Turn-consuming actions
     let action: PlayerAction;
     switch (msg.action) {
       case "move_n":
