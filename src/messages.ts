@@ -218,6 +218,7 @@ export type GameToUIMessage =
         healthTier: string;
       }[];
       inventory: {
+        slotIndex: number;
         itemId: string;
         name: string;
         type: string;

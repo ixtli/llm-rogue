@@ -185,18 +185,23 @@ function sendGameState(): void {
   }
 
   const inventory = player.inventory.slots
-    .filter((s): s is NonNullable<typeof s> => s !== null)
-    .map((s) => ({
-      itemId: s.item.id,
-      name: s.item.name,
-      type: s.item.type,
-      quantity: s.quantity,
-      slot: s.item.slot,
-      damage: s.item.damage,
-      defense: s.item.defense,
-      critBonus: s.item.critBonus,
-      stackable: s.item.stackable,
-    }));
+    .map((s, i) =>
+      s
+        ? {
+            slotIndex: i,
+            itemId: s.item.id,
+            name: s.item.name,
+            type: s.item.type,
+            quantity: s.quantity,
+            slot: s.item.slot,
+            damage: s.item.damage,
+            defense: s.item.defense,
+            critBonus: s.item.critBonus,
+            stackable: s.item.stackable,
+          }
+        : null,
+    )
+    .filter((s): s is NonNullable<typeof s> => s !== null);
 
   const serializeSlot = (slot: "weapon" | "armor" | "helmet" | "ring") => {
     const item = player.equipment[slot];
@@ -754,7 +759,6 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       if (!player) return;
       equip(player, msg.inventoryIndex);
       sendGameState();
-      sendSpriteUpdate();
       return;
     }
     if (msg.action === "unequip") {
