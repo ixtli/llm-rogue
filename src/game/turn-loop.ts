@@ -180,7 +180,7 @@ export class TurnLoop {
           .filter((e) => e.type === "item");
         if (items.length === 0) return false;
         const ie = items[0] as ItemEntity;
-        actor.inventory.push({ item: ie.item, quantity: 1 });
+        actor.inventory.add(ie.item);
         this.pendingPickups.push(ie.item.name);
         this.world.removeEntity(ie.id);
         return true;

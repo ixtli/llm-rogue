@@ -48,11 +48,11 @@ beforeEach(() => _resetIdCounter());
 describe("equip", () => {
   it("equips item from inventory into empty slot", () => {
     const player = createPlayer({ x: 0, y: 0, z: 0 });
-    player.inventory.push({ item: SWORD, quantity: 1 });
+    player.inventory.add(SWORD);
     const result = equip(player, 0);
     expect(result).toBe(true);
     expect(player.equipment.weapon).toBe(SWORD);
-    expect(player.inventory).toHaveLength(0);
+    expect(player.inventory.countOf("iron_sword")).toBe(0);
   });
 
   it("swaps existing equipment back to inventory", () => {
@@ -64,12 +64,12 @@ describe("equip", () => {
       name: "Great Sword",
       damage: 12,
     };
-    player.inventory.push({ item: betterSword, quantity: 1 });
+    player.inventory.add(betterSword);
     const result = equip(player, 0);
     expect(result).toBe(true);
     expect(player.equipment.weapon).toBe(betterSword);
-    expect(player.inventory).toHaveLength(1);
-    expect(player.inventory[0].item).toBe(SWORD);
+    expect(player.inventory.countOf("iron_sword")).toBe(1);
+    expect(player.inventory.slots[0]?.item).toBe(SWORD);
   });
 
   it("rejects equip if item has no slot", () => {
@@ -81,7 +81,7 @@ describe("equip", () => {
       stackable: true,
       maxStack: 10,
     };
-    player.inventory.push({ item: potion, quantity: 1 });
+    player.inventory.add(potion);
     const result = equip(player, 0);
     expect(result).toBe(false);
   });
@@ -100,8 +100,8 @@ describe("unequip", () => {
     const result = unequip(player, "weapon");
     expect(result).toBe(true);
     expect(player.equipment.weapon).toBeNull();
-    expect(player.inventory).toHaveLength(1);
-    expect(player.inventory[0].item).toBe(SWORD);
+    expect(player.inventory.countOf("iron_sword")).toBe(1);
+    expect(player.inventory.slots[0]?.item).toBe(SWORD);
   });
 
   it("returns false if slot is empty", () => {

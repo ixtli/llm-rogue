@@ -2,23 +2,17 @@ import type { Actor, EquipmentSlot } from "./entity";
 
 /** Equip item from actor's inventory[index] into its slot. Returns true on success. */
 export function equip(actor: Actor, inventoryIndex: number): boolean {
-  const stack = actor.inventory[inventoryIndex];
+  const stack = actor.inventory.slots[inventoryIndex];
   if (!stack) return false;
   const slot = stack.item.slot;
   if (!slot) return false;
 
-  // Remove from inventory
   const item = stack.item;
-  if (stack.quantity <= 1) {
-    actor.inventory.splice(inventoryIndex, 1);
-  } else {
-    stack.quantity -= 1;
-  }
+  actor.inventory.removeAt(inventoryIndex, 1);
 
-  // Swap existing equipment to inventory
   const existing = actor.equipment[slot];
   if (existing) {
-    actor.inventory.push({ item: existing, quantity: 1 });
+    actor.inventory.add(existing);
   }
 
   actor.equipment[slot] = item;
@@ -29,8 +23,8 @@ export function equip(actor: Actor, inventoryIndex: number): boolean {
 export function unequip(actor: Actor, slot: EquipmentSlot): boolean {
   const item = actor.equipment[slot];
   if (!item) return false;
+  if (!actor.inventory.add(item)) return false;
   actor.equipment[slot] = null;
-  actor.inventory.push({ item, quantity: 1 });
   return true;
 }
 
