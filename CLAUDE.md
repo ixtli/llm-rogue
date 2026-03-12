@@ -7,9 +7,10 @@ GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
 Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phases 1–7b and 8a–8g are complete (except 8f). The game has
+**Current state:** Phases 1–7b and 8a–8g are complete. The game has
 a turn-based game loop with stat-based combat (attack/defense/crit), equipment
-slots, inventory, FOV (with shader dimming + desaturation), Y-axis-aware
+slots, inventory with item management UI (I key toggle, equip/unequip/use/drop),
+auto-pickup on move, FOV (with shader dimming + desaturation), Y-axis-aware
 movement, bump-to-attack, follow camera with orbit/zoom, cinematic camera mode
 with waypoint queue, voxel mutation support, and dynamic local lighting
 (point/spot lights with radius culling, per-pixel budget cap, optional shadow
@@ -38,11 +39,10 @@ across the WASM boundary.
 
 **Controls:** WASD moves the player (turn-based, bump-to-attack hostile NPCs),
 Q/E orbits the camera 90°, scroll zooms, Tab toggles free-look (WASD/mouse
-moves camera), C triggers cinematic flyby, F2 toggles edit mode, F3 toggles
-perspective/ortho projection. Space waits.
+moves camera), I toggles inventory panel, C triggers cinematic flyby, F2
+toggles edit mode, F3 toggles perspective/ortho projection. Space waits.
 
-Next milestone: Phase 8 (remaining: 8f item management UI, death/game over),
-Phase 9 (chunk server).
+Next milestone: Phase 8 (remaining: death/game over), Phase 9 (chunk server).
 
 ## Tech Stack
 
@@ -282,6 +282,7 @@ occlusion samples), using the material's palette color.
 | `PlayerHUD` | `src/ui/PlayerHUD.tsx` | HP bar (green/yellow/red), ATK/DEF stats overlay |
 | `CombatLog` | `src/ui/CombatLog.tsx` | Scrolling combat log (last 8 entries), color-coded by event type |
 | `EntityTooltip` | `src/ui/EntityTooltip.tsx` | Hover tooltip showing entity name, hostility, health tier |
+| `InventoryPanel` | `src/ui/InventoryPanel.tsx` | I-key modal: equipment slots + inventory list, click equip/use, shift+click drop |
 | `particle_system` | `crates/engine/src/particle_system.rs` | CPU particle sim: Particle, ParticleTemplate, Emitter, ParticleSystem (advance/spawn/burst), delayed textured fadeout |
 | `particle-effects` | `src/game/particle-effects.ts` | Particle builders: BurstConfig, buildBurst(), buildTextParticles() (camera-relative text spread), preset configs |
 | `combat-particles` | `src/game/combat-particles.ts` | Maps CombatResult[] + deaths[] → ParticleBurst[] with color bursts + floating damage numbers |
