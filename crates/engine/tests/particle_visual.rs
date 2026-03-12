@@ -106,7 +106,8 @@ impl HeadlessParticleRenderer {
 
     /// Render the given particle vertices and return RGBA8 pixel data.
     fn render(&mut self, vertices: &[ParticleVertex]) -> Vec<u8> {
-        self.particle_pass.update_particles(&self.gpu.queue, vertices);
+        self.particle_pass
+            .update_particles(&self.gpu.queue, vertices);
 
         let mut encoder = self
             .gpu

@@ -12,6 +12,7 @@ import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
 } from "./gpu-check";
+import InventoryPanel from "./InventoryPanel";
 import PlayerHUD from "./PlayerHUD";
 import { SpriteEditorPanel } from "./SpriteEditorPanel";
 import ToolPalette, { activeTool } from "./ToolPalette";
@@ -42,6 +43,9 @@ const App: Component<AppProps> = (props) => {
     { type: "game_state" }
   > | null>(null);
   const [combatLogEntries, setCombatLogEntries] = createSignal<CombatLogEntry[]>([]);
+  const [inventoryOpen, setInventoryOpen] = createSignal(false);
+
+  let gameWorker: Worker | undefined;
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;
@@ -58,6 +62,7 @@ const App: Component<AppProps> = (props) => {
     const worker = new Worker(new URL("../workers/game.worker.ts", import.meta.url), {
       type: "module",
     });
+    gameWorker = worker;
 
     worker.onmessage = (e: MessageEvent<GameToUIMessage>) => {
       if (e.data.type === "ready") {
@@ -144,6 +149,18 @@ const App: Component<AppProps> = (props) => {
     // Keyboard input
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+      // I toggles inventory panel
+      if (key === "i") {
+        setInventoryOpen((v) => !v);
+        return;
+      }
+      // Escape closes inventory if open
+      if (key === "escape" && inventoryOpen()) {
+        setInventoryOpen(false);
+        return;
+      }
+      // Block game input while inventory is open
+      if (inventoryOpen()) return;
       // F2 toggles edit mode
       if (key === "f2") {
         toggleAppMode();
@@ -363,6 +380,39 @@ const App: Component<AppProps> = (props) => {
         )}
       </Show>
       <Show when={tooltipData()}>{(data) => <EntityTooltip data={data()} />}</Show>
+      <Show when={inventoryOpen() && lastGameState()}>
+        {(gs) => (
+          <InventoryPanel
+            inventory={gs().inventory}
+            equipment={gs().equipment}
+            onEquip={(idx) =>
+              gameWorker?.postMessage({
+                type: "player_action",
+                action: "equip",
+                inventoryIndex: idx,
+              })
+            }
+            onUnequip={(slot) =>
+              gameWorker?.postMessage({ type: "player_action", action: "unequip", slot })
+            }
+            onUse={(idx) =>
+              gameWorker?.postMessage({
+                type: "player_action",
+                action: "use_item",
+                inventoryIndex: idx,
+              })
+            }
+            onDrop={(idx) =>
+              gameWorker?.postMessage({
+                type: "player_action",
+                action: "drop",
+                inventoryIndex: idx,
+              })
+            }
+            onClose={() => setInventoryOpen(false)}
+          />
+        )}
+      </Show>
     </Show>
   );
 };

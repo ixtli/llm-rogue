@@ -17,6 +17,26 @@ export type UIToGameMessage =
       action: "move_n" | "move_s" | "move_e" | "move_w" | "attack" | "pickup" | "wait";
       targetId?: number;
     }
+  | {
+      type: "player_action";
+      action: "equip";
+      inventoryIndex: number;
+    }
+  | {
+      type: "player_action";
+      action: "unequip";
+      slot: "weapon" | "armor" | "helmet" | "ring";
+    }
+  | {
+      type: "player_action";
+      action: "use_item";
+      inventoryIndex: number;
+    }
+  | {
+      type: "player_action";
+      action: "drop";
+      inventoryIndex: number;
+    }
   | { type: "toggle_free_look" }
   | { type: "mouse_move"; screenX: number; screenY: number }
   | {
@@ -197,6 +217,28 @@ export type GameToUIMessage =
         hostility: "friendly" | "neutral" | "hostile";
         healthTier: string;
       }[];
+      inventory: {
+        slotIndex: number;
+        itemId: string;
+        name: string;
+        type: string;
+        quantity: number;
+        slot?: "weapon" | "armor" | "helmet" | "ring";
+        damage?: number;
+        defense?: number;
+        critBonus?: number;
+        stackable: boolean;
+      }[];
+      equipment: Record<
+        "weapon" | "armor" | "helmet" | "ring",
+        {
+          itemId: string;
+          name: string;
+          damage?: number;
+          defense?: number;
+          critBonus?: number;
+        } | null
+      >;
       turnNumber: number;
     }
   | {

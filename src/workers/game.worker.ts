@@ -5,7 +5,7 @@ import { buildCombatParticles } from "../game/combat-particles";
 import type { Actor, Entity, ItemEntity } from "../game/entity";
 import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import { pickNearest } from "../game/entity-hit-test";
-import { totalAttack, totalDefense } from "../game/equipment";
+import { equip, totalAttack, totalDefense, unequip } from "../game/equipment";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
 import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { healthTier } from "../game/health-tier";
@@ -111,11 +111,23 @@ function sendSpriteUpdate(): void {
       x: entity.position.x + 0.5,
       y: entity.position.y + 1,
       z: entity.position.z + 0.5,
-      spriteId: entity.type === "player" ? 0 : entity.type === "npc" ? 1 : 2,
+      spriteId: entitySpriteId(entity),
       facing: FACING_MAP[entity.facing] ?? 0,
     });
   }
   sendToRender({ type: "sprite_update", sprites });
+}
+
+function entitySpriteId(entity: Entity): number {
+  if (entity.type === "player") return 0;
+  if (entity.type === "npc") return 1;
+  if (entity.type === "item") {
+    const ie = entity as ItemEntity;
+    if (ie.item.type === "weapon") return 2;
+    if (ie.item.type === "armor") return 3;
+    if (ie.item.type === "consumable") return 4;
+  }
+  return 5; // unknown entity: "?"
 }
 
 const FOV_RADIUS = 10;
@@ -177,12 +189,43 @@ function sendGameState(): void {
       y: entity.position.y,
       z: entity.position.z,
       type: entity.type,
-      spriteId: entity.type === "player" ? 0 : entity.type === "npc" ? 1 : 2,
+      spriteId: entitySpriteId(entity),
       name: actor?.name ?? itemEntity?.name ?? "",
       hostility: actor?.hostility ?? "neutral",
       healthTier: actor ? healthTier(actor.health, actor.maxHealth) : "",
     });
   }
+
+  const inventory = player.inventory.slots
+    .map((s, i) =>
+      s
+        ? {
+            slotIndex: i,
+            itemId: s.item.id,
+            name: s.item.name,
+            type: s.item.type,
+            quantity: s.quantity,
+            slot: s.item.slot,
+            damage: s.item.damage,
+            defense: s.item.defense,
+            critBonus: s.item.critBonus,
+            stackable: s.item.stackable,
+          }
+        : null,
+    )
+    .filter((s): s is NonNullable<typeof s> => s !== null);
+
+  const serializeSlot = (slot: "weapon" | "armor" | "helmet" | "ring") => {
+    const item = player.equipment[slot];
+    if (!item) return null;
+    return {
+      itemId: item.id,
+      name: item.name,
+      damage: item.damage,
+      defense: item.defense,
+      critBonus: item.critBonus,
+    };
+  };
 
   sendToUI({
     type: "game_state",
@@ -196,6 +239,13 @@ function sendGameState(): void {
       defense: totalDefense(player),
     },
     entities,
+    inventory,
+    equipment: {
+      weapon: serializeSlot("weapon"),
+      armor: serializeSlot("armor"),
+      helmet: serializeSlot("helmet"),
+      ring: serializeSlot("ring"),
+    },
     turnNumber,
   });
 }
@@ -303,6 +353,47 @@ function initializeGame(): void {
   const spawnY = (x: number, z: number) => world.findTopSurface(x, z) ?? 0;
 
   const player = createPlayer({ x: 5, y: spawnY(5, 5), z: 5 });
+  // Starting equipment
+  player.equipment.weapon = {
+    id: "iron_sword",
+    name: "Iron Sword",
+    type: "weapon",
+    stackable: false,
+    maxStack: 1,
+    slot: "weapon",
+    damage: 8,
+  };
+  player.equipment.armor = {
+    id: "leather_armor",
+    name: "Leather Armor",
+    type: "armor",
+    stackable: false,
+    maxStack: 1,
+    slot: "armor",
+    defense: 3,
+  };
+  // Starting inventory
+  player.inventory.add({
+    id: "potion",
+    name: "Health Potion",
+    type: "consumable",
+    stackable: true,
+    maxStack: 10,
+  });
+  player.inventory.add({
+    id: "potion",
+    name: "Health Potion",
+    type: "consumable",
+    stackable: true,
+    maxStack: 10,
+  });
+  player.inventory.add({
+    id: "potion",
+    name: "Health Potion",
+    type: "consumable",
+    stackable: true,
+    maxStack: 10,
+  });
   world.addEntity(player);
 
   // Spawn test NPCs with combat stats
@@ -714,7 +805,61 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       }
     }
   } else if (msg.type === "player_action") {
-    // Explicit player action from UI
+    // Free actions (don't consume a turn)
+    if (msg.action === "equip") {
+      if (!turnLoop) return;
+      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      if (!player) return;
+      equip(player, msg.inventoryIndex);
+      sendGameState();
+      return;
+    }
+    if (msg.action === "unequip") {
+      if (!turnLoop) return;
+      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      if (!player) return;
+      unequip(player, msg.slot);
+      sendGameState();
+      return;
+    }
+    if (msg.action === "use_item") {
+      if (!turnLoop) return;
+      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      if (!player) return;
+      const stack = player.inventory.slots[msg.inventoryIndex];
+      if (!stack) return;
+      if (stack.item.type !== "consumable") return;
+      const itemName = stack.item.name;
+      player.health = Math.min(player.health + 25, player.maxHealth);
+      player.inventory.removeAt(msg.inventoryIndex, 1);
+      sendToUI({
+        type: "combat_log",
+        entries: [{ text: `You use a ${itemName}.`, color: "#22d3ee" }],
+      });
+      sendGameState();
+      return;
+    }
+    if (msg.action === "drop") {
+      if (!turnLoop) return;
+      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      if (!player) return;
+      const removed = player.inventory.removeAt(msg.inventoryIndex, 1);
+      if (!removed) return;
+      const itemEntity = createItemEntity(
+        { x: player.position.x, y: player.position.y, z: player.position.z },
+        removed.item,
+      );
+      world.addEntity(itemEntity);
+      sendToUI({
+        type: "combat_log",
+        entries: [{ text: `You drop a ${removed.item.name}.`, color: "#9ca3af" }],
+      });
+      sendSpriteUpdate();
+      sendGameState();
+      return;
+    }
+
+    // Turn-consuming actions
     let action: PlayerAction;
     switch (msg.action) {
       case "move_n":

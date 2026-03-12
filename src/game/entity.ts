@@ -1,3 +1,5 @@
+import { Inventory } from "./inventory";
+
 export type Direction = "n" | "s" | "e" | "w";
 export type Hostility = "friendly" | "neutral" | "hostile";
 export type EntityType = "player" | "npc" | "item";
@@ -32,7 +34,7 @@ export interface Actor extends Entity {
   attack: number;
   defense: number;
   equipment: Equipment;
-  inventory: ItemStack[];
+  inventory: Inventory;
   hostility: Hostility;
   mobility: Mobility;
 }
@@ -81,7 +83,7 @@ export function createPlayer(position: Position): Actor {
     attack: 10,
     defense: 5,
     equipment: { ...EMPTY_EQUIPMENT },
-    inventory: [],
+    inventory: new Inventory(20),
     hostility: "friendly",
     mobility: { stepHeight: 1, jumpHeight: 3, reach: 1, movementBudget: 1 },
   };
@@ -113,7 +115,7 @@ export function createNpc(
     attack: s.attack ?? 8,
     defense: s.defense ?? 2,
     equipment: { ...EMPTY_EQUIPMENT },
-    inventory: [],
+    inventory: new Inventory(10),
     hostility,
     mobility: { stepHeight: 1, jumpHeight: 2, reach: 1, movementBudget: 1 },
   };
