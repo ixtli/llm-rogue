@@ -233,31 +233,38 @@ const InventoryPanel: Component<InventoryPanelProps> = (props) => {
           </div>
         </Show>
 
-        {/* Hover tooltip */}
-        <Show when={hoveredItem()}>
-          {(item) => {
-            const stats = statLine(item());
-            return (
-              <div
-                style={{
-                  "margin-top": "10px",
-                  "border-top": "1px solid #333",
-                  "padding-top": "8px",
-                  "font-size": "11px",
-                }}
-              >
-                <div style={{ color: TYPE_COLORS[item().type] ?? "#9ca3af" }}>{item().name}</div>
-                <Show when={stats}>
-                  <div style={{ color: "#aaa", "margin-top": "2px" }}>{stats}</div>
-                </Show>
-                <div style={{ color: "#666", "margin-top": "2px" }}>
-                  {item().type}
-                  {item().stackable ? " (stackable)" : ""}
-                </div>
-              </div>
-            );
+        {/* Item details — fixed height to prevent layout shift on hover */}
+        <div
+          style={{
+            "margin-top": "10px",
+            "border-top": "1px solid #333",
+            "padding-top": "8px",
+            height: "52px",
+            "overflow-y": "scroll",
+            "font-size": "11px",
           }}
-        </Show>
+        >
+          <Show
+            when={hoveredItem()}
+            fallback={<div style={{ color: "#555" }}>Hover an item for details</div>}
+          >
+            {(item) => {
+              const stats = statLine(item());
+              return (
+                <>
+                  <div style={{ color: TYPE_COLORS[item().type] ?? "#9ca3af" }}>{item().name}</div>
+                  <Show when={stats}>
+                    <div style={{ color: "#aaa", "margin-top": "2px" }}>{stats}</div>
+                  </Show>
+                  <div style={{ color: "#666", "margin-top": "2px" }}>
+                    {item().type}
+                    {item().stackable ? " (stackable)" : ""}
+                  </div>
+                </>
+              );
+            }}
+          </Show>
+        </div>
       </div>
     </div>
   );

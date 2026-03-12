@@ -13,6 +13,8 @@ export const DEFAULT_ENTRIES: GlyphEntry[] = [
   { spriteId: 0, char: "@", label: "Player", tint: "#00FF00", halfWidth: false },
   { spriteId: 1, char: "r", label: "Rat", tint: "#CC6666", halfWidth: false },
   { spriteId: 2, char: "\u2020", label: "Sword", tint: "#CCCCCC", halfWidth: false },
+  { spriteId: 3, char: "\uD83D\uDEE1", label: "Armor", tint: "#3B82F6", halfWidth: false },
+  { spriteId: 4, char: "\u053E", label: "Potion", tint: "#22D3EE", halfWidth: false },
 ];
 
 export function hexToRgbaU32(hex: string): number {
@@ -54,6 +56,12 @@ export class GlyphRegistry {
         for (const entry of this._entries) {
           if ((entry as Record<string, unknown>).halfWidth === undefined) {
             entry.halfWidth = false;
+          }
+        }
+        // Migration: add any new default entries not yet in saved data
+        for (const def of DEFAULT_ENTRIES) {
+          if (!this._entries.some((e) => e.spriteId === def.spriteId)) {
+            this._entries.push({ ...def });
           }
         }
       } catch {

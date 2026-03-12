@@ -344,3 +344,64 @@ describe("combat resolution integration", () => {
     expect(result.combatEvents.some((e) => e.attackerId === npc.id)).toBe(true);
   });
 });
+
+describe("auto-pickup on move", () => {
+  it("picks up item when walking onto its tile", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    const item = createItemEntity(
+      { x: 6, y: 5, z: 5 },
+      {
+        id: "potion",
+        name: "Health Potion",
+        type: "consumable",
+        stackable: true,
+        maxStack: 10,
+      },
+    );
+    world.addEntity(player);
+    world.addEntity(item);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "move", dx: 1, dz: 0 });
+    expect(result.resolved).toBe(true);
+    expect(player.inventory.countOf("potion")).toBe(1);
+    expect(result.pickups).toContain("Health Potion");
+    // Item entity removed from world
+    expect(world.entitiesAt(6, 5, 5).filter((e) => e.type === "item")).toHaveLength(0);
+  });
+
+  it("skips auto-pickup when inventory is full", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 5, y: 5, z: 5 });
+    // Fill inventory (capacity 20)
+    for (let i = 0; i < 20; i++) {
+      player.inventory.add({
+        id: `junk_${i}`,
+        name: `Junk ${i}`,
+        type: "misc",
+        stackable: false,
+        maxStack: 1,
+      });
+    }
+    const item = createItemEntity(
+      { x: 6, y: 5, z: 5 },
+      {
+        id: "potion",
+        name: "Health Potion",
+        type: "consumable",
+        stackable: true,
+        maxStack: 10,
+      },
+    );
+    world.addEntity(player);
+    world.addEntity(item);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "move", dx: 1, dz: 0 });
+    expect(result.resolved).toBe(true);
+    // Item stays on ground
+    expect(world.entitiesAt(6, 5, 5).filter((e) => e.type === "item")).toHaveLength(1);
+    expect(result.pickups).toHaveLength(0);
+  });
+});

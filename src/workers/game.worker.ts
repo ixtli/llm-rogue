@@ -111,11 +111,22 @@ function sendSpriteUpdate(): void {
       x: entity.position.x + 0.5,
       y: entity.position.y + 1,
       z: entity.position.z + 0.5,
-      spriteId: entity.type === "player" ? 0 : entity.type === "npc" ? 1 : 2,
+      spriteId: entitySpriteId(entity),
       facing: FACING_MAP[entity.facing] ?? 0,
     });
   }
   sendToRender({ type: "sprite_update", sprites });
+}
+
+function entitySpriteId(entity: Entity): number {
+  if (entity.type === "player") return 0;
+  if (entity.type === "npc") return 1;
+  if (entity.type === "item") {
+    const ie = entity as ItemEntity;
+    if (ie.item.type === "armor") return 3;
+    if (ie.item.type === "consumable") return 4;
+  }
+  return 2; // default: sword/weapon
 }
 
 const FOV_RADIUS = 10;
@@ -177,7 +188,7 @@ function sendGameState(): void {
       y: entity.position.y,
       z: entity.position.z,
       type: entity.type,
-      spriteId: entity.type === "player" ? 0 : entity.type === "npc" ? 1 : 2,
+      spriteId: entitySpriteId(entity),
       name: actor?.name ?? itemEntity?.name ?? "",
       hostility: actor?.hostility ?? "neutral",
       healthTier: actor ? healthTier(actor.health, actor.maxHealth) : "",
@@ -341,6 +352,47 @@ function initializeGame(): void {
   const spawnY = (x: number, z: number) => world.findTopSurface(x, z) ?? 0;
 
   const player = createPlayer({ x: 5, y: spawnY(5, 5), z: 5 });
+  // Starting equipment
+  player.equipment.weapon = {
+    id: "iron_sword",
+    name: "Iron Sword",
+    type: "weapon",
+    stackable: false,
+    maxStack: 1,
+    slot: "weapon",
+    damage: 8,
+  };
+  player.equipment.armor = {
+    id: "leather_armor",
+    name: "Leather Armor",
+    type: "armor",
+    stackable: false,
+    maxStack: 1,
+    slot: "armor",
+    defense: 3,
+  };
+  // Starting inventory
+  player.inventory.add({
+    id: "potion",
+    name: "Health Potion",
+    type: "consumable",
+    stackable: true,
+    maxStack: 10,
+  });
+  player.inventory.add({
+    id: "potion",
+    name: "Health Potion",
+    type: "consumable",
+    stackable: true,
+    maxStack: 10,
+  });
+  player.inventory.add({
+    id: "potion",
+    name: "Health Potion",
+    type: "consumable",
+    stackable: true,
+    maxStack: 10,
+  });
   world.addEntity(player);
 
   // Spawn test NPCs with combat stats

@@ -159,6 +159,17 @@ export class TurnLoop {
     else if (action.dx < 0) actor.facing = "w";
     else if (action.dz > 0) actor.facing = "s";
     else if (action.dz < 0) actor.facing = "n";
+
+    // Auto-pickup items at destination
+    const items = this.world
+      .entitiesAt(nx, landing.y, nz)
+      .filter((e) => e.type === "item") as ItemEntity[];
+    for (const ie of items) {
+      if (!actor.inventory.add(ie.item)) break;
+      this.pendingPickups.push(ie.item.name);
+      this.world.removeEntity(ie.id);
+    }
+
     return true;
   }
 
