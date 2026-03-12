@@ -123,10 +123,11 @@ function entitySpriteId(entity: Entity): number {
   if (entity.type === "npc") return 1;
   if (entity.type === "item") {
     const ie = entity as ItemEntity;
+    if (ie.item.type === "weapon") return 2;
     if (ie.item.type === "armor") return 3;
     if (ie.item.type === "consumable") return 4;
   }
-  return 2; // default: sword/weapon
+  return 5; // unknown entity: "?"
 }
 
 const FOV_RADIUS = 10;

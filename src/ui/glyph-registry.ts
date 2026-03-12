@@ -15,6 +15,7 @@ export const DEFAULT_ENTRIES: GlyphEntry[] = [
   { spriteId: 2, char: "\u2020", label: "Sword", tint: "#CCCCCC", halfWidth: false },
   { spriteId: 3, char: "\uD83D\uDEE1", label: "Armor", tint: "#3B82F6", halfWidth: false },
   { spriteId: 4, char: "\u053E", label: "Potion", tint: "#22D3EE", halfWidth: false },
+  { spriteId: 5, char: "?", label: "Unknown", tint: "#FFFFFF", halfWidth: true },
 ];
 
 export function hexToRgbaU32(hex: string): number {

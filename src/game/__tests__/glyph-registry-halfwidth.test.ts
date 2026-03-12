@@ -7,9 +7,9 @@ import {
 } from "../../ui/glyph-registry";
 
 describe("GlyphEntry halfWidth", () => {
-  it("halfWidth field exists and defaults to false for entity glyphs", () => {
+  it("halfWidth field exists on all entity glyphs", () => {
     for (const entry of DEFAULT_ENTRIES) {
-      expect(entry.halfWidth).toBe(false);
+      expect(typeof entry.halfWidth).toBe("boolean");
     }
   });
 });
