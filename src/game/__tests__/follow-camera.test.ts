@@ -275,6 +275,57 @@ describe("FollowCamera ortho projection", () => {
   });
 });
 
+describe("FollowCamera.screenToWorld", () => {
+  it("at orbit 0, W (screen up-right) maps to +z", () => {
+    const cam = new FollowCamera();
+    expect(cam.screenToWorld(0, 1)).toEqual({ dx: 0, dz: 1 });
+  });
+
+  it("at orbit 0, D (screen down-right) maps to -x", () => {
+    const cam = new FollowCamera();
+    expect(cam.screenToWorld(-1, 0)).toEqual({ dx: -1, dz: 0 });
+  });
+
+  it("at orbit 0, S (screen down-left) maps to -z", () => {
+    const cam = new FollowCamera();
+    expect(cam.screenToWorld(0, -1)).toEqual({ dx: 0, dz: -1 });
+  });
+
+  it("at orbit 0, A (screen up-left) maps to +x", () => {
+    const cam = new FollowCamera();
+    expect(cam.screenToWorld(1, 0)).toEqual({ dx: 1, dz: 0 });
+  });
+
+  it("after one CW orbit (E key), W (screen up-right) maps to +x", () => {
+    const cam = new FollowCamera();
+    cam.orbit(1); // orbit angle -= π/2
+    expect(cam.screenToWorld(0, 1)).toEqual({ dx: 1, dz: 0 });
+  });
+
+  it("after one CCW orbit (Q key), W (screen up-right) maps to -x", () => {
+    const cam = new FollowCamera();
+    cam.orbit(-1); // orbit angle += π/2
+    expect(cam.screenToWorld(0, 1)).toEqual({ dx: -1, dz: 0 });
+  });
+
+  it("after two CW orbits, W (screen up-right) maps to -z", () => {
+    const cam = new FollowCamera();
+    cam.orbit(1);
+    cam.orbit(1); // orbit angle = -π
+    expect(cam.screenToWorld(0, 1)).toEqual({ dx: 0, dz: -1 });
+  });
+
+  it("four orbits returns to original mapping", () => {
+    const cam = new FollowCamera();
+    cam.orbit(1);
+    cam.orbit(1);
+    cam.orbit(1);
+    cam.orbit(1);
+    expect(cam.screenToWorld(0, 1)).toEqual({ dx: 0, dz: 1 });
+    expect(cam.screenToWorld(-1, 0)).toEqual({ dx: -1, dz: 0 });
+  });
+});
+
 describe("buildFlybyWaypoints", () => {
   it("returns 4 waypoints", () => {
     const wps = buildFlybyWaypoints({ x: 5, y: 10, z: 5 });

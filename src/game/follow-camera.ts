@@ -144,6 +144,15 @@ export class FollowCamera {
     return { position, lookAt: { ...playerPos }, yaw, pitch };
   }
 
+  screenToWorld(screenDx: number, screenDz: number): { dx: number; dz: number } {
+    const c = Math.round(Math.cos(this.orbitAngle));
+    const s = Math.round(Math.sin(this.orbitAngle));
+    return {
+      dx: screenDx * c - screenDz * s,
+      dz: screenDx * s + screenDz * c,
+    };
+  }
+
   compute(playerPos: Vec3): CameraTarget {
     return this.computeAtAngle(playerPos, this.orbitAngle);
   }
