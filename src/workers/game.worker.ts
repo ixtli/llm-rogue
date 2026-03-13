@@ -34,18 +34,19 @@ const KEY_TO_INTENT: Record<string, number> = {
   shift: CameraIntent.Sprint,
 };
 
-// --- Direction-to-action mapping for WASD/arrow keys ---
+// --- Screen-relative direction mapping for WASD/arrow keys ---
+// These are screen-space directions rotated by the camera orbit angle at input time.
+// W = screen up-right (0,+1), S = down-left (0,-1), A = up-left (+1,0), D = down-right (-1,0)
 
-const KEY_TO_DIRECTION: Record<string, PlayerAction> = {
-  w: { type: "move", dx: 0, dz: -1 },
-  arrowup: { type: "move", dx: 0, dz: -1 },
-  s: { type: "move", dx: 0, dz: 1 },
-  arrowdown: { type: "move", dx: 0, dz: 1 },
-  a: { type: "move", dx: -1, dz: 0 },
-  arrowleft: { type: "move", dx: -1, dz: 0 },
-  d: { type: "move", dx: 1, dz: 0 },
-  arrowright: { type: "move", dx: 1, dz: 0 },
-  " ": { type: "wait" },
+const SCREEN_DIRECTIONS: Record<string, { sx: number; sz: number }> = {
+  w: { sx: 0, sz: 1 },
+  arrowup: { sx: 0, sz: 1 },
+  s: { sx: 0, sz: -1 },
+  arrowdown: { sx: 0, sz: -1 },
+  a: { sx: 1, sz: 0 },
+  arrowleft: { sx: 1, sz: 0 },
+  d: { sx: -1, sz: 0 },
+  arrowright: { sx: -1, sz: 0 },
 };
 
 let renderWorker: Worker | null = null;
@@ -712,10 +713,15 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     }
 
     if (followCamera.mode === "follow") {
-      // Follow mode: WASD = player movement, Q/E = orbit
-      const action = KEY_TO_DIRECTION[key];
-      if (action) {
-        handlePlayerAction(action);
+      // Follow mode: WASD = player movement (screen-relative), Q/E = orbit
+      if (key === " ") {
+        handlePlayerAction({ type: "wait" });
+        return;
+      }
+      const screenDir = SCREEN_DIRECTIONS[key];
+      if (screenDir) {
+        const { dx, dz } = followCamera.screenToWorld(screenDir.sx, screenDir.sz);
+        handlePlayerAction({ type: "move", dx, dz });
         return;
       }
       if (key === "q" || key === "e") {
