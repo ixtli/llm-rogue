@@ -44,7 +44,7 @@ function isColorGlyph(data: Uint8ClampedArray): boolean {
  */
 export function probeHalfWidth(char: string): boolean {
   const canvas = new OffscreenCanvas(NATIVE_SIZE, NATIVE_SIZE);
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   ctx.font = `${NATIVE_SIZE}px ${FONT_FAMILY}, sans-serif`;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
@@ -64,14 +64,14 @@ export function rasterizeAtlas(entries: readonly GlyphEntry[], cellSize: number)
   const halfWidths: boolean[] = new Array(totalSlots).fill(false);
 
   const glyphCanvas = new OffscreenCanvas(NATIVE_SIZE, NATIVE_SIZE);
-  const glyphCtx = glyphCanvas.getContext("2d")!;
+  const glyphCtx = glyphCanvas.getContext("2d", { willReadFrequently: true })!;
   glyphCtx.font = `${NATIVE_SIZE}px ${FONT_FAMILY}, sans-serif`;
   glyphCtx.textAlign = "center";
   glyphCtx.textBaseline = "middle";
   glyphCtx.fillStyle = "white";
 
   const atlas = new OffscreenCanvas(width, height);
-  const ctx = atlas.getContext("2d")!;
+  const ctx = atlas.getContext("2d", { willReadFrequently: true })!;
 
   const renderGlyph = (char: string, spriteId: number) => {
     if (spriteId >= totalSlots) return;
