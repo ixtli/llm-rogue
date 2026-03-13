@@ -58,7 +58,11 @@ pub const STAT_CAMERA_CHUNK_Y: usize = 17;
 pub const STAT_CAMERA_CHUNK_Z: usize = 18;
 pub const STAT_ALIVE_PARTICLES: usize = 19;
 pub const STAT_ACTIVE_EMITTERS: usize = 20;
-pub const STAT_VEC_LEN: usize = 21;
+pub const STAT_RENDER_WIDTH: usize = 21;
+pub const STAT_RENDER_HEIGHT: usize = 22;
+pub const STAT_SPRITE_COUNT: usize = 23;
+pub const STAT_LIGHT_COUNT: usize = 24;
+pub const STAT_VEC_LEN: usize = 25;
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
@@ -111,6 +115,7 @@ pub struct Renderer {
     ortho_size: f32,
     width: u32,
     height: u32,
+    light_count: u32,
     last_time: f32,
     last_dt: f32,
     last_wall_dt: f32,
@@ -207,6 +212,7 @@ impl Renderer {
             ortho_size: 0.0,
             width,
             height,
+            light_count: 0,
             last_time: 0.0,
             last_dt: 1.0 / 60.0,
             last_wall_dt: 1.0 / 60.0,
@@ -491,6 +497,7 @@ impl Renderer {
                 cone: c[11],
             })
             .collect();
+        self.light_count = lights.len() as u32;
         self.light_buffer.update(&self.gpu.queue, &lights);
     }
 
@@ -643,6 +650,10 @@ impl Renderer {
         v[STAT_CAMERA_CHUNK_Z] = (self.camera.position.z / chunk_size).floor();
         v[STAT_ALIVE_PARTICLES] = self.particle_system.alive_count() as f32;
         v[STAT_ACTIVE_EMITTERS] = self.particle_system.active_emitter_count() as f32;
+        v[STAT_RENDER_WIDTH] = self.width as f32;
+        v[STAT_RENDER_HEIGHT] = self.height as f32;
+        v[STAT_SPRITE_COUNT] = self.sprite_pass.instance_count() as f32;
+        v[STAT_LIGHT_COUNT] = self.light_count as f32;
         v
     }
 }

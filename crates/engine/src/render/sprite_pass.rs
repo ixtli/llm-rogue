@@ -88,6 +88,11 @@ impl SpritePass {
         self.instance_count = count as u32;
     }
 
+    #[must_use]
+    pub fn instance_count(&self) -> u32 {
+        self.instance_count
+    }
+
     /// Replaces the sprite atlas texture with new RGBA data.
     /// Rebuilds the bind group to reference the new texture.
     pub fn update_atlas(

@@ -42,9 +42,13 @@ import {
   STAT_CAMERA_Z,
   STAT_CHUNK_BUDGET,
   STAT_FRAME_TIME_MS,
+  STAT_LIGHT_COUNT,
   STAT_LOADED_CHUNKS,
   STAT_LOADED_THIS_TICK,
   STAT_PENDING_CHUNKS,
+  STAT_RENDER_HEIGHT,
+  STAT_RENDER_WIDTH,
+  STAT_SPRITE_COUNT,
   STAT_STREAMING_STATE,
   STAT_UNLOADED_THIS_TICK,
   STAT_WASM_MEMORY_BYTES,
@@ -109,6 +113,10 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
         camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
         alive_particles: s[STAT_ALIVE_PARTICLES],
         active_emitters: s[STAT_ACTIVE_EMITTERS],
+        render_width: s[STAT_RENDER_WIDTH],
+        render_height: s[STAT_RENDER_HEIGHT],
+        sprite_count: s[STAT_SPRITE_COUNT],
+        light_count: s[STAT_LIGHT_COUNT],
       });
 
       // Emit terrain grids for newly loaded chunks, or on first frame

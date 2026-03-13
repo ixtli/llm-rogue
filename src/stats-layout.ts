@@ -21,3 +21,7 @@ export const STAT_CAMERA_CHUNK_Y = 17;
 export const STAT_CAMERA_CHUNK_Z = 18;
 export const STAT_ALIVE_PARTICLES = 19;
 export const STAT_ACTIVE_EMITTERS = 20;
+export const STAT_RENDER_WIDTH = 21;
+export const STAT_RENDER_HEIGHT = 22;
+export const STAT_SPRITE_COUNT = 23;
+export const STAT_LIGHT_COUNT = 24;

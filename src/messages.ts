@@ -180,6 +180,10 @@ export type RenderToGameMessage =
       camera_chunk_z: number;
       alive_particles: number;
       active_emitters: number;
+      render_width: number;
+      render_height: number;
+      sprite_count: number;
+      light_count: number;
     }
   | {
       type: "chunk_terrain";

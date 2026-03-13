@@ -74,6 +74,7 @@ const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
 
   const formatMB = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1);
   const formatPos = (n: number) => n.toFixed(1);
+  const formatMpx = (w: number, h: number) => ((w * h) / 1_000_000).toFixed(2);
 
   return (
     <Show when={visible()}>
@@ -136,6 +137,14 @@ const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
         <div>
           Chunk: ({props.data.camera_chunk_x}, {props.data.camera_chunk_y},{" "}
           {props.data.camera_chunk_z})
+        </div>
+        <div>
+          Render: {props.data.render_width}x{props.data.render_height} (
+          {formatMpx(props.data.render_width, props.data.render_height)} Mpx)
+        </div>
+        <div>DPR: {window.devicePixelRatio.toFixed(2)}</div>
+        <div>
+          Sprites: {props.data.sprite_count} Lights: {props.data.light_count}
         </div>
         <div>
           Particles: {props.data.alive_particles} Emitters: {props.data.active_emitters}
