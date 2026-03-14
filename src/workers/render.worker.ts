@@ -18,6 +18,7 @@ import init, {
   set_dolly,
   set_look_delta,
   set_projection,
+  set_render_scale,
   spawn_burst,
   take_animation_completed,
   update_lights,
@@ -47,6 +48,7 @@ import {
   STAT_LOADED_THIS_TICK,
   STAT_PENDING_CHUNKS,
   STAT_RENDER_HEIGHT,
+  STAT_RENDER_SCALE,
   STAT_RENDER_WIDTH,
   STAT_SPRITE_COUNT,
   STAT_STREAMING_STATE,
@@ -117,6 +119,7 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
         render_height: s[STAT_RENDER_HEIGHT],
         sprite_count: s[STAT_SPRITE_COUNT],
         light_count: s[STAT_LIGHT_COUNT],
+        render_scale: s[STAT_RENDER_SCALE],
       });
 
       // Emit terrain grids for newly loaded chunks, or on first frame
@@ -268,6 +271,8 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     create_emitter(msg.id, msg.x, msg.y, msg.z, msg.rate, msg.duration, msg.template);
   } else if (msg.type === "destroy_emitter") {
     destroy_emitter(msg.id);
+  } else if (msg.type === "set_render_scale") {
+    set_render_scale(msg.auto, msg.scale);
   } else if (msg.type === "voxel_mutate") {
     const flat = new Int32Array(msg.changes.length * 4);
     for (let i = 0; i < msg.changes.length; i++) {

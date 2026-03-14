@@ -140,7 +140,8 @@ const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
         </div>
         <div>
           Render: {props.data.render_width}x{props.data.render_height} (
-          {formatMpx(props.data.render_width, props.data.render_height)} Mpx)
+          {formatMpx(props.data.render_width, props.data.render_height)} Mpx) Scale:{" "}
+          {props.data.render_scale > 0 ? `${props.data.render_scale.toFixed(2)}x` : "—"}
         </div>
         <div>DPR: {window.devicePixelRatio.toFixed(2)}</div>
         <div>

@@ -49,6 +49,10 @@ const SCREEN_DIRECTIONS: Record<string, { sx: number; sz: number }> = {
   arrowright: { sx: -1, sz: 0 },
 };
 
+// --- Render scale state ---
+const SCALE_PRESETS = ["auto", 0.25, 0.5, 0.75, 1.0] as const;
+let currentScaleIndex = 0; // starts on "auto"
+
 let renderWorker: Worker | null = null;
 const statsAggregator = new StatsAggregator(120);
 let digestTimer: ReturnType<typeof setInterval> | null = null;
@@ -94,6 +98,13 @@ function sendToRender(msg: GameToRenderMessage) {
 
 function sendToUI(msg: GameToUIMessage) {
   (self as unknown as Worker).postMessage(msg);
+}
+
+function sendRenderScale(): void {
+  const preset = SCALE_PRESETS[currentScaleIndex];
+  const auto = preset === "auto";
+  const scale = auto ? 1.0 : preset;
+  sendToRender({ type: "set_render_scale", auto, scale });
 }
 
 function sendSpriteUpdate(): void {
@@ -605,6 +616,7 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
       render_height: msg.render_height,
       sprite_count: msg.sprite_count,
       light_count: msg.light_count,
+      render_scale: msg.render_scale,
     });
     // Track camera state for entity hover projection (esp. free-look mode)
     lastCamX = msg.camera_x;
@@ -675,6 +687,13 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     }, 250);
   } else if (msg.type === "key_down") {
     const key = msg.key;
+
+    // F4 cycles render scale presets
+    if (key === "f4") {
+      currentScaleIndex = (currentScaleIndex + 1) % SCALE_PRESETS.length;
+      sendRenderScale();
+      return;
+    }
 
     // F3 toggles ortho/perspective projection
     if (key === "f3") {

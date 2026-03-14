@@ -138,7 +138,8 @@ export type GameToRenderMessage =
       duration: number;
       template: Float32Array; // 17 floats
     }
-  | { type: "destroy_emitter"; id: number };
+  | { type: "destroy_emitter"; id: number }
+  | { type: "set_render_scale"; auto: boolean; scale: number };
 
 // --- Render Worker → Game Worker ---
 
@@ -184,6 +185,7 @@ export type RenderToGameMessage =
       render_height: number;
       sprite_count: number;
       light_count: number;
+      render_scale: number;
     }
   | {
       type: "chunk_terrain";

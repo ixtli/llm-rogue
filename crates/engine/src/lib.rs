@@ -169,6 +169,16 @@ pub fn resize_renderer(width: u32, height: u32) {
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
+pub fn set_render_scale(auto_mode: bool, scale: f32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.set_render_scale(auto_mode, scale);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_animating() -> bool {
     RENDERER.with(|r| {

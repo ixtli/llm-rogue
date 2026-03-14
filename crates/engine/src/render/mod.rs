@@ -62,7 +62,8 @@ pub const STAT_RENDER_WIDTH: usize = 21;
 pub const STAT_RENDER_HEIGHT: usize = 22;
 pub const STAT_SPRITE_COUNT: usize = 23;
 pub const STAT_LIGHT_COUNT: usize = 24;
-pub const STAT_VEC_LEN: usize = 25;
+pub const STAT_RENDER_SCALE: usize = 25;
+pub const STAT_VEC_LEN: usize = 26;
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
@@ -113,8 +114,12 @@ pub struct Renderer {
     tick_stats: Option<crate::chunk_manager::TickStats>,
     projection_mode: u32,
     ortho_size: f32,
-    width: u32,
-    height: u32,
+    surface_width: u32,
+    surface_height: u32,
+    render_width: u32,
+    render_height: u32,
+    render_scale: f32,
+    scale_mode_auto: bool,
     light_count: u32,
     last_time: f32,
     last_dt: f32,
@@ -136,7 +141,10 @@ impl Renderer {
     ) -> Result<Self, crate::error::EngineError> {
         let (gpu, surface, surface_config) = GpuContext::new(canvas, width, height).await?;
 
-        let storage_texture = create_storage_texture(&gpu.device, width, height);
+        let render_scale = compute_auto_scale(width, height);
+        let (render_width, render_height) = compute_render_dims(width, height, render_scale);
+
+        let storage_texture = create_storage_texture(&gpu.device, render_width, render_height);
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let atlas_slots = UVec3::new(ATLAS_SLOTS_X, ATLAS_SLOTS_Y, ATLAS_SLOTS_Z);
@@ -149,7 +157,7 @@ impl Renderer {
         let camera = Camera::default();
         let grid_info = chunk_manager.tick(&gpu.queue, camera.position);
 
-        let camera_uniform = camera.to_uniform(width, height, &grid_info);
+        let camera_uniform = camera.to_uniform(render_width, render_height, &grid_info);
         let palette = build_palette();
 
         let light_buffer = light_buffer::LightBuffer::new(&gpu.device, 64);
@@ -160,8 +168,8 @@ impl Renderer {
             chunk_manager.atlas(),
             &palette,
             &camera_uniform,
-            width,
-            height,
+            render_width,
+            render_height,
             light_buffer.buffer(),
         );
 
@@ -210,8 +218,12 @@ impl Renderer {
             tick_stats: None,
             projection_mode: 0,
             ortho_size: 0.0,
-            width,
-            height,
+            surface_width: width,
+            surface_height: height,
+            render_width,
+            render_height,
+            render_scale,
+            scale_mode_auto: true,
             light_count: 0,
             last_time: 0.0,
             last_dt: 1.0 / 60.0,
@@ -273,9 +285,9 @@ impl Renderer {
             }
         }
 
-        let mut camera_uniform = self
-            .camera
-            .to_uniform(self.width, self.height, &self.grid_info);
+        let mut camera_uniform =
+            self.camera
+                .to_uniform(self.render_width, self.render_height, &self.grid_info);
         camera_uniform.projection_mode = self.projection_mode;
         camera_uniform.ortho_size = self.ortho_size;
         self.raymarch_pass
@@ -592,20 +604,29 @@ impl Renderer {
             return;
         }
 
+        self.surface_width = width;
+        self.surface_height = height;
         self.surface_config.width = width;
         self.surface_config.height = height;
         self.surface
             .configure(&self.gpu.device, &self.surface_config);
 
-        let storage_texture = create_storage_texture(&self.gpu.device, width, height);
+        if self.scale_mode_auto {
+            self.render_scale = compute_auto_scale(width, height);
+        }
+        let (rw, rh) = compute_render_dims(width, height, self.render_scale);
+        self.render_width = rw;
+        self.render_height = rh;
+
+        let storage_texture = create_storage_texture(&self.gpu.device, rw, rh);
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         self.raymarch_pass.rebuild_for_resize(
             &self.gpu.device,
             &storage_view,
             self.chunk_manager.atlas(),
-            width,
-            height,
+            rw,
+            rh,
             self.light_buffer.buffer(),
         );
         self.blit_pass.rebuild_for_resize(
@@ -617,8 +638,45 @@ impl Renderer {
         );
 
         self._storage_texture = storage_texture;
-        self.width = width;
-        self.height = height;
+    }
+
+    /// Sets the render scale mode. If `auto` is true, `scale` is ignored and
+    /// auto-computed from the pixel budget. Otherwise `scale` is used directly.
+    pub fn set_render_scale(&mut self, auto_mode: bool, scale: f32) {
+        self.scale_mode_auto = auto_mode;
+        if auto_mode {
+            self.render_scale = compute_auto_scale(self.surface_width, self.surface_height);
+        } else {
+            self.render_scale = scale.clamp(0.25, 1.0);
+        }
+        let (rw, rh) =
+            compute_render_dims(self.surface_width, self.surface_height, self.render_scale);
+        if rw == self.render_width && rh == self.render_height {
+            return;
+        }
+        self.render_width = rw;
+        self.render_height = rh;
+
+        let storage_texture = create_storage_texture(&self.gpu.device, rw, rh);
+        let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        self.raymarch_pass.rebuild_for_resize(
+            &self.gpu.device,
+            &storage_view,
+            self.chunk_manager.atlas(),
+            rw,
+            rh,
+            self.light_buffer.buffer(),
+        );
+        self.blit_pass.rebuild_for_resize(
+            &self.gpu.device,
+            &storage_view,
+            self.raymarch_pass.depth_view(),
+            self.surface_width,
+            self.surface_height,
+        );
+
+        self._storage_texture = storage_texture;
     }
 
     /// Collect all per-frame stats into a fixed-layout float vector.
@@ -650,12 +708,46 @@ impl Renderer {
         v[STAT_CAMERA_CHUNK_Z] = (self.camera.position.z / chunk_size).floor();
         v[STAT_ALIVE_PARTICLES] = self.particle_system.alive_count() as f32;
         v[STAT_ACTIVE_EMITTERS] = self.particle_system.active_emitter_count() as f32;
-        v[STAT_RENDER_WIDTH] = self.width as f32;
-        v[STAT_RENDER_HEIGHT] = self.height as f32;
+        v[STAT_RENDER_WIDTH] = self.render_width as f32;
+        v[STAT_RENDER_HEIGHT] = self.render_height as f32;
         v[STAT_SPRITE_COUNT] = self.sprite_pass.instance_count() as f32;
         v[STAT_LIGHT_COUNT] = self.light_count as f32;
+        v[STAT_RENDER_SCALE] = self.render_scale;
         v
     }
+}
+
+// --- Resolution computation (pure math, no wasm gating) ---
+
+const PIXEL_BUDGET: f32 = 2_073_600.0; // 1920 * 1080
+const MIN_RENDER_W: u32 = 320;
+const MAX_RENDER_W: u32 = 1920;
+const MIN_RENDER_H: u32 = 240;
+const MAX_RENDER_H: u32 = 1080;
+
+/// Computes internal render dimensions from surface size and scale factor.
+/// Clamps to [320..1920] width and [240..1080] height.
+#[must_use]
+#[allow(clippy::cast_sign_loss, clippy::cast_precision_loss)]
+pub fn compute_render_dims(surface_w: u32, surface_h: u32, scale: f32) -> (u32, u32) {
+    let w = ((surface_w as f32) * scale).floor() as u32;
+    let h = ((surface_h as f32) * scale).floor() as u32;
+    (
+        w.clamp(MIN_RENDER_W, MAX_RENDER_W),
+        h.clamp(MIN_RENDER_H, MAX_RENDER_H),
+    )
+}
+
+/// Computes auto-scale to fit within a pixel budget.
+/// Returns a scale in [0.25, 1.0].
+#[must_use]
+#[allow(clippy::cast_precision_loss)]
+pub fn compute_auto_scale(surface_w: u32, surface_h: u32) -> f32 {
+    let pixels = (surface_w as f32) * (surface_h as f32);
+    if pixels <= PIXEL_BUDGET {
+        return 1.0;
+    }
+    (PIXEL_BUDGET / pixels).sqrt().clamp(0.25, 1.0)
 }
 
 /// Creates the storage texture used as the ray march output target.
@@ -682,4 +774,56 @@ pub fn create_storage_texture(device: &wgpu::Device, width: u32, height: u32) ->
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_dims_at_scale_1_0_small_surface() {
+        assert_eq!(compute_render_dims(800, 600, 1.0), (800, 600));
+    }
+
+    #[test]
+    fn render_dims_capped_at_1920x1080() {
+        assert_eq!(compute_render_dims(3840, 2160, 1.0), (1920, 1080));
+    }
+
+    #[test]
+    fn render_dims_floor_at_320x240() {
+        assert_eq!(compute_render_dims(800, 600, 0.1), (320, 240));
+    }
+
+    #[test]
+    fn render_dims_half_scale() {
+        assert_eq!(compute_render_dims(1920, 1080, 0.5), (960, 540));
+    }
+
+    #[test]
+    fn render_dims_quarter_scale_large_surface() {
+        assert_eq!(compute_render_dims(3840, 2160, 0.25), (960, 540));
+    }
+
+    #[test]
+    fn auto_scale_small_surface_is_1_0() {
+        assert_eq!(compute_auto_scale(800, 600), 1.0);
+    }
+
+    #[test]
+    fn auto_scale_1080p_is_1_0() {
+        assert_eq!(compute_auto_scale(1920, 1080), 1.0);
+    }
+
+    #[test]
+    fn auto_scale_4k_is_reduced() {
+        let s = compute_auto_scale(3840, 2160);
+        assert!((s - 0.5).abs() < 0.01, "expected ~0.5, got {s}");
+    }
+
+    #[test]
+    fn auto_scale_clamped_to_0_25_min() {
+        let s = compute_auto_scale(15360, 8640);
+        assert!(s >= 0.25, "expected >= 0.25, got {s}");
+    }
 }

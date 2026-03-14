@@ -22,6 +22,7 @@ export interface StatsSample {
   render_height: number;
   sprite_count: number;
   light_count: number;
+  render_scale: number;
 }
 
 export interface DiagnosticsDigest {
@@ -50,6 +51,7 @@ export interface DiagnosticsDigest {
   render_height: number;
   sprite_count: number;
   light_count: number;
+  render_scale: number;
 }
 
 export const EMPTY_DIGEST: DiagnosticsDigest = {
@@ -78,6 +80,7 @@ export const EMPTY_DIGEST: DiagnosticsDigest = {
   render_height: 0,
   sprite_count: 0,
   light_count: 0,
+  render_scale: 0,
 };
 
 /**
@@ -149,6 +152,7 @@ export class StatsAggregator {
       render_height: s?.render_height ?? 0,
       sprite_count: s?.sprite_count ?? 0,
       light_count: s?.light_count ?? 0,
+      render_scale: s?.render_scale ?? 0,
     };
   }
 }
