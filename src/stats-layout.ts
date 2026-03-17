@@ -26,3 +26,4 @@ export const STAT_RENDER_HEIGHT = 22;
 export const STAT_SPRITE_COUNT = 23;
 export const STAT_LIGHT_COUNT = 24;
 export const STAT_RENDER_SCALE = 25;
+export const STAT_SHADER_PRESET = 26;

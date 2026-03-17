@@ -23,6 +23,7 @@ export interface StatsSample {
   sprite_count: number;
   light_count: number;
   render_scale: number;
+  shader_preset: number;
 }
 
 export interface DiagnosticsDigest {
@@ -52,6 +53,7 @@ export interface DiagnosticsDigest {
   sprite_count: number;
   light_count: number;
   render_scale: number;
+  shader_preset: number;
 }
 
 export const EMPTY_DIGEST: DiagnosticsDigest = {
@@ -81,6 +83,7 @@ export const EMPTY_DIGEST: DiagnosticsDigest = {
   sprite_count: 0,
   light_count: 0,
   render_scale: 0,
+  shader_preset: 0,
 };
 
 /**
@@ -153,6 +156,7 @@ export class StatsAggregator {
       sprite_count: s?.sprite_count ?? 0,
       light_count: s?.light_count ?? 0,
       render_scale: s?.render_scale ?? 0,
+      shader_preset: s?.shader_preset ?? 0,
     };
   }
 }

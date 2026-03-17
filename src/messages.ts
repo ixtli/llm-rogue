@@ -139,7 +139,8 @@ export type GameToRenderMessage =
       template: Float32Array; // 17 floats
     }
   | { type: "destroy_emitter"; id: number }
-  | { type: "set_render_scale"; auto: boolean; scale: number };
+  | { type: "set_render_scale"; auto: boolean; scale: number }
+  | { type: "set_shader_preset"; index: number };
 
 // --- Render Worker → Game Worker ---
 
@@ -186,6 +187,7 @@ export type RenderToGameMessage =
       sprite_count: number;
       light_count: number;
       render_scale: number;
+      shader_preset: number;
     }
   | {
       type: "chunk_terrain";
@@ -270,6 +272,7 @@ export type GameToUIMessage =
       camera_chunk_z: number;
       alive_particles: number;
       active_emitters: number;
+      shader_preset: number;
     }
   | { type: "camera_mode"; mode: "follow" | "free_look" | "cinematic" }
   | {

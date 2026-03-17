@@ -609,9 +609,11 @@ fn evaluate_lights(hit_pos: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
 
         // Optional shadow ray
         var shadowed = false;
-        if (kind & 2u) != 0u {
-            let shadow_origin = hit_pos + normal * SHADOW_BIAS;
-            shadowed = trace_ray(shadow_origin, light_dir, dist);
+        if ENABLE_LIGHT_SHADOWS {
+            if (kind & 2u) != 0u {
+                let shadow_origin = hit_pos + normal * SHADOW_BIAS;
+                shadowed = trace_ray(shadow_origin, light_dir, dist);
+            }
         }
 
         if !shadowed {
@@ -632,10 +634,26 @@ fn shade(mat_id: u32, face: u32, step: vec3<i32>, hit_pos: vec3<f32>) -> vec4<f3
 
     let base = palette[mat_id];
     let shadow_origin = hit_pos + normal * SHADOW_BIAS;
-    let in_shadow = trace_ray(shadow_origin, SUN_DIR, SHADOW_MAX_DIST);
-    let ao = trace_ao(shadow_origin, face, step);
-    let diffuse = select(max(dot(normal, SUN_DIR), 0.0), 0.0, in_shadow);
-    let ambient = 0.15 * ao;
-    let local = evaluate_lights(hit_pos, normal);
+
+    var ambient = 0.15;
+    var diffuse = 0.0;
+    var local = vec3(0.0);
+
+    if ENABLE_AO {
+        ambient *= trace_ao(shadow_origin, face, step);
+    }
+    if ENABLE_SUN_DIFFUSE {
+        let ndotl = max(dot(normal, SUN_DIR), 0.0);
+        if ENABLE_SUN_SHADOWS {
+            let in_shadow = trace_ray(shadow_origin, SUN_DIR, SHADOW_MAX_DIST);
+            diffuse = select(ndotl, 0.0, in_shadow);
+        } else {
+            diffuse = ndotl;
+        }
+    }
+    if ENABLE_LOCAL_LIGHTS {
+        local = evaluate_lights(hit_pos, normal);
+    }
+
     return vec4(base.rgb * (ambient + diffuse + local), 1.0);
 }

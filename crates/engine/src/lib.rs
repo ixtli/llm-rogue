@@ -179,6 +179,16 @@ pub fn set_render_scale(auto_mode: bool, scale: f32) {
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
+pub fn set_shader_preset(index: u32) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.set_shader_preset(index);
+        }
+    });
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
 #[must_use]
 pub fn is_animating() -> bool {
     RENDERER.with(|r| {

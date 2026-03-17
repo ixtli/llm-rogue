@@ -53,6 +53,10 @@ const SCREEN_DIRECTIONS: Record<string, { sx: number; sz: number }> = {
 const SCALE_PRESETS = ["auto", 0.25, 0.5, 0.75, 1.0] as const;
 let currentScaleIndex = 0; // starts on "auto"
 
+// --- Shader preset state ---
+const SHADER_PRESET_COUNT = 5;
+let currentPresetIndex = 1; // default: Indoor
+
 let renderWorker: Worker | null = null;
 const statsAggregator = new StatsAggregator(120);
 let digestTimer: ReturnType<typeof setInterval> | null = null;
@@ -617,6 +621,7 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
       sprite_count: msg.sprite_count,
       light_count: msg.light_count,
       render_scale: msg.render_scale,
+      shader_preset: msg.shader_preset,
     });
     // Track camera state for entity hover projection (esp. free-look mode)
     lastCamX = msg.camera_x;
@@ -692,6 +697,13 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     if (key === "f4") {
       currentScaleIndex = (currentScaleIndex + 1) % SCALE_PRESETS.length;
       sendRenderScale();
+      return;
+    }
+
+    // F5 cycles shader presets
+    if (key === "f5") {
+      currentPresetIndex = (currentPresetIndex + 1) % SHADER_PRESET_COUNT;
+      sendToRender({ type: "set_shader_preset", index: currentPresetIndex });
       return;
     }
 

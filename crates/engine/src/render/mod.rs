@@ -63,7 +63,8 @@ pub const STAT_RENDER_HEIGHT: usize = 22;
 pub const STAT_SPRITE_COUNT: usize = 23;
 pub const STAT_LIGHT_COUNT: usize = 24;
 pub const STAT_RENDER_SCALE: usize = 25;
-pub const STAT_VEC_LEN: usize = 26;
+pub const STAT_SHADER_PRESET: usize = 26;
+pub const STAT_VEC_LEN: usize = 27;
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
@@ -73,6 +74,87 @@ pub fn build_palette() -> Vec<[f32; 4]> {
     palette[2] = [0.5, 0.3, 0.1, 1.0]; // dirt
     palette[3] = [0.5, 0.5, 0.5, 1.0]; // stone
     palette
+}
+
+const PRESET_COUNT: u32 = 5;
+
+/// Compile-time shader feature flags. Each bool maps to a `const bool` in WGSL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct ShaderFeatures {
+    pub sun_shadows: bool,
+    pub sun_diffuse: bool,
+    pub ao: bool,
+    pub local_lights: bool,
+    pub light_shadows: bool,
+}
+
+impl Default for ShaderFeatures {
+    fn default() -> Self {
+        Self::from_preset(1) // Indoor
+    }
+}
+
+impl ShaderFeatures {
+    /// Look up a preset by index. Out-of-bounds clamps to the last preset.
+    #[must_use]
+    pub fn from_preset(index: u32) -> Self {
+        match index.min(PRESET_COUNT - 1) {
+            0 => Self {
+                sun_shadows: true,
+                sun_diffuse: true,
+                ao: true,
+                local_lights: true,
+                light_shadows: true,
+            }, // Full
+            1 => Self {
+                sun_shadows: false,
+                sun_diffuse: false,
+                ao: true,
+                local_lights: true,
+                light_shadows: true,
+            }, // Indoor
+            2 => Self {
+                sun_shadows: false,
+                sun_diffuse: false,
+                ao: false,
+                local_lights: true,
+                light_shadows: true,
+            }, // Fast
+            3 => Self {
+                sun_shadows: false,
+                sun_diffuse: false,
+                ao: false,
+                local_lights: true,
+                light_shadows: false,
+            }, // Flat
+            _ => Self {
+                sun_shadows: false,
+                sun_diffuse: false,
+                ao: false,
+                local_lights: false,
+                light_shadows: false,
+            }, // Unlit
+        }
+    }
+
+    /// Generate the WGSL `const bool` header to prepend to the shader source.
+    #[must_use]
+    pub fn header(&self) -> String {
+        let b = |v: bool| if v { "true" } else { "false" };
+        format!(
+            "const ENABLE_SUN_SHADOWS: bool = {};\n\
+             const ENABLE_SUN_DIFFUSE: bool = {};\n\
+             const ENABLE_AO: bool = {};\n\
+             const ENABLE_LOCAL_LIGHTS: bool = {};\n\
+             const ENABLE_LIGHT_SHADOWS: bool = {};\n",
+            b(self.sun_shadows),
+            b(self.sun_diffuse),
+            b(self.ao),
+            b(self.local_lights),
+            b(self.light_shadows),
+        )
+    }
 }
 
 /// Atlas slot dimensions along each axis. Must be >= the test grid dimensions.
@@ -120,6 +202,8 @@ pub struct Renderer {
     render_height: u32,
     render_scale: f32,
     scale_mode_auto: bool,
+    shader_features: ShaderFeatures,
+    shader_preset: u32,
     light_count: u32,
     last_time: f32,
     last_dt: f32,
@@ -224,6 +308,8 @@ impl Renderer {
             render_height,
             render_scale,
             scale_mode_auto: true,
+            shader_features: ShaderFeatures::default(),
+            shader_preset: 1,
             light_count: 0,
             last_time: 0.0,
             last_dt: 1.0 / 60.0,
@@ -679,6 +765,18 @@ impl Renderer {
         self._storage_texture = storage_texture;
     }
 
+    /// Switch to a shader preset by index, recompiling the pipeline if features changed.
+    pub fn set_shader_preset(&mut self, index: u32) {
+        let features = ShaderFeatures::from_preset(index);
+        if features == self.shader_features {
+            return;
+        }
+        self.shader_features = features;
+        self.shader_preset = index.min(PRESET_COUNT - 1);
+        self.raymarch_pass
+            .rebuild_pipeline(&self.gpu.device, &features);
+    }
+
     /// Collect all per-frame stats into a fixed-layout float vector.
     #[must_use]
     #[allow(clippy::cast_precision_loss)]
@@ -713,6 +811,7 @@ impl Renderer {
         v[STAT_SPRITE_COUNT] = self.sprite_pass.instance_count() as f32;
         v[STAT_LIGHT_COUNT] = self.light_count as f32;
         v[STAT_RENDER_SCALE] = self.render_scale;
+        v[STAT_SHADER_PRESET] = self.shader_preset as f32;
         v
     }
 }
@@ -825,5 +924,86 @@ mod tests {
     fn auto_scale_clamped_to_0_25_min() {
         let s = compute_auto_scale(15360, 8640);
         assert!(s >= 0.25, "expected >= 0.25, got {s}");
+    }
+
+    #[test]
+    fn shader_features_default_is_indoor() {
+        let f = ShaderFeatures::default();
+        assert!(!f.sun_shadows);
+        assert!(!f.sun_diffuse);
+        assert!(f.ao);
+        assert!(f.local_lights);
+        assert!(f.light_shadows);
+    }
+
+    #[test]
+    fn shader_features_preset_full() {
+        let f = ShaderFeatures::from_preset(0);
+        assert!(f.sun_shadows);
+        assert!(f.sun_diffuse);
+        assert!(f.ao);
+        assert!(f.local_lights);
+        assert!(f.light_shadows);
+    }
+
+    #[test]
+    fn shader_features_preset_unlit() {
+        let f = ShaderFeatures::from_preset(4);
+        assert!(!f.sun_shadows);
+        assert!(!f.sun_diffuse);
+        assert!(!f.ao);
+        assert!(!f.local_lights);
+        assert!(!f.light_shadows);
+    }
+
+    #[test]
+    fn shader_features_preset_out_of_bounds_clamps() {
+        let f = ShaderFeatures::from_preset(99);
+        let expected = ShaderFeatures::from_preset(4);
+        assert_eq!(f.header(), expected.header());
+    }
+
+    #[test]
+    fn shader_features_header_indoor() {
+        let f = ShaderFeatures::from_preset(1);
+        let h = f.header();
+        assert!(h.contains("const ENABLE_SUN_SHADOWS: bool = false;"));
+        assert!(h.contains("const ENABLE_SUN_DIFFUSE: bool = false;"));
+        assert!(h.contains("const ENABLE_AO: bool = true;"));
+        assert!(h.contains("const ENABLE_LOCAL_LIGHTS: bool = true;"));
+        assert!(h.contains("const ENABLE_LIGHT_SHADOWS: bool = true;"));
+    }
+
+    #[test]
+    fn shader_features_header_full() {
+        let f = ShaderFeatures::from_preset(0);
+        let h = f.header();
+        assert!(h.contains("const ENABLE_SUN_SHADOWS: bool = true;"));
+        assert!(h.contains("const ENABLE_SUN_DIFFUSE: bool = true;"));
+    }
+
+    #[test]
+    fn shader_features_all_presets_generate_valid_headers() {
+        for i in 0..5 {
+            let f = ShaderFeatures::from_preset(i);
+            let h = f.header();
+            assert!(
+                h.contains("ENABLE_SUN_SHADOWS"),
+                "preset {i} missing SUN_SHADOWS"
+            );
+            assert!(
+                h.contains("ENABLE_SUN_DIFFUSE"),
+                "preset {i} missing SUN_DIFFUSE"
+            );
+            assert!(h.contains("ENABLE_AO"), "preset {i} missing AO");
+            assert!(
+                h.contains("ENABLE_LOCAL_LIGHTS"),
+                "preset {i} missing LOCAL_LIGHTS"
+            );
+            assert!(
+                h.contains("ENABLE_LIGHT_SHADOWS"),
+                "preset {i} missing LIGHT_SHADOWS"
+            );
+        }
     }
 }

@@ -1,5 +1,6 @@
 use wgpu::util::DeviceExt;
 
+use super::ShaderFeatures;
 use super::chunk_atlas::ChunkAtlas;
 use crate::camera::CameraUniform;
 
@@ -247,12 +248,26 @@ impl RaymarchPass {
         buf
     }
 
+    /// Recompile the shader with new feature flags and recreate the pipeline.
+    /// Bind groups are left untouched — they reference textures/buffers, not the pipeline.
+    pub fn rebuild_pipeline(&mut self, device: &wgpu::Device, features: &ShaderFeatures) {
+        let base_source = include_str!("../../../../shaders/raymarch.wgsl");
+        let combined = format!("{}{}", features.header(), base_source);
+        let shader = Self::load_shader_with_source(device, &combined);
+        self.pipeline = Self::create_pipeline(device, &self.bind_group_layout, &shader);
+    }
+
     fn load_shader(device: &wgpu::Device) -> wgpu::ShaderModule {
+        let features = ShaderFeatures::default();
+        let base_source = include_str!("../../../../shaders/raymarch.wgsl");
+        let combined = format!("{}{}", features.header(), base_source);
+        Self::load_shader_with_source(device, &combined)
+    }
+
+    fn load_shader_with_source(device: &wgpu::Device, source: &str) -> wgpu::ShaderModule {
         device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Raymarch Compute"),
-            source: wgpu::ShaderSource::Wgsl(
-                include_str!("../../../../shaders/raymarch.wgsl").into(),
-            ),
+            source: wgpu::ShaderSource::Wgsl(source.into()),
         })
     }
 

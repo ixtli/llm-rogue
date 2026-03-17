@@ -42,6 +42,14 @@ const budgetBar = (loaded: number, budget: number): string => {
   return "\u25A0".repeat(filled) + "\u25A1".repeat(budget - filled);
 };
 
+const SHADER_PRESETS: { name: string; desc: string }[] = [
+  { name: "Full", desc: "All effects" },
+  { name: "Indoor", desc: "AO + lights" },
+  { name: "Fast", desc: "Lights only" },
+  { name: "Flat", desc: "Lights, no shadows" },
+  { name: "Unlit", desc: "Material color only" },
+];
+
 const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
   const [visible, setVisible] = createSignal(false);
   let canvasRef: HTMLCanvasElement | undefined;
@@ -149,6 +157,10 @@ const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
         </div>
         <div>
           Particles: {props.data.alive_particles} Emitters: {props.data.active_emitters}
+        </div>
+        <div>
+          Shader: {SHADER_PRESETS[props.data.shader_preset]?.name ?? "?"} (
+          {SHADER_PRESETS[props.data.shader_preset]?.desc ?? "unknown"})
         </div>
       </div>
     </Show>
