@@ -46,6 +46,11 @@ At 3200x1800: ~92M ray traces/frame.
   Requires updating both the WGSL `@workgroup_size` and the Rust dispatch
   calculation. Benchmark before/after.
 
+- [x] **2.x Shader feature toggles** — Compile-time `const bool` flags injected
+  into WGSL source. 5 presets (Full/Indoor/Fast/Flat/Unlit), F5 to cycle.
+  Default: Indoor. Zero runtime cost for disabled features via dead-code
+  elimination. See `2026-03-16-shader-feature-toggles-spec.md`.
+
 - [ ] **2.2 Distance-based quality reduction** — Skip AO and light shadow
   rays for pixels beyond a configurable distance from the camera. Sun shadow
   can use a cheaper single-chunk trace at distance.

@@ -22,6 +22,7 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Phase 8g | Floating damage numbers: 16×16 atlas expansion, ASCII particle glyph slots (190-255), half-width glyph detection, buildTextParticles API, combat damage number integration | `archive/2026-03-08-phase8g-damage-numbers-*.md` |
 | Phase 8f | Item management UI: InventoryPanel (I key toggle), Inventory class migration, equip/unequip/use/drop free actions, auto-pickup on move, per-item-type sprites, starting gear | `archive/2026-03-11-phase8f-item-management-ui-*.md` |
 | Misc | Glam migration, app error screens, visual diagnostics, debounced resize, legacy cleanup, EngineError WASM boundary | `archive/2026-02-15-glam-migration-*.md`, `archive/2026-02-15-app-error-screen-tests*.md`, `archive/2026-02-24-visual-diagnostics-*.md`, `archive/2026-02-24-debounced-resize-*.md`, `archive/2026-02-24-legacy-cleanup-is-solid-*.md` |
+| Render optimization | Render scale factor + max resolution cap (Tier 1), shader feature toggles with 5 presets (Tier 2) | `2026-03-13-render-scale-*.md`, `2026-03-16-shader-feature-toggles-*.md` |
 
 ## Not yet planned
 
