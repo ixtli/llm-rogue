@@ -6,6 +6,7 @@ import { appMode, toggleAppMode } from "./app-mode";
 import CombatLog, { type CombatLogEntry } from "./CombatLog";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
 import EntityTooltip, { type TooltipData } from "./EntityTooltip";
+import GameOverScreen from "./GameOverScreen";
 import { loadGlyphFont, rasterizeAtlas } from "./glyph-rasterizer";
 import { GlyphRegistry } from "./glyph-registry";
 import {
@@ -44,6 +45,15 @@ const App: Component<AppProps> = (props) => {
   > | null>(null);
   const [combatLogEntries, setCombatLogEntries] = createSignal<CombatLogEntry[]>([]);
   const [inventoryOpen, setInventoryOpen] = createSignal(false);
+  const [gameOverStats, setGameOverStats] = createSignal<{
+    turns: number;
+    kills: number;
+    damageDealt: number;
+    damageTaken: number;
+    itemsPickedUp: number;
+    causeOfDeath: string | null;
+  } | null>(null);
+  const [showGameOver, setShowGameOver] = createSignal(false);
 
   let gameWorker: Worker | undefined;
 
@@ -110,6 +120,9 @@ const App: Component<AppProps> = (props) => {
         if (e.data.mode === "follow" && document.pointerLockElement) {
           document.exitPointerLock();
         }
+      } else if (e.data.type === "player_dead") {
+        setGameOverStats(e.data.stats);
+        setTimeout(() => setShowGameOver(true), 2500);
       }
     };
 
@@ -161,6 +174,8 @@ const App: Component<AppProps> = (props) => {
       }
       // Block game input while inventory is open
       if (inventoryOpen()) return;
+      // Block input when player is dead
+      if (gameOverStats()) return;
       // F2 toggles edit mode
       if (key === "f2") {
         toggleAppMode();
@@ -267,6 +282,14 @@ const App: Component<AppProps> = (props) => {
       cleanupInput();
     });
   });
+
+  const handleRestart = () => {
+    setShowGameOver(false);
+    setGameOverStats(null);
+    setCombatLogEntries([]);
+    setInventoryOpen(false);
+    gameWorker?.postMessage({ type: "restart" } satisfies UIToGameMessage);
+  };
 
   const tooltipData = createMemo<TooltipData | null>(() => {
     const hover = hoverInfo();
@@ -412,6 +435,9 @@ const App: Component<AppProps> = (props) => {
             onClose={() => setInventoryOpen(false)}
           />
         )}
+      </Show>
+      <Show when={showGameOver() && gameOverStats()}>
+        {(stats) => <GameOverScreen stats={stats()} onRestart={handleRestart} />}
       </Show>
     </Show>
   );
