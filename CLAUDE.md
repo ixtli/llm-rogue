@@ -35,12 +35,16 @@ implicit LRU caching. A composable `MapFeature` system generates the play-test
 terrain. Three-thread architecture (UI → game worker → render worker) with a
 follow camera in the game worker and intent-based free-look fallback in the
 render worker. Rust error handling uses `EngineError` with `Result` propagation
-across the WASM boundary.
+across the WASM boundary. Render scale factor with auto-scale targets stable
+frame rates; F4 cycles manual override. Shader feature toggles offer 5 presets
+(Full/Indoor/Fast/Flat/Unlit) controlling shadows, AO, and local lighting.
+WASD movement is screen-relative (rotates with camera orbit).
 
-**Controls:** WASD moves the player (turn-based, bump-to-attack hostile NPCs),
-Q/E orbits the camera 90°, scroll zooms, Tab toggles free-look (WASD/mouse
-moves camera), I toggles inventory panel, C triggers cinematic flyby, F2
-toggles edit mode, F3 toggles perspective/ortho projection. Space waits.
+**Controls:** WASD moves the player (screen-relative, bump-to-attack hostile
+NPCs), Q/E orbits the camera 90°, scroll zooms, Tab toggles free-look
+(WASD/mouse moves camera), I toggles inventory panel, C triggers cinematic
+flyby, F2 toggles edit mode, F3 toggles perspective/ortho projection, F4
+cycles render scale. Space waits.
 
 Next milestone: Phase 8 (remaining: death/game over), Phase 9 (chunk server).
 
