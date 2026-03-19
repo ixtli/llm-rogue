@@ -7,10 +7,11 @@ GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
 Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phases 1–7b and 8a–8g are complete. The game has
+**Current state:** Phases 1–7b, 8a–8g, and Phase 8 (death) are complete. The game has
 a turn-based game loop with stat-based combat (attack/defense/crit), equipment
 slots, inventory with item management UI (I key toggle, equip/unequip/use/drop),
-auto-pickup on move, FOV (with shader dimming + desaturation), Y-axis-aware
+auto-pickup on move, permadeath with stats recap and soft reset,
+FOV (with shader dimming + desaturation), Y-axis-aware
 movement, bump-to-attack, follow camera with orbit/zoom, cinematic camera mode
 with waypoint queue, voxel mutation support, and dynamic local lighting
 (point/spot lights with radius culling, per-pixel budget cap, optional shadow
@@ -42,11 +43,11 @@ WASD movement is screen-relative (rotates with camera orbit).
 
 **Controls:** WASD moves the player (screen-relative, bump-to-attack hostile
 NPCs), Q/E orbits the camera 90°, scroll zooms, Tab toggles free-look
-(WASD/mouse moves camera), I toggles inventory panel, C triggers cinematic
-flyby, F2 toggles edit mode, F3 toggles perspective/ortho projection, F4
-cycles render scale. Space waits.
+(WASD/mouse moves camera), I toggles inventory panel, K debug-kills the player,
+C triggers cinematic flyby, F2 toggles edit mode, F3 toggles perspective/ortho
+projection, F4 cycles render scale. Space waits.
 
-Next milestone: Phase 8 (remaining: death/game over), Phase 9 (chunk server).
+Next milestone: Phase 9 (chunk server).
 
 ## Tech Stack
 
@@ -290,6 +291,8 @@ occlusion samples), using the material's palette color.
 | `particle_system` | `crates/engine/src/particle_system.rs` | CPU particle sim: Particle, ParticleTemplate, Emitter, ParticleSystem (advance/spawn/burst), delayed textured fadeout |
 | `particle-effects` | `src/game/particle-effects.ts` | Particle builders: BurstConfig, buildBurst(), buildTextParticles() (camera-relative text spread), preset configs |
 | `combat-particles` | `src/game/combat-particles.ts` | Maps CombatResult[] + deaths[] → ParticleBurst[] with color bursts + floating damage numbers |
+| `run-stats` | `src/game/run-stats.ts` | RunStats tracking: turns, kills, damage dealt/taken, items picked up, cause of death |
+| `GameOverScreen` | `src/ui/GameOverScreen.tsx` | Death overlay: "You Died", cause of death, stats grid, "New Game" restart button |
 
 ## Worktree Gotchas
 
