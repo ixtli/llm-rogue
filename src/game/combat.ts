@@ -1,4 +1,4 @@
-import type { Actor } from "./entity";
+import { type Actor, alterHealth } from "./entity";
 import { totalAttack, totalCritBonus, totalDefense } from "./equipment";
 
 export interface CombatResult {
@@ -34,7 +34,7 @@ export function resolveCombat(
   const crit = critRoll < critChance;
   if (crit) damage *= 2;
 
-  defender.health -= damage;
+  alterHealth(defender, -damage);
   const killed = defender.health <= 0;
 
   return {

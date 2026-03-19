@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ItemDef } from "../entity";
-import { _resetIdCounter, createItemEntity, createNpc, createPlayer } from "../entity";
+import { _resetIdCounter, alterHealth, createItemEntity, createNpc, createPlayer } from "../entity";
 
 beforeEach(() => _resetIdCounter());
 
@@ -114,6 +114,49 @@ describe("ItemDef combat fields", () => {
     };
     expect(potion.damage).toBeUndefined();
     expect(potion.slot).toBeUndefined();
+  });
+});
+
+describe("alterHealth", () => {
+  it("reduces health by damage amount", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    alterHealth(p, -30);
+    expect(p.health).toBe(70);
+  });
+
+  it("increases health by heal amount", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    p.health = 50;
+    alterHealth(p, 25);
+    expect(p.health).toBe(75);
+  });
+
+  it("clamps health to 0 on overkill", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    alterHealth(p, -9999);
+    expect(p.health).toBe(0);
+  });
+
+  it("clamps health to maxHealth on overheal", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    p.health = 90;
+    alterHealth(p, 50);
+    expect(p.health).toBe(100);
+  });
+
+  it("returns the actual change applied", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    p.health = 10;
+    const actual = alterHealth(p, -30);
+    expect(actual).toBe(-10);
+    expect(p.health).toBe(0);
+  });
+
+  it("returns actual change on overheal", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    p.health = 95;
+    const actual = alterHealth(p, 20);
+    expect(actual).toBe(5);
   });
 });
 

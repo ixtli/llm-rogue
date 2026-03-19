@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ItemDef } from "../entity";
-import { _resetIdCounter, createItemEntity, createPlayer } from "../entity";
+import { _resetIdCounter, alterHealth, createItemEntity, createPlayer } from "../entity";
 import { equip, totalAttack, totalDefense, unequip } from "../equipment";
 import { GameWorld } from "../world";
 
@@ -52,7 +52,7 @@ describe("use_item", () => {
     const stack = player.inventory.slots[0];
     expect(stack).not.toBeNull();
     expect(stack?.item.type).toBe("consumable");
-    player.health = Math.min(player.health + 25, player.maxHealth);
+    alterHealth(player, 25);
     player.inventory.removeAt(0, 1);
 
     expect(player.health).toBe(75);
@@ -64,7 +64,7 @@ describe("use_item", () => {
     player.health = 90;
     player.inventory.add(POTION);
 
-    player.health = Math.min(player.health + 25, player.maxHealth);
+    alterHealth(player, 25);
     player.inventory.removeAt(0, 1);
 
     expect(player.health).toBe(100);
