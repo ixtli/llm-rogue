@@ -1,6 +1,6 @@
 import type { CombatResult } from "./combat";
 import { resolveCombat } from "./combat";
-import { type Actor, alterHealth, type ItemEntity, type Position } from "./entity";
+import type { Actor, ItemEntity, Position } from "./entity";
 import { getTerrainDef } from "./terrain";
 import type { GameWorld } from "./world";
 
@@ -288,14 +288,14 @@ export class TurnLoop {
     const def = getTerrainDef(surface.terrainId);
     if (!def?.effect) return;
     if (def.effect.type === "damage") {
-      alterHealth(actor, -def.effect.amount);
+      actor.health -= def.effect.amount;
       result.terrainEffects.push({
         entityId: actor.id,
         effect: "damage",
         amount: def.effect.amount,
       });
     } else if (def.effect.type === "heal") {
-      alterHealth(actor, def.effect.amount);
+      actor.health = Math.min(actor.maxHealth, actor.health + def.effect.amount);
       result.terrainEffects.push({
         entityId: actor.id,
         effect: "heal",

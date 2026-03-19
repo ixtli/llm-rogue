@@ -69,14 +69,6 @@ export interface ItemEntity extends Entity {
   item: ItemDef;
 }
 
-/** Modify an actor's health by `amount` (negative = damage, positive = heal).
- *  Clamps to [0, maxHealth]. Returns the actual change applied. */
-export function alterHealth(actor: Actor, amount: number): number {
-  const before = actor.health;
-  actor.health = Math.max(0, Math.min(actor.maxHealth, actor.health + amount));
-  return actor.health - before;
-}
-
 let nextId = 1;
 
 export function createPlayer(position: Position): Actor {

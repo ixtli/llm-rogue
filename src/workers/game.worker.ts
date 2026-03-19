@@ -3,7 +3,7 @@ import { CameraIntent } from "../../crates/engine/pkg/engine";
 import { formatCombatLog } from "../game/combat-log";
 import { buildCombatParticles } from "../game/combat-particles";
 import type { Actor, Entity, ItemEntity } from "../game/entity";
-import { alterHealth, createItemEntity, createNpc, createPlayer } from "../game/entity";
+import { createItemEntity, createNpc, createPlayer } from "../game/entity";
 import { pickNearest } from "../game/entity-hit-test";
 import { equip, totalAttack, totalDefense, unequip } from "../game/equipment";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
@@ -721,7 +721,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       if (!turnLoop || playerDead) return;
       const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
       if (!player) return;
-      alterHealth(player, -9999);
+      player.health -= 9999;
       handlePlayerAction({ type: "wait" });
       return;
     }
@@ -890,7 +890,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       if (!stack) return;
       if (stack.item.type !== "consumable") return;
       const itemName = stack.item.name;
-      alterHealth(player, 25);
+      player.health = Math.min(player.health + 25, player.maxHealth);
       player.inventory.removeAt(msg.inventoryIndex, 1);
       sendToUI({
         type: "combat_log",
