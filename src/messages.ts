@@ -48,7 +48,8 @@ export type UIToGameMessage =
       rows: number;
       tints: Uint32Array;
       halfWidths: boolean[];
-    };
+    }
+  | { type: "restart" };
 
 // --- Game Worker → Render Worker ---
 
@@ -284,4 +285,15 @@ export type GameToUIMessage =
   | {
       type: "combat_log";
       entries: { text: string; color: string }[];
+    }
+  | {
+      type: "player_dead";
+      stats: {
+        turns: number;
+        kills: number;
+        damageDealt: number;
+        damageTaken: number;
+        itemsPickedUp: number;
+        causeOfDeath: string | null;
+      };
     };

@@ -21,6 +21,7 @@ export interface NpcAction {
 
 export interface TurnResult {
   resolved: boolean;
+  playerDead: boolean;
   npcActions: NpcAction[];
   deaths: number[];
   terrainEffects: { entityId: number; effect: string; amount: number }[];
@@ -72,6 +73,7 @@ export class TurnLoop {
   submitAction(action: PlayerAction): TurnResult {
     const result: TurnResult = {
       resolved: false,
+      playerDead: false,
       npcActions: [],
       deaths: [],
       terrainEffects: [],
@@ -124,7 +126,8 @@ export class TurnLoop {
     }
 
     for (const actor of this.world.actors()) {
-      if (actor.health <= 0 && actor.id !== this.playerId) {
+      if (actor.health <= 0) {
+        if (actor.id === this.playerId) result.playerDead = true;
         this.world.removeEntity(actor.id);
         result.deaths.push(actor.id);
       }

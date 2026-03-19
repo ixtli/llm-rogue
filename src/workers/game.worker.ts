@@ -11,6 +11,7 @@ import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { healthTier } from "../game/health-tier";
 import { LightManager } from "../game/light-manager";
 import type { AtlasInfo } from "../game/particle-effects";
+import { createRunStats } from "../game/run-stats";
 import { type CameraParams, projectToScreen } from "../game/screen-projection";
 import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
@@ -69,6 +70,8 @@ const lightManager = new LightManager();
 let turnLoop: TurnLoop | null = null;
 let turnNumber = 0;
 let gameInitialized = false;
+const runStats = createRunStats();
+let playerDead = false;
 let screenWidth = 0;
 let screenHeight = 0;
 let lastHoveredEntityId = 0;
@@ -474,6 +477,7 @@ function initializeGame(): void {
 
 function handlePlayerAction(action: PlayerAction): void {
   if (!turnLoop) return;
+  if (playerDead) return;
   if (followCamera.mode !== "follow") return;
   cancelOrbitAnimation();
   // Snapshot entity names and positions before the turn resolves (dead entities get removed).
@@ -490,9 +494,10 @@ function handlePlayerAction(action: PlayerAction): void {
   const result = turnLoop.submitAction(action);
   if (result.resolved) {
     turnNumber++;
+    const getName = (id: number) => nameMap.get(id) ?? "unknown";
+    runStats.recordTurn(turnLoop.turnOrder()[0], result, getName);
     sendSpriteUpdate();
     sendGameState();
-    const getName = (id: number) => nameMap.get(id) ?? "unknown";
     const logEntries = formatCombatLog(
       turnLoop.turnOrder()[0],
       result.combatEvents,
@@ -524,6 +529,10 @@ function handlePlayerAction(action: PlayerAction): void {
     sendVisibilityMask();
     const player = world.getEntity(turnLoop.turnOrder()[0]);
     if (player) sendFollowCamera(player.position, true);
+    if (result.playerDead) {
+      playerDead = true;
+      sendToUI({ type: "player_dead", stats: runStats.snapshot() });
+    }
   }
 }
 
@@ -704,6 +713,16 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     if (key === "f5") {
       currentPresetIndex = (currentPresetIndex + 1) % SHADER_PRESET_COUNT;
       sendToRender({ type: "set_shader_preset", index: currentPresetIndex });
+      return;
+    }
+
+    // K = debug kill (deal 9999 damage to player)
+    if (key === "k") {
+      if (!turnLoop || playerDead) return;
+      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      if (!player) return;
+      player.health -= 9999;
+      handlePlayerAction({ type: "wait" });
       return;
     }
 
@@ -926,6 +945,17 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
         break;
     }
     handlePlayerAction(action);
+  } else if (msg.type === "restart") {
+    for (const actor of [...world.actors()]) world.removeEntity(actor.id);
+    for (const item of [...world.items()]) world.removeEntity(item.id);
+    turnLoop = null;
+    turnNumber = 0;
+    gameInitialized = false;
+    playerDead = false;
+    runStats.reset();
+    initializeGame();
+    sendSpriteUpdate();
+    sendGameState();
   } else if (msg.type === "pointer_move") {
     if (followCamera.mode === "free_look") {
       sendToRender({ type: "set_look_delta", dyaw: msg.dx, dpitch: msg.dy });

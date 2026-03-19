@@ -24,10 +24,10 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Misc | Glam migration, app error screens, visual diagnostics, debounced resize, legacy cleanup, EngineError WASM boundary | `archive/2026-02-15-glam-migration-*.md`, `archive/2026-02-15-app-error-screen-tests*.md`, `archive/2026-02-24-visual-diagnostics-*.md`, `archive/2026-02-24-debounced-resize-*.md`, `archive/2026-02-24-legacy-cleanup-is-solid-*.md` |
 | Render optimization | Render scale factor + max resolution cap (Tier 1), shader feature toggles with 5 presets (Tier 2) | `archive/2026-03-13-render-scale-*.md`, `archive/2026-03-16-shader-feature-toggles-*.md` |
 | Screen-relative WASD | Camera-orbit-aware movement: WASD directions rotate with camera facing | PR #33 |
+| Phase 8 (death) | Permadeath with stats recap: player death detection, RunStats tracking, GameOverScreen overlay, 2.5s death delay, soft reset ("New Game"), debug kill (K key) | `archive/2026-03-17-phase8-death-game-over-*.md` |
 
 ## Not yet planned
 
 | Phase | Summary | Notes |
 |-------|---------|-------|
-| Phase 8 (death) | Death/game over screen, respawn | Design needed |
 | Phase 9: Chunk server | LLM/MCP integration, compression codec, chunk worker thread, HTTP endpoints | Replaces procedural generation |

@@ -405,3 +405,55 @@ describe("auto-pickup on move", () => {
     expect(result.pickups).toHaveLength(0);
   });
 });
+
+describe("player death", () => {
+  it("sets playerDead when player health reaches zero", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 0, y: 5, z: 0 });
+    const npc = createNpc({ x: 1, y: 5, z: 0 }, "hostile", {
+      health: 100,
+      attack: 200,
+      defense: 0,
+    });
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "wait" });
+    expect(result.playerDead).toBe(true);
+    expect(result.deaths).toContain(player.id);
+  });
+
+  it("playerDead is false when player survives", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 0, y: 5, z: 0 });
+    const npc = createNpc({ x: 1, y: 5, z: 0 }, "hostile", {
+      health: 100,
+      attack: 1,
+      defense: 0,
+    });
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    const result = loop.submitAction({ type: "wait" });
+    expect(result.playerDead).toBe(false);
+    expect(result.deaths).not.toContain(player.id);
+  });
+
+  it("player entity is removed from world on death", () => {
+    const world = new GameWorld();
+    world.loadTerrain(makeFlat());
+    const player = createPlayer({ x: 0, y: 5, z: 0 });
+    const npc = createNpc({ x: 1, y: 5, z: 0 }, "hostile", {
+      health: 100,
+      attack: 200,
+      defense: 0,
+    });
+    world.addEntity(player);
+    world.addEntity(npc);
+    const loop = new TurnLoop(world, player.id);
+    loop.submitAction({ type: "wait" });
+    expect(world.getEntity(player.id)).toBeUndefined();
+  });
+});
