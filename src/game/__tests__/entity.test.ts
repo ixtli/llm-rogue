@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { ItemDef } from "../entity";
+import type { HealthEvent, ItemDef } from "../entity";
 import { _resetIdCounter, alterHealth, createItemEntity, createNpc, createPlayer } from "../entity";
 
 beforeEach(() => _resetIdCounter());
@@ -157,6 +157,40 @@ describe("alterHealth", () => {
     p.health = 95;
     const actual = alterHealth(p, 20);
     expect(actual).toBe(5);
+  });
+
+  it("pushes event to collector when provided", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    const events: HealthEvent[] = [];
+    alterHealth(p, -30, events);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({ entityId: p.id, delta: -30 });
+  });
+
+  it("records clamped delta in collector", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    p.health = 10;
+    const events: HealthEvent[] = [];
+    alterHealth(p, -50, events);
+    expect(events[0].delta).toBe(-10);
+  });
+
+  it("does not push to collector when delta is zero", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    const events: HealthEvent[] = [];
+    alterHealth(p, -0, events);
+    expect(events).toHaveLength(0);
+  });
+
+  it("accumulates multiple events in collector", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    const n = createNpc({ x: 1, y: 0, z: 1 }, "hostile");
+    const events: HealthEvent[] = [];
+    alterHealth(p, -20, events);
+    alterHealth(n, -10, events);
+    expect(events).toHaveLength(2);
+    expect(events[0].entityId).toBe(p.id);
+    expect(events[1].entityId).toBe(n.id);
   });
 });
 

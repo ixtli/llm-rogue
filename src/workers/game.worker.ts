@@ -1,7 +1,7 @@
 // CameraIntent is exported from Rust via #[wasm_bindgen] — single source of truth.
 import { CameraIntent } from "../../crates/engine/pkg/engine";
 import { formatCombatLog } from "../game/combat-log";
-import { buildCombatParticles } from "../game/combat-particles";
+import { buildCombatParticles, buildHealthNumberParticles } from "../game/combat-particles";
 import type { Actor, Entity, ItemEntity } from "../game/entity";
 import { alterHealth, createItemEntity, createNpc, createPlayer } from "../game/entity";
 import { pickNearest } from "../game/entity-hit-test";
@@ -517,6 +517,16 @@ function handlePlayerAction(action: PlayerAction): void {
       atlasInfo,
       lastSentYaw,
     );
+    if (atlasInfo) {
+      const healthBursts = buildHealthNumberParticles(
+        result.healthEvents,
+        result.combatEvents,
+        getPos,
+        atlasInfo,
+        lastSentYaw,
+      );
+      bursts.push(...healthBursts);
+    }
     for (const burst of bursts) {
       sendToRender({
         type: "spawn_burst",
@@ -890,12 +900,32 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       if (!stack) return;
       if (stack.item.type !== "consumable") return;
       const itemName = stack.item.name;
-      alterHealth(player, 25);
+      const healEvents: import("../game/entity").HealthEvent[] = [];
+      alterHealth(player, 25, healEvents);
       player.inventory.removeAt(msg.inventoryIndex, 1);
       sendToUI({
         type: "combat_log",
         entries: [{ text: `You use a ${itemName}.`, color: "#22d3ee" }],
       });
+      if (atlasInfo && healEvents.length > 0) {
+        const pos = player.position;
+        const hBursts = buildHealthNumberParticles(
+          healEvents,
+          [],
+          () => ({ x: pos.x + 0.5, y: pos.y + 1, z: pos.z + 0.5 }),
+          atlasInfo,
+          lastSentYaw,
+        );
+        for (const burst of hBursts) {
+          sendToRender({
+            type: "spawn_burst",
+            x: burst.x,
+            y: burst.y,
+            z: burst.z,
+            particles: burst.particles,
+          });
+        }
+      }
       sendGameState();
       return;
     }

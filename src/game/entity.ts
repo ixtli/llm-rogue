@@ -69,12 +69,22 @@ export interface ItemEntity extends Entity {
   item: ItemDef;
 }
 
+export interface HealthEvent {
+  entityId: number;
+  delta: number;
+}
+
 /** Modify an actor's health by `amount` (negative = damage, positive = heal).
- *  Clamps to [0, maxHealth]. Returns the actual change applied. */
-export function alterHealth(actor: Actor, amount: number): number {
+ *  Clamps to [0, maxHealth]. Returns the actual change applied.
+ *  If `collector` is provided, pushes a HealthEvent (when delta != 0). */
+export function alterHealth(actor: Actor, amount: number, collector?: HealthEvent[]): number {
   const before = actor.health;
   actor.health = Math.max(0, Math.min(actor.maxHealth, actor.health + amount));
-  return actor.health - before;
+  const delta = actor.health - before;
+  if (collector && delta !== 0) {
+    collector.push({ entityId: actor.id, delta });
+  }
+  return delta;
 }
 
 let nextId = 1;
