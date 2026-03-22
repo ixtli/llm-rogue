@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ItemDef } from "../entity";
-import { _resetIdCounter, alterHealth, createItemEntity, createNpc, createPlayer } from "../entity";
+import {
+  _resetIdCounter,
+  alterHealth,
+  createItemEntity,
+  createNpc,
+  createPlayer,
+  drainHealthEvents,
+} from "../entity";
 
 beforeEach(() => _resetIdCounter());
 
@@ -157,6 +164,65 @@ describe("alterHealth", () => {
     p.health = 95;
     const actual = alterHealth(p, 20);
     expect(actual).toBe(5);
+  });
+
+  it("pushes event to actor.healthEvents", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    alterHealth(p, -30);
+    expect(p.healthEvents).toHaveLength(1);
+    expect(p.healthEvents[0]).toEqual({ entityId: p.id, delta: -30 });
+  });
+
+  it("records clamped delta in healthEvents", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    p.health = 10;
+    alterHealth(p, -50);
+    expect(p.healthEvents[0].delta).toBe(-10);
+  });
+
+  it("does not push event when delta is zero", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    alterHealth(p, -0);
+    expect(p.healthEvents).toHaveLength(0);
+  });
+
+  it("accumulates multiple events on same actor", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    alterHealth(p, -20);
+    alterHealth(p, -10);
+    expect(p.healthEvents).toHaveLength(2);
+  });
+});
+
+describe("drainHealthEvents", () => {
+  it("returns empty array when no events", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    expect(drainHealthEvents([p])).toEqual([]);
+  });
+
+  it("collects events from multiple actors", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    const n = createNpc({ x: 1, y: 0, z: 1 }, "hostile");
+    alterHealth(p, -20);
+    alterHealth(n, -10);
+    const events = drainHealthEvents([p, n]);
+    expect(events).toHaveLength(2);
+    expect(events[0].entityId).toBe(p.id);
+    expect(events[1].entityId).toBe(n.id);
+  });
+
+  it("clears actor healthEvents after drain", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    alterHealth(p, -20);
+    drainHealthEvents([p]);
+    expect(p.healthEvents).toHaveLength(0);
+  });
+
+  it("second drain returns empty after first", () => {
+    const p = createPlayer({ x: 0, y: 0, z: 0 });
+    alterHealth(p, -20);
+    drainHealthEvents([p]);
+    expect(drainHealthEvents([p])).toEqual([]);
   });
 });
 

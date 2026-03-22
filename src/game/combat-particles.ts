@@ -1,4 +1,5 @@
 import type { CombatResult } from "./combat";
+import type { HealthEvent } from "./entity";
 import {
   type AtlasInfo,
   BURST_CRIT,
@@ -82,5 +83,50 @@ export function buildCombatParticles(
     bursts.push(buildBurst(pos.x, pos.y, pos.z, COUNT_DEATH, BURST_DEATH));
   }
 
+  return bursts;
+}
+
+const HEAL_COLOR: [number, number, number, number] = [0.2, 1.0, 0.3, 1.0];
+const NON_COMBAT_DAMAGE_COLOR: [number, number, number, number] = [1.0, 0.3, 0.2, 1.0];
+
+/**
+ * Build floating damage/heal number particles for health events that were NOT
+ * already covered by combat damage numbers.
+ *
+ * @param healthEvents  All health changes this turn (from alterHealth collector).
+ * @param combatEvents  Combat results (defenders already get numbers from buildCombatParticles).
+ * @param getPosition   Entity position lookup.
+ * @param atlas         Atlas info for text particles.
+ * @param cameraYaw     Camera yaw for text spread direction.
+ */
+export function buildHealthNumberParticles(
+  healthEvents: HealthEvent[],
+  combatEvents: CombatResult[],
+  getPosition: (id: number) => { x: number; y: number; z: number } | undefined,
+  atlas: AtlasInfo,
+  cameraYaw = 0,
+): ParticleBurst[] {
+  // Entities that already got damage numbers from combat
+  const combatDefenders = new Set(combatEvents.map((e) => e.defenderId));
+
+  const bursts: ParticleBurst[] = [];
+  for (const event of healthEvents) {
+    if (combatDefenders.has(event.entityId)) continue;
+    const pos = getPosition(event.entityId);
+    if (!pos) continue;
+
+    const color = event.delta > 0 ? HEAL_COLOR : NON_COMBAT_DAMAGE_COLOR;
+    const text = Math.abs(event.delta).toString();
+    const textBursts = buildTextParticles(
+      text,
+      pos.x,
+      pos.y + TEXT_Y_OFFSET,
+      pos.z,
+      { ...DAMAGE_TEXT_CONFIG, color },
+      atlas,
+      cameraYaw,
+    );
+    bursts.push(...textBursts);
+  }
   return bursts;
 }

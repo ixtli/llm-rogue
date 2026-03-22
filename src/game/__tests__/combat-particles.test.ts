@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CombatResult } from "../combat";
-import { buildCombatParticles } from "../combat-particles";
+import { buildCombatParticles, buildHealthNumberParticles } from "../combat-particles";
+import type { HealthEvent } from "../entity";
 
 const PLAYER_ID = 1;
 const NPC_ID = 2;
@@ -140,5 +141,65 @@ describe("buildCombatParticles with damage numbers", () => {
     const bursts = buildCombatParticles(PLAYER_ID, events, [], pos, ATLAS_INFO);
     // 1 color burst (crit) + 2 text bursts (one per digit of "10")
     expect(bursts.length).toBe(3);
+  });
+});
+
+describe("buildHealthNumberParticles", () => {
+  it("returns empty array when no health events", () => {
+    const bursts = buildHealthNumberParticles([], [], pos, ATLAS_INFO);
+    expect(bursts).toEqual([]);
+  });
+
+  it("emits damage number for non-combat health event", () => {
+    const healthEvents: HealthEvent[] = [{ entityId: PLAYER_ID, delta: -15 }];
+    const bursts = buildHealthNumberParticles(healthEvents, [], pos, ATLAS_INFO);
+    // "15" = 2 digit bursts
+    expect(bursts.length).toBe(2);
+  });
+
+  it("skips entities that already have combat damage numbers", () => {
+    const healthEvents: HealthEvent[] = [{ entityId: NPC_ID, delta: -10 }];
+    const combatEvents: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 10, crit: false, killed: false },
+    ];
+    const bursts = buildHealthNumberParticles(healthEvents, combatEvents, pos, ATLAS_INFO);
+    expect(bursts).toEqual([]);
+  });
+
+  it("emits heal number with green color", () => {
+    const healthEvents: HealthEvent[] = [{ entityId: PLAYER_ID, delta: 25 }];
+    const bursts = buildHealthNumberParticles(healthEvents, [], pos, ATLAS_INFO);
+    expect(bursts.length).toBeGreaterThan(0);
+    // Check green channel is high (heal color)
+    const g = bursts[0].particles[5];
+    expect(g).toBeGreaterThan(0.5);
+  });
+
+  it("emits damage number with red color", () => {
+    const healthEvents: HealthEvent[] = [{ entityId: PLAYER_ID, delta: -10 }];
+    const bursts = buildHealthNumberParticles(healthEvents, [], pos, ATLAS_INFO);
+    expect(bursts.length).toBeGreaterThan(0);
+    // Check red channel is high (damage color)
+    const r = bursts[0].particles[4];
+    expect(r).toBeGreaterThan(0.5);
+  });
+
+  it("skips entities with unknown position", () => {
+    const healthEvents: HealthEvent[] = [{ entityId: 999, delta: -5 }];
+    const bursts = buildHealthNumberParticles(healthEvents, [], pos, ATLAS_INFO);
+    expect(bursts).toEqual([]);
+  });
+
+  it("only filters the specific entity that had combat, not all", () => {
+    const healthEvents: HealthEvent[] = [
+      { entityId: NPC_ID, delta: -10 },
+      { entityId: PLAYER_ID, delta: -5 },
+    ];
+    const combatEvents: CombatResult[] = [
+      { attackerId: PLAYER_ID, defenderId: NPC_ID, damage: 10, crit: false, killed: false },
+    ];
+    const bursts = buildHealthNumberParticles(healthEvents, combatEvents, pos, ATLAS_INFO);
+    // NPC filtered (combat defender), player emitted ("5" = 1 digit)
+    expect(bursts.length).toBe(1);
   });
 });

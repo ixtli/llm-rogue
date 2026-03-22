@@ -1,9 +1,15 @@
 // CameraIntent is exported from Rust via #[wasm_bindgen] — single source of truth.
 import { CameraIntent } from "../../crates/engine/pkg/engine";
 import { formatCombatLog } from "../game/combat-log";
-import { buildCombatParticles } from "../game/combat-particles";
+import { buildCombatParticles, buildHealthNumberParticles } from "../game/combat-particles";
 import type { Actor, Entity, ItemEntity } from "../game/entity";
-import { alterHealth, createItemEntity, createNpc, createPlayer } from "../game/entity";
+import {
+  alterHealth,
+  createItemEntity,
+  createNpc,
+  createPlayer,
+  drainHealthEvents,
+} from "../game/entity";
 import { pickNearest } from "../game/entity-hit-test";
 import { equip, totalAttack, totalDefense, unequip } from "../game/equipment";
 import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
@@ -105,6 +111,33 @@ function sendToRender(msg: GameToRenderMessage) {
 
 function sendToUI(msg: GameToUIMessage) {
   (self as unknown as Worker).postMessage(msg);
+}
+
+/** Drain pending health events from all actors and emit floating number particles. */
+function flushHealthParticles(
+  actors: Actor[],
+  combatEvents: import("../game/combat").CombatResult[],
+  getPosition: (id: number) => { x: number; y: number; z: number } | undefined,
+): void {
+  if (!atlasInfo) return;
+  const healthEvents = drainHealthEvents(actors);
+  if (healthEvents.length === 0) return;
+  const bursts = buildHealthNumberParticles(
+    healthEvents,
+    combatEvents,
+    getPosition,
+    atlasInfo,
+    lastSentYaw,
+  );
+  for (const burst of bursts) {
+    sendToRender({
+      type: "spawn_burst",
+      x: burst.x,
+      y: burst.y,
+      z: burst.z,
+      particles: burst.particles,
+    });
+  }
 }
 
 function sendRenderScale(): void {
@@ -526,6 +559,7 @@ function handlePlayerAction(action: PlayerAction): void {
         particles: burst.particles,
       });
     }
+    flushHealthParticles([...world.actors()], result.combatEvents, getPos);
     sendVisibilityMask();
     const player = world.getEntity(turnLoop.turnOrder()[0]);
     if (player) sendFollowCamera(player.position, true);
@@ -722,6 +756,8 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
       if (!player) return;
       alterHealth(player, -9999);
+      const pos = player.position;
+      flushHealthParticles([player], [], () => ({ x: pos.x + 0.5, y: pos.y + 1, z: pos.z + 0.5 }));
       handlePlayerAction({ type: "wait" });
       return;
     }
@@ -896,6 +932,8 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
         type: "combat_log",
         entries: [{ text: `You use a ${itemName}.`, color: "#22d3ee" }],
       });
+      const pos = player.position;
+      flushHealthParticles([player], [], () => ({ x: pos.x + 0.5, y: pos.y + 1, z: pos.z + 0.5 }));
       sendGameState();
       return;
     }
