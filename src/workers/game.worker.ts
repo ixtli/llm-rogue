@@ -731,7 +731,27 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       if (!turnLoop || playerDead) return;
       const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
       if (!player) return;
-      alterHealth(player, -9999);
+      const killEvents: import("../game/entity").HealthEvent[] = [];
+      alterHealth(player, -9999, killEvents);
+      if (atlasInfo && killEvents.length > 0) {
+        const pos = player.position;
+        const kBursts = buildHealthNumberParticles(
+          killEvents,
+          [],
+          () => ({ x: pos.x + 0.5, y: pos.y + 1, z: pos.z + 0.5 }),
+          atlasInfo,
+          lastSentYaw,
+        );
+        for (const burst of kBursts) {
+          sendToRender({
+            type: "spawn_burst",
+            x: burst.x,
+            y: burst.y,
+            z: burst.z,
+            particles: burst.particles,
+          });
+        }
+      }
       handlePlayerAction({ type: "wait" });
       return;
     }
