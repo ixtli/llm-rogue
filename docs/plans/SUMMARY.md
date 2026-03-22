@@ -30,4 +30,4 @@ Living index of project phases. Detailed plans are in `archive/`.
 
 | Phase | Summary | Notes |
 |-------|---------|-------|
-| Phase 9: Chunk server | LLM/MCP integration, compression codec, chunk worker thread, HTTP endpoints | Replaces procedural generation |
+| Phase 9: Chunk server | LLM/MCP integration, compression codec, chunk worker thread, HTTP endpoints, baked sun shadows + AO, light culling metadata | Replaces procedural generation. Brainstorm: `2026-03-22-phase9-chunk-server-brainstorm.md` |
