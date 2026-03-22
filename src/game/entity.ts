@@ -37,6 +37,7 @@ export interface Actor extends Entity {
   inventory: Inventory;
   hostility: Hostility;
   mobility: Mobility;
+  healthEvents: HealthEvent[];
 }
 
 export interface ItemDef {
@@ -76,15 +77,27 @@ export interface HealthEvent {
 
 /** Modify an actor's health by `amount` (negative = damage, positive = heal).
  *  Clamps to [0, maxHealth]. Returns the actual change applied.
- *  If `collector` is provided, pushes a HealthEvent (when delta != 0). */
-export function alterHealth(actor: Actor, amount: number, collector?: HealthEvent[]): number {
+ *  Automatically records a HealthEvent on the actor (when delta != 0). */
+export function alterHealth(actor: Actor, amount: number): number {
   const before = actor.health;
   actor.health = Math.max(0, Math.min(actor.maxHealth, actor.health + amount));
   const delta = actor.health - before;
-  if (collector && delta !== 0) {
-    collector.push({ entityId: actor.id, delta });
+  if (delta !== 0) {
+    actor.healthEvents.push({ entityId: actor.id, delta });
   }
   return delta;
+}
+
+/** Collect and clear all pending health events from the given actors. */
+export function drainHealthEvents(actors: Actor[]): HealthEvent[] {
+  const events: HealthEvent[] = [];
+  for (const actor of actors) {
+    if (actor.healthEvents.length > 0) {
+      events.push(...actor.healthEvents);
+      actor.healthEvents.length = 0;
+    }
+  }
+  return events;
 }
 
 let nextId = 1;
@@ -104,6 +117,7 @@ export function createPlayer(position: Position): Actor {
     inventory: new Inventory(20),
     hostility: "friendly",
     mobility: { stepHeight: 1, jumpHeight: 3, reach: 1, movementBudget: 1 },
+    healthEvents: [],
   };
 }
 
@@ -136,6 +150,7 @@ export function createNpc(
     inventory: new Inventory(10),
     hostility,
     mobility: { stepHeight: 1, jumpHeight: 2, reach: 1, movementBudget: 1 },
+    healthEvents: [],
   };
 }
 
