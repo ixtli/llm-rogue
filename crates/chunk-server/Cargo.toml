@@ -1,0 +1,22 @@
+[package]
+name = "chunk-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+engine = { path = "../engine" }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+postcard = { version = "1", features = ["alloc"] }
+lru = "0.12"
+clap = { version = "4", features = ["derive"] }
+tower-http = { version = "0.6", features = ["cors"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+glam = "0.29"
+
+[dev-dependencies]
+reqwest = "0.12"
+
+[lints]
+workspace = true
