@@ -445,8 +445,14 @@ impl ChunkManager {
 
             match fetch.result {
                 Ok(payload) => {
+                    // A successful fetch means the server is reachable.
+                    self.consecutive_failures = 0;
+                    self.server_status = ServerStatus::Online;
+
                     let coord = IVec3::new(payload.cx, payload.cy, payload.cz);
                     if self.loaded.contains_key(&coord) {
+                        // Already loaded (e.g. local fallback), skip upload
+                        // but status is already updated above.
                         continue;
                     }
 
@@ -485,8 +491,6 @@ impl ChunkManager {
                     );
 
                     self.server_loaded_count += 1;
-                    self.consecutive_failures = 0;
-                    self.server_status = ServerStatus::Online;
 
                     // Update EMA of latency (alpha = 0.2).
                     #[allow(clippy::cast_possible_truncation)]
