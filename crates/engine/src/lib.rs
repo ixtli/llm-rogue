@@ -10,6 +10,7 @@ use camera::{CameraIntent, EasingKind};
 
 pub mod camera;
 pub mod chunk_manager;
+pub mod chunk_payload;
 pub mod collision;
 pub mod error;
 pub mod map_features;
