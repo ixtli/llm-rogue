@@ -517,6 +517,11 @@ impl Renderer {
         self.input.end_intent(intent);
     }
 
+    /// Set or clear the chunk server URL used for remote chunk fetching.
+    pub fn set_server_url(&mut self, url: Option<String>) {
+        self.chunk_manager.set_server_url(url);
+    }
+
     /// Whether a chunk at the given chunk coordinate is currently loaded.
     #[must_use]
     pub fn is_chunk_loaded(&self, cx: i32, cy: i32, cz: i32) -> bool {

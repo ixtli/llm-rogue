@@ -19,6 +19,7 @@ import init, {
   set_look_delta,
   set_projection,
   set_render_scale,
+  set_server_url,
   set_shader_preset,
   spawn_burst,
   take_animation_completed,
@@ -76,6 +77,12 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     try {
       await init();
       await init_renderer(canvas, width, height);
+
+      // Configure chunk server URL from build-time env var (Vite bakes this in)
+      const serverUrl: string | undefined = import.meta.env.VITE_CHUNK_SERVER_URL;
+      if (serverUrl) {
+        set_server_url(serverUrl);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       (self as unknown as Worker).postMessage({ type: "error", message });

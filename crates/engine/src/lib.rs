@@ -59,6 +59,18 @@ pub fn render_frame(time: f32) {
     });
 }
 
+/// Set or clear the chunk server URL used for remote chunk fetching.
+/// Pass `undefined`/`null` from JS to disable server fetching.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn set_server_url(url: Option<String>) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.set_server_url(url);
+        }
+    });
+}
+
 /// Orient the camera to look at the given world-space voxel coordinate.
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
