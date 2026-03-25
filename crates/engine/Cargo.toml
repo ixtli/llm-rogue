@@ -36,7 +36,16 @@ js-sys = { version = "0.3", optional = true }
 
 [dependencies.web-sys]
 version = "0.3"
-features = ["OffscreenCanvas", "console"]
+features = [
+    "OffscreenCanvas",
+    "console",
+    "Headers",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "WorkerGlobalScope",
+]
 optional = true
 
 [dev-dependencies]
