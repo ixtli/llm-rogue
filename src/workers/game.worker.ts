@@ -665,6 +665,10 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
       light_count: msg.light_count,
       render_scale: msg.render_scale,
       shader_preset: msg.shader_preset,
+      chunk_source: msg.chunk_source,
+      server_chunks: msg.server_chunks,
+      fallback_chunks: msg.fallback_chunks,
+      fetch_latency_ms: msg.fetch_latency_ms,
     });
     // Track camera state for entity hover projection (esp. free-look mode)
     lastCamX = msg.camera_x;

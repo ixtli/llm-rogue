@@ -24,6 +24,10 @@ export interface StatsSample {
   light_count: number;
   render_scale: number;
   shader_preset: number;
+  chunk_source: number;
+  server_chunks: number;
+  fallback_chunks: number;
+  fetch_latency_ms: number;
 }
 
 export interface DiagnosticsDigest {
@@ -54,6 +58,10 @@ export interface DiagnosticsDigest {
   light_count: number;
   render_scale: number;
   shader_preset: number;
+  chunk_source: number;
+  server_chunks: number;
+  fallback_chunks: number;
+  fetch_latency_ms: number;
 }
 
 export const EMPTY_DIGEST: DiagnosticsDigest = {
@@ -84,6 +92,10 @@ export const EMPTY_DIGEST: DiagnosticsDigest = {
   light_count: 0,
   render_scale: 0,
   shader_preset: 0,
+  chunk_source: 0,
+  server_chunks: 0,
+  fallback_chunks: 0,
+  fetch_latency_ms: 0,
 };
 
 /**
@@ -157,6 +169,10 @@ export class StatsAggregator {
       light_count: s?.light_count ?? 0,
       render_scale: s?.render_scale ?? 0,
       shader_preset: s?.shader_preset ?? 0,
+      chunk_source: s?.chunk_source ?? 0,
+      server_chunks: s?.server_chunks ?? 0,
+      fallback_chunks: s?.fallback_chunks ?? 0,
+      fetch_latency_ms: s?.fetch_latency_ms ?? 0,
     };
   }
 }

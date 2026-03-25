@@ -44,6 +44,9 @@ import {
   STAT_CAMERA_YAW,
   STAT_CAMERA_Z,
   STAT_CHUNK_BUDGET,
+  STAT_CHUNK_SOURCE,
+  STAT_FALLBACK_CHUNKS,
+  STAT_FETCH_LATENCY,
   STAT_FRAME_TIME_MS,
   STAT_LIGHT_COUNT,
   STAT_LOADED_CHUNKS,
@@ -52,6 +55,7 @@ import {
   STAT_RENDER_HEIGHT,
   STAT_RENDER_SCALE,
   STAT_RENDER_WIDTH,
+  STAT_SERVER_CHUNKS,
   STAT_SHADER_PRESET,
   STAT_SPRITE_COUNT,
   STAT_STREAMING_STATE,
@@ -130,6 +134,10 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
         light_count: s[STAT_LIGHT_COUNT],
         render_scale: s[STAT_RENDER_SCALE],
         shader_preset: s[STAT_SHADER_PRESET],
+        chunk_source: s[STAT_CHUNK_SOURCE],
+        server_chunks: s[STAT_SERVER_CHUNKS],
+        fallback_chunks: s[STAT_FALLBACK_CHUNKS],
+        fetch_latency_ms: s[STAT_FETCH_LATENCY],
       });
 
       // Emit terrain grids for newly loaded chunks, or on first frame

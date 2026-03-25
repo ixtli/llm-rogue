@@ -27,3 +27,7 @@ export const STAT_SPRITE_COUNT = 23;
 export const STAT_LIGHT_COUNT = 24;
 export const STAT_RENDER_SCALE = 25;
 export const STAT_SHADER_PRESET = 26;
+export const STAT_CHUNK_SOURCE = 27;
+export const STAT_SERVER_CHUNKS = 28;
+export const STAT_FALLBACK_CHUNKS = 29;
+export const STAT_FETCH_LATENCY = 30;
