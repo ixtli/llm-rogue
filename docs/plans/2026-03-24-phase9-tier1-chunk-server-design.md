@@ -11,11 +11,11 @@ extraction. Game remains fully playable offline via local Perlin fallback.
 │  Chunk Server (Rust/axum)   │
 │  GET /chunks/{cx},{cy},{cz} │
 │  GET /health                │
-│  Perlin generation          │
+│  MapConfig generation       │
 │  Precomputes: occupancy,    │
 │    collision, terrain grid   │
 │  In-memory LRU cache        │
-│  Cap'n Proto response       │
+│  postcard response          │
 └──────────────┬──────────────┘
                │ HTTP (localhost or remote)
                ▼
@@ -23,10 +23,9 @@ extraction. Game remains fully playable offline via local Perlin fallback.
 │  Render Worker (Rust/WASM)                   │
 │  ChunkManager state machine per chunk:       │
 │  Empty → Fetching → Ready (or FallbackLocal) │
-│  Browser fetch() via wasm-bindgen-futures    │
-│  Deserialize Cap'n Proto (zero-copy)         │
-│  Upload voxels to GPU atlas                  │
-│  Use precomputed occupancy/collision/terrain  │
+│  Browser fetch() via spawn_local callback    │
+│  Deserialize postcard payload                │
+│  Upload voxels + precomputed data to atlas   │
 │  Emit chunk_terrain to game worker           │
 └──────────────────────────────────────────────┘
 ```
@@ -37,19 +36,23 @@ No changes to the game worker or UI thread. They continue receiving
 ## Chunk Server Binary
 
 New Rust crate: `crates/chunk-server/`. Depends on `engine` crate (native, not
-WASM) for `Chunk`, `CollisionMap`, `TerrainGrid`, and occupancy computation.
+WASM) for `Chunk`, `CollisionMap`, `TerrainGrid`, `MapConfig`, and occupancy
+computation. Must be added to workspace `members` in the root `Cargo.toml` and
+inherit `[workspace.lints]`.
 
 ### Endpoints
 
-- `GET /chunks/{cx},{cy},{cz}` — Cap'n Proto serialized `ChunkPayload`
+- `GET /chunks/{cx},{cy},{cz}` — `postcard`-serialized `ChunkPayload`
 - `GET /health` — liveness check for deployment probes and client connectivity
 
 ### Generation Flow
 
 1. Check LRU cache for `(cx, cy, cz)`
-2. Cache miss → `Chunk::new_terrain_at(seed, coord)`, compute occupancy,
-   collision map, terrain grid
-3. Serialize to Cap'n Proto, store in cache, return response
+2. Cache miss → generate chunk via `MapConfig::generate_chunk(coord)` (same
+   pipeline as the client uses for local generation — ensures deterministic
+   parity between server and fallback), compute occupancy, collision map,
+   terrain grid
+3. Serialize to `postcard`, store in cache, return response
 
 ### Configuration
 
@@ -63,7 +66,8 @@ CORS: `Access-Control-Allow-Origin: *` for Tier 1.
 
 ### Dependencies
 
-`axum`, `tokio`, `capnpc-rust`, `lru`, plus `engine` crate (native).
+`axum`, `tokio`, `postcard` (with `serde`), `lru`, `clap`, plus `engine` crate
+(native).
 
 ### Run Command
 
@@ -72,35 +76,52 @@ cargo run -p chunk-server
 cargo run -p chunk-server -- --port 3001 --seed 42
 ```
 
-## Cap'n Proto Schema
+## Wire Format (postcard + serde)
 
-Shared schema file at `schema/chunk.capnp`:
+Shared `ChunkPayload` struct defined in the `engine` crate (available to both
+server and client):
 
-```capnp
-@0xabcdef1234567890;
-
-struct ChunkPayload {
-  cx @0 :Int32;
-  cy @1 :Int32;
-  cz @2 :Int32;
-  voxels @3 :Data;          # 32768 × 4 bytes = 128 KB
-  occupancy @4 :UInt64;     # 64-bit bitmask
-  collision @5 :Data;       # 4096 bytes (1 bit/voxel, packed)
-  terrainGrid @6 :Data;     # variable, existing serialization format
+```rust
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ChunkPayload {
+    pub cx: i32,
+    pub cy: i32,
+    pub cz: i32,
+    pub voxels: Vec<u8>,        // 32768 × 4 bytes = 128 KB
+    pub occupancy: u64,         // 64-bit bitmask
+    pub collision: Vec<u8>,     // CHUNK_SIZE^3 / 8 bytes (4096 at CHUNK_SIZE=32)
+    pub terrain_grid: Vec<u8>,  // variable, existing serialization format
 }
 ```
 
-Both `crates/chunk-server/` and `crates/engine/` generate Rust bindings from
-this schema at build time via `capnpc-rust` in `build.rs`.
+Serialized via `postcard` — a compact, no-std-compatible, serde-based binary
+format. Works on both native (server) and `wasm32-unknown-unknown` (client)
+without platform-specific dependencies.
 
-### Design Choices
+### Why postcard over Cap'n Proto
 
-- `voxels` is `Data` (raw bytes) not `List(UInt32)` — avoids per-element
-  overhead, client interprets buffer directly
-- `terrainGrid` reuses existing binary format from `terrain_grid.rs`
-  (column-major `[count, [y, terrainId, headroom] × count]`)
-- Schema extensible for Tier 2a: add `bakedAo @7 :Data` and
-  `sunShadow @8 :Data` later. Old clients ignore unknown fields.
+Cap'n Proto's Rust runtime (`capnp` crate) depends on `std::fs` and OS I/O,
+making it incompatible with `wasm32-unknown-unknown`. `postcard` is
+`no_std`-compatible, has zero platform deps, and compiles cleanly to WASM.
+While it doesn't offer true zero-copy reads, deserialization of the ~40 KB
+payload is sub-millisecond and not a bottleneck vs the fetch latency.
+
+### Extensibility
+
+Adding Tier 2a fields is a backward-compatible serde change:
+
+```rust
+pub struct ChunkPayload {
+    // ... existing fields ...
+    #[serde(default)]
+    pub baked_ao: Option<Vec<u8>>,
+    #[serde(default)]
+    pub sun_shadow: Option<Vec<u8>>,
+}
+```
+
+Old payloads without these fields deserialize with `None`. Old clients ignore
+unknown trailing bytes (postcard's default behavior).
 
 ## Client-Side Integration
 
@@ -112,26 +133,60 @@ Empty → Fetching → Ready
   └──→ FallbackLocal─┘  (on fetch failure)
 ```
 
-### ChunkManager Changes
+### Async Fetch Architecture
 
-- New field: `server_url: Option<String>` — `None` = pure offline mode
-  (existing behavior unchanged)
-- New field: `pending_fetches: HashMap<IVec3, JsFuture>` — in-flight requests
-- `tick_budgeted` change: if `server_url` is set, initiate `fetch()` for each
-  needed chunk (up to budget). Each fetch is a `JsFuture` polled on subsequent
-  ticks.
-- On fetch success: deserialize Cap'n Proto, upload voxels to atlas, use
-  precomputed occupancy/collision/terrain directly (skip all extraction). Emit
-  `chunk_terrain`.
-- On fetch failure: log warning, fall back to `Chunk::new_terrain_at` + local
-  extraction. Mark chunk as `FallbackLocal`.
+Browser `fetch()` cannot be called from a synchronous Rust function. The
+integration uses `wasm_bindgen_futures::spawn_local` with a shared result queue:
+
+1. `tick_budgeted` checks for chunks that need loading. For each (up to budget),
+   if `server_url` is set and chunk is not already `Fetching`, mark it
+   `Fetching` and call `spawn_local` with an async closure that:
+   - Calls `web_sys::window().fetch()` for the chunk URL
+   - On success: deserializes the `postcard` payload
+   - Pushes a `CompletedFetch { coord, result: Result<ChunkPayload, Error> }`
+     into a `Rc<RefCell<Vec<CompletedFetch>>>` shared with the ChunkManager
+2. On each subsequent `tick_budgeted` call, drain the completed fetches queue
+   first. For each completed fetch:
+   - Success: upload voxels to atlas via a new `upload_precomputed` path that
+     accepts raw voxel bytes + precomputed occupancy mask (bypasses
+     `chunk.occupancy_mask()` call). Set collision map and terrain grid from
+     payload. Emit `chunk_terrain`. Mark chunk `Ready`.
+   - Failure: fall back to local generation. Mark chunk `FallbackLocal`.
+3. If `server_url` is `None`, skip all of the above — use existing synchronous
+   `chunk_gen` closure (behavior identical to today).
+
+### cfg Gating
+
+All fetch-related code is gated behind `#[cfg(feature = "wasm")]`:
+- `spawn_local`, `web_sys::Request`, `JsFuture` imports
+- `pending_count`, `completed_queue` fields on ChunkManager
+- The `spawn_local` call path in `tick_budgeted`
+
+For native compilation (`cargo test -p engine`), these fields and code paths
+don't exist. The `server_url` field exists on all targets but is only acted
+on in WASM builds.
+
+### Atlas Upload Path
+
+New method `ChunkAtlas::upload_precomputed(coord, voxels, occupancy, collision)`
+that:
+- Allocates or reuses an atlas slot (existing logic)
+- Writes voxel bytes directly to the 3D texture (existing `queue.write_texture`)
+- Stores the precomputed occupancy mask in `occupancy_masks[slot]` (bypasses
+  `chunk.occupancy_mask()`)
+- Stores the precomputed collision map (bypasses `CollisionMap::from_chunk()`)
+
+This avoids constructing a `Chunk` struct on the client side — the payload
+bytes flow directly to their destinations.
 
 ### Connectivity Tracking
 
 - Track consecutive fetch failures. After 5 failures, switch to offline mode —
   stop making requests, generate all chunks locally.
-- Every 30 seconds, try one probe fetch. If it succeeds, resume server mode.
-- Report server status (online/offline/degraded) in stats pipeline.
+- Every 30 seconds, try one probe fetch (to `/health`). If it succeeds, resume
+  server mode.
+- Report server status in stats pipeline as integer: 0=offline, 1=local
+  (never connected), 2=server.
 
 ### What Doesn't Change
 
@@ -174,14 +229,14 @@ becomes a bottleneck.
 
 ## Diagnostics
 
-Stats pipeline additions (following existing 6-step pattern):
+Stats pipeline additions (following existing 6-step pattern, all `f32`):
 
-| Stat | Type | Description |
-|------|------|-------------|
-| `chunk_source` | string | Current mode: "server", "local", "offline" |
-| `server_chunks_loaded` | number | Chunks loaded from server this session |
-| `fallback_chunks_loaded` | number | Chunks that fell back to local |
-| `fetch_latency_ms` | number | Rolling average fetch round-trip |
+| Stat | Type | Encoding | Description |
+|------|------|----------|-------------|
+| `chunk_source` | f32 | 0=offline, 1=local, 2=server | Current mode |
+| `server_chunks_loaded` | f32 | count | Chunks loaded from server this session |
+| `fallback_chunks_loaded` | f32 | count | Chunks that fell back to local |
+| `fetch_latency_ms` | f32 | milliseconds | Rolling average fetch round-trip |
 
 Displayed in diagnostics overlay (~). Server-side logs: request coord, cache
 hit/miss, generation time, response size.
@@ -196,8 +251,10 @@ hit/miss, generation time, response size.
 
 ### Client (engine crate)
 
-- Deserialize Cap'n Proto `ChunkPayload`, verify precomputed fields used
+- Deserialize `postcard` `ChunkPayload`, verify precomputed fields used
   directly (no extraction called)
+- `upload_precomputed` unit test: verify occupancy mask and collision map are
+  stored at the correct atlas slot without calling extraction functions
 - Fallback: simulate fetch failure → local Perlin generation
 - State machine: Empty → Fetching → Ready, Empty → FallbackLocal
 
@@ -216,9 +273,9 @@ game worker interface doesn't change.
 
 The design accommodates future tiers without architectural changes:
 
-- **Tier 2a (baked shadows + AO):** Add fields to Cap'n Proto schema. Server
-  computes sun shadow bits and AO values. Shader reads baked data. Fall back
-  to real-time tracing for mutated chunks.
-- **Tier 2b (light culling):** Add region tags and face connectivity to schema.
-- **Tier 3 (LLM):** Server replaces Perlin with Claude API call. LRU cache
-  becomes critical (LLM latency ~500 ms). Same wire format.
+- **Tier 2a (baked shadows + AO):** Add `Option` fields to `ChunkPayload`.
+  Server computes sun shadow bits and AO values. Shader reads baked data. Fall
+  back to real-time tracing for mutated chunks.
+- **Tier 2b (light culling):** Add region tags and face connectivity fields.
+- **Tier 3 (LLM):** Server replaces `MapConfig` generation with Claude API
+  call. LRU cache becomes critical (LLM latency ~500 ms). Same wire format.
