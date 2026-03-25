@@ -160,6 +160,63 @@ impl ChunkAtlas {
         );
     }
 
+    /// Upload pre-built voxel data and a precomputed occupancy mask into the
+    /// given atlas slot, bypassing `Chunk` construction and `occupancy_mask()`
+    /// computation. Used by the chunk server path where raw bytes arrive over
+    /// the wire.
+    pub fn upload_precomputed(
+        &mut self,
+        queue: &wgpu::Queue,
+        slot: u32,
+        voxel_bytes: &[u8],
+        occupancy: u64,
+        world_coord: IVec3,
+    ) {
+        let chunk_u32 = CHUNK_SIZE as u32;
+        let origin = slot_to_atlas_origin(slot, self.slots_per_axis);
+
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.atlas_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d {
+                    x: origin.x,
+                    y: origin.y,
+                    z: origin.z,
+                },
+                aspect: wgpu::TextureAspect::All,
+            },
+            voxel_bytes,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(chunk_u32 * 4),
+                rows_per_image: Some(chunk_u32),
+            },
+            wgpu::Extent3d {
+                width: chunk_u32,
+                height: chunk_u32,
+                depth_or_array_layers: chunk_u32,
+            },
+        );
+
+        self.slots[slot as usize] = ChunkSlotGpu {
+            world_pos: world_coord,
+            flags: 1,
+        };
+        queue.write_buffer(
+            &self.index_buffer,
+            u64::from(slot) * size_of::<ChunkSlotGpu>() as u64,
+            bytemuck::bytes_of(&self.slots[slot as usize]),
+        );
+
+        self.occupancy_masks[slot as usize] = occupancy;
+        queue.write_buffer(
+            &self.occupancy_buffer,
+            u64::from(slot) * size_of::<u64>() as u64,
+            bytemuck::bytes_of(&occupancy),
+        );
+    }
+
     /// Mark a slot as empty in the index buffer and clear its occupancy mask.
     pub fn clear_slot(&mut self, queue: &wgpu::Queue, slot: u32) {
         self.slots[slot as usize].flags = 0;
@@ -349,6 +406,38 @@ mod tests {
         atlas.upload_chunk(&gpu.queue, 0, chunk, *coord);
         atlas.clear_slot(&gpu.queue, 0);
         assert_eq!(atlas.occupancy_masks()[0], 0);
+    }
+
+    #[test]
+    fn upload_precomputed_stores_occupancy() {
+        let gpu =
+            pollster::block_on(crate::render::gpu::GpuContext::new_headless()).expect("GPU init");
+        let mut atlas = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
+        let grid = build_test_grid();
+        let (coord, chunk) = &grid[0];
+        let expected_mask = chunk.occupancy_mask();
+        let voxel_bytes: &[u8] = bytemuck::cast_slice(&chunk.voxels);
+        atlas.upload_precomputed(&gpu.queue, 0, voxel_bytes, expected_mask, *coord);
+        assert_eq!(atlas.occupancy_masks()[0], expected_mask);
+    }
+
+    #[test]
+    fn upload_precomputed_matches_upload_chunk() {
+        let gpu =
+            pollster::block_on(crate::render::gpu::GpuContext::new_headless()).expect("GPU init");
+        let mut atlas_a = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
+        let mut atlas_b = ChunkAtlas::new(&gpu.device, UVec3::new(8, 2, 8));
+        let grid = build_test_grid();
+        let (coord, chunk) = &grid[0];
+        let mask = chunk.occupancy_mask();
+        let voxel_bytes: &[u8] = bytemuck::cast_slice(&chunk.voxels);
+
+        atlas_a.upload_chunk(&gpu.queue, 0, chunk, *coord);
+        atlas_b.upload_precomputed(&gpu.queue, 0, voxel_bytes, mask, *coord);
+
+        assert_eq!(atlas_a.occupancy_masks()[0], atlas_b.occupancy_masks()[0]);
+        assert_eq!(atlas_a.slots[0].world_pos, atlas_b.slots[0].world_pos);
+        assert_eq!(atlas_a.slots[0].flags, atlas_b.slots[0].flags);
     }
 
     #[test]

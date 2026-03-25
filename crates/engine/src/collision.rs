@@ -26,6 +26,30 @@ impl CollisionMap {
         Self { bits }
     }
 
+    /// Returns a byte-slice view of the underlying bitfield.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bits
+    }
+
+    /// Reconstructs a `CollisionMap` from a byte slice (must be exactly 4096 bytes).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `bytes.len() != 4096`.
+    #[must_use]
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        assert_eq!(
+            bytes.len(),
+            Self::BYTES,
+            "CollisionMap requires exactly {0} bytes",
+            Self::BYTES
+        );
+        let mut bits = [0u8; Self::BYTES];
+        bits.copy_from_slice(bytes);
+        Self { bits }
+    }
+
     /// Check if two world positions are in different voxels.
     #[must_use]
     pub fn crosses_voxel_boundary(old: Vec3, new: Vec3) -> bool {
@@ -117,5 +141,23 @@ mod tests {
             Vec3::new(-0.1, 0.0, 0.0),
             Vec3::new(0.1, 0.0, 0.0),
         ));
+    }
+
+    #[test]
+    fn as_bytes_returns_4096_bytes() {
+        let voxels = vec![0u32; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+        let map = CollisionMap::from_voxels(&voxels);
+        assert_eq!(map.as_bytes().len(), 4096);
+    }
+
+    #[test]
+    fn from_bytes_round_trips_with_from_voxels() {
+        let mut voxels = vec![0u32; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+        let idx = 20 * CHUNK_SIZE * CHUNK_SIZE + 10 * CHUNK_SIZE + 5;
+        voxels[idx] = pack_voxel(MAT_STONE, 0, 0, 0);
+        let original = CollisionMap::from_voxels(&voxels);
+        let restored = CollisionMap::from_bytes(original.as_bytes());
+        assert!(restored.is_solid(5, 10, 20));
+        assert!(!restored.is_solid(5, 10, 19));
     }
 }

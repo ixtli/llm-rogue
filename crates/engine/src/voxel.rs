@@ -56,6 +56,14 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    /// Creates an all-air chunk (32^3 zero voxels).
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            voxels: vec![0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE],
+        }
+    }
+
     /// Returns `true` if every voxel in the chunk is air (`material_id` == 0).
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -363,6 +371,13 @@ mod tests {
         let idx = 0 * CHUNK_SIZE * CHUNK_SIZE + 0 * CHUNK_SIZE + 8;
         chunk.voxels[idx] = pack_voxel(MAT_DIRT, 0, 0, 0);
         assert_eq!(chunk.occupancy_mask(), 1u64 << 1);
+    }
+
+    #[test]
+    fn chunk_empty_is_empty() {
+        let chunk = Chunk::empty();
+        assert!(chunk.is_empty());
+        assert_eq!(chunk.voxels.len(), CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
     }
 
     #[test]

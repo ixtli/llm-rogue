@@ -189,6 +189,10 @@ export type RenderToGameMessage =
       light_count: number;
       render_scale: number;
       shader_preset: number;
+      chunk_source: number;
+      server_chunks: number;
+      fallback_chunks: number;
+      fetch_latency_ms: number;
     }
   | {
       type: "chunk_terrain";
@@ -274,6 +278,10 @@ export type GameToUIMessage =
       alive_particles: number;
       active_emitters: number;
       shader_preset: number;
+      chunk_source: number;
+      server_chunks: number;
+      fallback_chunks: number;
+      fetch_latency_ms: number;
     }
   | { type: "camera_mode"; mode: "follow" | "free_look" | "cinematic" }
   | {

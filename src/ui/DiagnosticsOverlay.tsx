@@ -36,6 +36,32 @@ const streamingColor = (state: number): string => {
   }
 };
 
+const chunkSourceLabel = (source: number): string => {
+  switch (source) {
+    case 0:
+      return "offline";
+    case 1:
+      return "local";
+    case 2:
+      return "server";
+    default:
+      return "unknown";
+  }
+};
+
+const chunkSourceColor = (source: number): string => {
+  switch (source) {
+    case 0:
+      return "#9e9e9e"; // gray
+    case 1:
+      return "#ffeb3b"; // yellow
+    case 2:
+      return "#4caf50"; // green
+    default:
+      return "#e0e0e0";
+  }
+};
+
 const budgetBar = (loaded: number, budget: number): string => {
   if (budget === 0) return "";
   const filled = Math.min(loaded, budget);
@@ -161,6 +187,13 @@ const DiagnosticsOverlay: Component<DiagnosticsOverlayProps> = (props) => {
         <div>
           Shader: {SHADER_PRESETS[props.data.shader_preset]?.name ?? "?"} (
           {SHADER_PRESETS[props.data.shader_preset]?.desc ?? "unknown"})
+        </div>
+        <div>
+          <span style={{ color: chunkSourceColor(props.data.chunk_source) }}>
+            Server: {chunkSourceLabel(props.data.chunk_source)}
+          </span>
+          {" | "}loaded: {props.data.server_chunks} | fallback: {props.data.fallback_chunks} |{" "}
+          {props.data.fetch_latency_ms.toFixed(0)}ms
         </div>
       </div>
     </Show>

@@ -64,7 +64,11 @@ pub const STAT_SPRITE_COUNT: usize = 23;
 pub const STAT_LIGHT_COUNT: usize = 24;
 pub const STAT_RENDER_SCALE: usize = 25;
 pub const STAT_SHADER_PRESET: usize = 26;
-pub const STAT_VEC_LEN: usize = 27;
+pub const STAT_CHUNK_SOURCE: usize = 27;
+pub const STAT_SERVER_CHUNKS: usize = 28;
+pub const STAT_FALLBACK_CHUNKS: usize = 29;
+pub const STAT_FETCH_LATENCY: usize = 30;
+pub const STAT_VEC_LEN: usize = 31;
 
 /// Material palette: 256 RGBA entries. Phase 2 uses 4 materials.
 #[must_use]
@@ -517,6 +521,11 @@ impl Renderer {
         self.input.end_intent(intent);
     }
 
+    /// Set or clear the chunk server URL used for remote chunk fetching.
+    pub fn set_server_url(&mut self, url: Option<String>) {
+        self.chunk_manager.set_server_url(url);
+    }
+
     /// Whether a chunk at the given chunk coordinate is currently loaded.
     #[must_use]
     pub fn is_chunk_loaded(&self, cx: i32, cy: i32, cz: i32) -> bool {
@@ -812,6 +821,10 @@ impl Renderer {
         v[STAT_LIGHT_COUNT] = self.light_count as f32;
         v[STAT_RENDER_SCALE] = self.render_scale;
         v[STAT_SHADER_PRESET] = self.shader_preset as f32;
+        v[STAT_CHUNK_SOURCE] = self.chunk_manager.server_status_code();
+        v[STAT_SERVER_CHUNKS] = self.chunk_manager.server_chunks_loaded();
+        v[STAT_FALLBACK_CHUNKS] = self.chunk_manager.fallback_chunks_loaded();
+        v[STAT_FETCH_LATENCY] = self.chunk_manager.avg_fetch_latency_ms();
         v
     }
 }

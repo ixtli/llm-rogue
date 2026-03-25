@@ -24,6 +24,8 @@ log = "0.4"
 noise = "0.9"
 bytemuck = { version = "1", features = ["derive"] }
 glam = { version = "0.29", features = ["bytemuck"] }
+serde = { version = "1", features = ["derive"] }
+postcard = { version = "1", features = ["alloc"] }
 simple-easing = "1"
 
 # WASM-only dependencies, gated behind the "wasm" feature
@@ -34,7 +36,16 @@ js-sys = { version = "0.3", optional = true }
 
 [dependencies.web-sys]
 version = "0.3"
-features = ["OffscreenCanvas", "console"]
+features = [
+    "OffscreenCanvas",
+    "console",
+    "Headers",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "WorkerGlobalScope",
+]
 optional = true
 
 [dev-dependencies]

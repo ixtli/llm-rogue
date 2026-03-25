@@ -26,8 +26,12 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Screen-relative WASD | Camera-orbit-aware movement: WASD directions rotate with camera facing | PR #33 |
 | Phase 8 (death) | Permadeath with stats recap: player death detection, RunStats tracking, GameOverScreen overlay, 2.5s death delay, soft reset ("New Game"), debug kill (K key) | `archive/2026-03-17-phase8-death-game-over-*.md` |
 
+| Phase 9 Tier 1 | Chunk server: standalone Rust/axum binary serving precomputed chunks via postcard, async WASM fetch with offline fallback, LRU cache, diagnostics stats | `archive/2026-03-24-phase9-tier1-chunk-server-*.md`, `archive/2026-03-22-phase9-chunk-server-brainstorm.md` |
+
 ## Not yet planned
 
 | Phase | Summary | Notes |
 |-------|---------|-------|
-| Phase 9: Chunk server | LLM/MCP integration, compression codec, chunk worker thread, HTTP endpoints, baked sun shadows + AO, light culling metadata | Replaces procedural generation. Brainstorm: `2026-03-22-phase9-chunk-server-brainstorm.md` |
+| Phase 9 Tier 2a | Baked sun shadows + static AO from chunk server | Extends chunk payload with precomputed lighting data |
+| Phase 9 Tier 2b | Light culling metadata (indoor/outdoor tags, face connectivity) | Optional, small GPU savings in indoor scenes |
+| Phase 9 Tier 3 | LLM/MCP integration for terrain generation | Replaces Perlin with Claude API calls, requires cache layer |

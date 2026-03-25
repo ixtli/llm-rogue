@@ -10,6 +10,7 @@ use camera::{CameraIntent, EasingKind};
 
 pub mod camera;
 pub mod chunk_manager;
+pub mod chunk_payload;
 pub mod collision;
 pub mod error;
 pub mod map_features;
@@ -54,6 +55,18 @@ pub fn render_frame(time: f32) {
     RENDERER.with(|r| {
         if let Some(renderer) = r.borrow_mut().as_mut() {
             renderer.render(time);
+        }
+    });
+}
+
+/// Set or clear the chunk server URL used for remote chunk fetching.
+/// Pass `undefined`/`null` from JS to disable server fetching.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn set_server_url(url: Option<String>) {
+    RENDERER.with(|r| {
+        if let Some(renderer) = r.borrow_mut().as_mut() {
+            renderer.set_server_url(url);
         }
     });
 }

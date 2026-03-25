@@ -1,6 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
+#[cfg(feature = "wasm")]
+use std::cell::RefCell;
+#[cfg(feature = "wasm")]
+use std::rc::Rc;
+
 use glam::{IVec3, UVec3, Vec3};
+
+#[cfg(feature = "wasm")]
+use wasm_bindgen::JsCast;
+#[cfg(feature = "wasm")]
+use wasm_bindgen_futures::JsFuture;
 
 use crate::collision::CollisionMap;
 use crate::render::chunk_atlas::{ChunkAtlas, world_to_slot};
@@ -59,6 +69,21 @@ pub struct TickResult {
     pub stats: TickStats,
 }
 
+#[cfg(feature = "wasm")]
+struct CompletedFetch {
+    coord: IVec3,
+    result: Result<crate::chunk_payload::ChunkPayload, String>,
+    elapsed_ms: f64,
+}
+
+#[cfg(feature = "wasm")]
+#[derive(Clone, Copy, PartialEq)]
+enum ServerStatus {
+    Online,
+    Offline,
+    NeverConnected,
+}
+
 /// Manages dynamic chunk loading and unloading around the camera.
 ///
 /// Wraps a [`ChunkAtlas`] and tracks which world coordinates are loaded.
@@ -73,6 +98,24 @@ pub struct ChunkManager {
     chunk_gen: Box<dyn Fn(IVec3) -> Chunk + Send>,
     view_distance: u32,
     atlas_slots: UVec3,
+
+    // Server fetch stats (all targets)
+    server_url: Option<String>,
+    server_loaded_count: u32,
+    fallback_loaded_count: u32,
+    avg_latency_ms: f32,
+
+    // WASM-only async fetch state
+    #[cfg(feature = "wasm")]
+    fetching: HashSet<IVec3>,
+    #[cfg(feature = "wasm")]
+    completed: Rc<RefCell<Vec<CompletedFetch>>>,
+    #[cfg(feature = "wasm")]
+    server_status: ServerStatus,
+    #[cfg(feature = "wasm")]
+    consecutive_failures: u32,
+    #[cfg(feature = "wasm")]
+    last_probe_time: f64,
 }
 
 impl ChunkManager {
@@ -115,6 +158,20 @@ impl ChunkManager {
             chunk_gen,
             view_distance,
             atlas_slots,
+            server_url: None,
+            server_loaded_count: 0,
+            fallback_loaded_count: 0,
+            avg_latency_ms: 0.0,
+            #[cfg(feature = "wasm")]
+            fetching: HashSet::new(),
+            #[cfg(feature = "wasm")]
+            completed: Rc::new(RefCell::new(Vec::new())),
+            #[cfg(feature = "wasm")]
+            server_status: ServerStatus::NeverConnected,
+            #[cfg(feature = "wasm")]
+            consecutive_failures: 0,
+            #[cfg(feature = "wasm")]
+            last_probe_time: 0.0,
         }
     }
 
@@ -276,6 +333,192 @@ impl ChunkManager {
         }
     }
 
+    /// Set the chunk server URL. `None` = pure offline (local generation only).
+    pub fn set_server_url(&mut self, url: Option<String>) {
+        self.server_url = url;
+    }
+
+    /// Returns a status code: 0 = offline, 1 = local generation, 2 = server.
+    #[must_use]
+    pub fn server_status_code(&self) -> f32 {
+        #[cfg(feature = "wasm")]
+        {
+            match self.server_status {
+                ServerStatus::Online => 2.0,
+                ServerStatus::NeverConnected => {
+                    if self.server_url.is_some() {
+                        1.0
+                    } else {
+                        1.0
+                    }
+                }
+                ServerStatus::Offline => 0.0,
+            }
+        }
+        #[cfg(not(feature = "wasm"))]
+        {
+            1.0
+        }
+    }
+
+    /// Number of chunks loaded from the server.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn server_chunks_loaded(&self) -> f32 {
+        self.server_loaded_count as f32
+    }
+
+    /// Number of chunks loaded via local fallback generation.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn fallback_chunks_loaded(&self) -> f32 {
+        self.fallback_loaded_count as f32
+    }
+
+    /// Exponential moving average of server fetch latency in ms.
+    #[must_use]
+    pub fn avg_fetch_latency_ms(&self) -> f32 {
+        self.avg_latency_ms
+    }
+
+    /// Find which chunk coordinate occupies the given atlas slot, if any.
+    #[cfg_attr(not(feature = "wasm"), allow(dead_code))]
+    fn slot_occupant(&self, slot: u32) -> Option<IVec3> {
+        self.loaded
+            .iter()
+            .find(|(_, lc)| lc.slot == slot)
+            .map(|(c, _)| *c)
+    }
+
+    /// Spawn an async fetch for a chunk from the server (wasm-only).
+    #[cfg(feature = "wasm")]
+    fn spawn_fetch(&mut self, coord: IVec3) {
+        let url = match &self.server_url {
+            Some(u) => format!("{u}/chunks/{},{},{}", coord.x, coord.y, coord.z),
+            None => return,
+        };
+
+        self.fetching.insert(coord);
+        let completed = Rc::clone(&self.completed);
+        let start_time = js_sys::Date::now();
+
+        wasm_bindgen_futures::spawn_local(async move {
+            let result = async {
+                let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
+                let resp_value = JsFuture::from(global.fetch_with_str(&url))
+                    .await
+                    .map_err(|e| format!("fetch error: {e:?}"))?;
+                let resp: web_sys::Response = resp_value.unchecked_into();
+                if !resp.ok() {
+                    return Err(format!("HTTP {}", resp.status()));
+                }
+                let buf = JsFuture::from(
+                    resp.array_buffer()
+                        .map_err(|e| format!("array_buffer error: {e:?}"))?,
+                )
+                .await
+                .map_err(|e| format!("await array_buffer: {e:?}"))?;
+                let array = js_sys::Uint8Array::new(&buf);
+                let bytes = array.to_vec();
+                let payload: crate::chunk_payload::ChunkPayload =
+                    postcard::from_bytes(&bytes).map_err(|e| format!("deserialize error: {e}"))?;
+                Ok(payload)
+            }
+            .await;
+
+            let elapsed_ms = js_sys::Date::now() - start_time;
+            completed.borrow_mut().push(CompletedFetch {
+                coord,
+                result,
+                elapsed_ms,
+            });
+        });
+    }
+
+    /// Drain completed server fetches, uploading successes and falling back on failures.
+    #[cfg(feature = "wasm")]
+    fn drain_completed_fetches(&mut self, queue: &wgpu::Queue) {
+        let fetches: Vec<CompletedFetch> = self.completed.borrow_mut().drain(..).collect();
+
+        for fetch in fetches {
+            self.fetching.remove(&fetch.coord);
+
+            match fetch.result {
+                Ok(payload) => {
+                    // A successful fetch means the server is reachable.
+                    self.consecutive_failures = 0;
+                    self.server_status = ServerStatus::Online;
+
+                    let coord = IVec3::new(payload.cx, payload.cy, payload.cz);
+                    if self.loaded.contains_key(&coord) {
+                        // Already loaded (e.g. local fallback), skip upload
+                        // but status is already updated above.
+                        continue;
+                    }
+
+                    let slot = world_to_slot(coord, self.atlas_slots);
+
+                    // Evict occupant if needed.
+                    if let Some(old_coord) = self.slot_occupant(slot) {
+                        self.loaded.remove(&old_coord);
+                        self.atlas.clear_slot(queue, slot);
+                    }
+
+                    // Upload precomputed data.
+                    self.atlas.upload_precomputed(
+                        queue,
+                        slot,
+                        &payload.voxels,
+                        payload.occupancy,
+                        coord,
+                    );
+
+                    let collision = Some(CollisionMap::from_bytes(&payload.collision));
+                    let terrain = Some(TerrainGrid::from_bytes(&payload.terrain_grid));
+
+                    // Reconstruct a Chunk from the voxel bytes for the LoadedChunk.
+                    let voxels: Vec<u32> = bytemuck::cast_slice(&payload.voxels).to_vec();
+                    let chunk = Chunk { voxels };
+
+                    self.loaded.insert(
+                        coord,
+                        LoadedChunk {
+                            slot,
+                            collision,
+                            terrain,
+                            chunk,
+                        },
+                    );
+
+                    self.server_loaded_count += 1;
+
+                    // Update EMA of latency (alpha = 0.2).
+                    #[allow(clippy::cast_possible_truncation)]
+                    let elapsed = fetch.elapsed_ms as f32;
+                    if self.avg_latency_ms == 0.0 {
+                        self.avg_latency_ms = elapsed;
+                    } else {
+                        self.avg_latency_ms = self.avg_latency_ms * 0.8 + elapsed * 0.2;
+                    }
+                }
+                Err(err) => {
+                    log::warn!("chunk fetch failed for {:?}: {}", fetch.coord, err);
+                    self.consecutive_failures += 1;
+                    if self.consecutive_failures >= 5 {
+                        self.server_status = ServerStatus::Offline;
+                        log::warn!(
+                            "chunk server marked offline after {} consecutive failures",
+                            self.consecutive_failures
+                        );
+                    }
+                    // Fall back to local generation.
+                    self.load_chunk(queue, fetch.coord);
+                    self.fallback_loaded_count += 1;
+                }
+            }
+        }
+    }
+
     /// Compute the set of chunk coordinates visible from `camera_pos` with the
     /// given `view_distance` (in chunks). Returns a box of (2*vd+1)^3 chunks
     /// centered on the camera's chunk.
@@ -347,6 +590,10 @@ impl ChunkManager {
         budget: u32,
         animation: Option<&crate::camera::CameraAnimation>,
     ) -> TickResult {
+        // Drain any completed server fetches first (wasm-only).
+        #[cfg(feature = "wasm")]
+        self.drain_completed_fetches(queue);
+
         let visible = Self::compute_visible_set(camera_pos, self.view_distance);
         let visible_set: HashSet<IVec3> = visible.iter().copied().collect();
         self.visible.clone_from(&visible_set);
@@ -382,9 +629,39 @@ impl ChunkManager {
             }
         }
 
+        // On wasm with a server URL, check for connectivity probe.
+        #[cfg(feature = "wasm")]
+        {
+            if self.server_url.is_some() && self.server_status == ServerStatus::Offline {
+                let now = js_sys::Date::now();
+                if now - self.last_probe_time >= 30_000.0 {
+                    self.last_probe_time = now;
+                    // Try a single probe fetch for the first pending chunk.
+                    if let Some(&probe_coord) = to_load.first() {
+                        if !self.fetching.contains(&probe_coord) {
+                            self.spawn_fetch(probe_coord);
+                        }
+                    }
+                }
+            }
+        }
+
         let mut loaded_this_tick: u32 = 0;
         let mut unloaded_this_tick: u32 = 0;
         for coord in to_load.iter().take(budget as usize) {
+            // On wasm: if server URL is set and not offline, spawn async fetch.
+            #[cfg(feature = "wasm")]
+            {
+                if self.server_url.is_some()
+                    && self.server_status != ServerStatus::Offline
+                    && !self.fetching.contains(coord)
+                {
+                    self.spawn_fetch(*coord);
+                    // Count as "in progress" — it'll complete in a future tick.
+                    continue;
+                }
+            }
+
             let slot = world_to_slot(*coord, self.atlas_slots);
             let will_evict = self
                 .loaded
@@ -392,6 +669,7 @@ impl ChunkManager {
                 .any(|(c, lc)| lc.slot == slot && *c != *coord);
             self.load_chunk(queue, *coord);
             loaded_this_tick += 1;
+            self.fallback_loaded_count += 1;
             if will_evict {
                 unloaded_this_tick += 1;
             }
@@ -794,5 +1072,63 @@ mod tests {
         mgr.load_chunk(&gpu.queue, IVec3::ZERO);
         // The chunk should be loaded and solid at y=0 (stone).
         assert!(mgr.is_solid(Vec3::new(0.5, 0.5, 0.5)));
+    }
+
+    #[test]
+    fn set_server_url_stores_value() {
+        let (_gpu, mut mgr) = make_manager(42, 3);
+        assert!(mgr.server_url.is_none());
+        mgr.set_server_url(Some("http://localhost:3001".into()));
+        assert_eq!(mgr.server_url.as_deref(), Some("http://localhost:3001"));
+    }
+
+    #[test]
+    fn set_server_url_can_clear() {
+        let (_gpu, mut mgr) = make_manager(42, 3);
+        mgr.set_server_url(Some("http://localhost:3001".into()));
+        mgr.set_server_url(None);
+        assert!(mgr.server_url.is_none());
+    }
+
+    #[test]
+    fn load_chunk_works_without_server_url() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        assert!(mgr.server_url.is_none());
+        mgr.load_chunk(&gpu.queue, IVec3::ZERO);
+        assert!(mgr.is_loaded(IVec3::ZERO));
+    }
+
+    #[test]
+    fn stats_getters_default_values() {
+        let (_gpu, mgr) = make_manager(42, 3);
+        // Native always reports local status.
+        assert!((mgr.server_status_code() - 1.0).abs() < f32::EPSILON);
+        assert!((mgr.server_chunks_loaded() - 0.0).abs() < f32::EPSILON);
+        assert!((mgr.fallback_chunks_loaded() - 0.0).abs() < f32::EPSILON);
+        assert!((mgr.avg_fetch_latency_ms() - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn slot_occupant_finds_loaded_chunk() {
+        let (gpu, mut mgr) = make_manager(42, 3);
+        let coord = IVec3::ZERO;
+        mgr.load_chunk(&gpu.queue, coord);
+        let slot = world_to_slot(coord, mgr.atlas_slots);
+        assert_eq!(mgr.slot_occupant(slot), Some(coord));
+    }
+
+    #[test]
+    fn slot_occupant_returns_none_for_empty_slot() {
+        let (_gpu, mgr) = make_manager(42, 3);
+        assert_eq!(mgr.slot_occupant(0), None);
+    }
+
+    #[test]
+    fn fallback_loaded_count_increments_on_local_gen() {
+        let (gpu, mut mgr) = make_manager(42, 1);
+        assert_eq!(mgr.fallback_loaded_count, 0);
+        let cam_pos = Vec3::new(16.0, 16.0, 16.0);
+        mgr.tick_budgeted(&gpu.queue, cam_pos, 5);
+        assert_eq!(mgr.fallback_loaded_count, 5);
     }
 }

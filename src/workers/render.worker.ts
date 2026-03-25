@@ -19,6 +19,7 @@ import init, {
   set_look_delta,
   set_projection,
   set_render_scale,
+  set_server_url,
   set_shader_preset,
   spawn_burst,
   take_animation_completed,
@@ -43,6 +44,9 @@ import {
   STAT_CAMERA_YAW,
   STAT_CAMERA_Z,
   STAT_CHUNK_BUDGET,
+  STAT_CHUNK_SOURCE,
+  STAT_FALLBACK_CHUNKS,
+  STAT_FETCH_LATENCY,
   STAT_FRAME_TIME_MS,
   STAT_LIGHT_COUNT,
   STAT_LOADED_CHUNKS,
@@ -51,6 +55,7 @@ import {
   STAT_RENDER_HEIGHT,
   STAT_RENDER_SCALE,
   STAT_RENDER_WIDTH,
+  STAT_SERVER_CHUNKS,
   STAT_SHADER_PRESET,
   STAT_SPRITE_COUNT,
   STAT_STREAMING_STATE,
@@ -76,6 +81,12 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     try {
       await init();
       await init_renderer(canvas, width, height);
+
+      // Configure chunk server URL from build-time env var (Vite bakes this in)
+      const serverUrl: string | undefined = import.meta.env.VITE_CHUNK_SERVER_URL;
+      if (serverUrl) {
+        set_server_url(serverUrl);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       (self as unknown as Worker).postMessage({ type: "error", message });
@@ -123,6 +134,10 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
         light_count: s[STAT_LIGHT_COUNT],
         render_scale: s[STAT_RENDER_SCALE],
         shader_preset: s[STAT_SHADER_PRESET],
+        chunk_source: s[STAT_CHUNK_SOURCE],
+        server_chunks: s[STAT_SERVER_CHUNKS],
+        fallback_chunks: s[STAT_FALLBACK_CHUNKS],
+        fetch_latency_ms: s[STAT_FETCH_LATENCY],
       });
 
       // Emit terrain grids for newly loaded chunks, or on first frame
