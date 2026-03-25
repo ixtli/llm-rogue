@@ -7,7 +7,11 @@ GPU ray marching through a 3D texture atlas in Rust/WASM (wgpu/WebGPU), with a
 Solid.js UI overlay. See `docs/plans/2026-02-07-voxel-engine-design.md` for the
 full architecture, `docs/plans/SUMMARY.md` for phase completion status.
 
-**Current state:** Phases 1–7b, 8a–8g, and Phase 8 (death) are complete. The game has
+**Current state:** Phases 1–7b, 8a–8g, Phase 8 (death), and Phase 9 Tier 1 are complete. The game has
+a standalone chunk server (`crates/chunk-server/`, Rust/axum) that serves
+precomputed terrain via HTTP. The WASM render worker fetches chunks
+asynchronously with automatic offline fallback to local Perlin generation,
+connectivity probing for reconnection, and diagnostics stats. It also has
 a turn-based game loop with stat-based combat (attack/defense/crit), equipment
 slots, inventory with item management UI (I key toggle, equip/unequip/use/drop),
 auto-pickup on move, permadeath with stats recap and soft reset,
@@ -47,7 +51,7 @@ NPCs), Q/E orbits the camera 90°, scroll zooms, Tab toggles free-look
 C triggers cinematic flyby, F2 toggles edit mode, F3 toggles perspective/ortho
 projection, F4 cycles render scale. Space waits.
 
-Next milestone: Phase 9 (chunk server).
+Next milestone: Phase 9 Tier 2a (baked sun shadows + AO) or Tier 3 (LLM integration).
 
 ## Tech Stack
 
@@ -87,8 +91,14 @@ bun run build:wasm       # compile rust to wasm (passes --features wasm)
 bun run dev              # vite dev server
 cargo test -p engine     # run all rust tests (unit + regression)
 cargo test -p engine --test render_regression  # regression tests only
+cargo test -p chunk-server  # chunk server tests
+cargo run -p chunk-server   # start chunk server (default port 3001)
 bun run test             # run UI component tests (vitest)
 ```
+
+To run with chunk server: start `cargo run -p chunk-server` in one terminal,
+then `VITE_CHUNK_SERVER_URL=http://localhost:3001 bun run dev` in another.
+Without the env var, the game runs in pure offline mode (local Perlin).
 
 ## Development Process
 
@@ -293,6 +303,8 @@ occlusion samples), using the material's palette color.
 | `combat-particles` | `src/game/combat-particles.ts` | Maps CombatResult[] + deaths[] → ParticleBurst[] with color bursts + floating damage numbers |
 | `run-stats` | `src/game/run-stats.ts` | RunStats tracking: turns, kills, damage dealt/taken, items picked up, cause of death |
 | `GameOverScreen` | `src/ui/GameOverScreen.tsx` | Death overlay: "You Died", cause of death, stats grid, "New Game" restart button |
+| `chunk_payload` | `crates/engine/src/chunk_payload.rs` | ChunkPayload wire format (postcard), from_chunk builder |
+| `chunk-server` | `crates/chunk-server/src/main.rs` | Standalone HTTP chunk server (axum), LRU cache, /chunks and /health endpoints |
 
 ## Worktree Gotchas
 
