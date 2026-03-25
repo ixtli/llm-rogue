@@ -394,7 +394,7 @@ impl ChunkManager {
     #[cfg(feature = "wasm")]
     fn spawn_fetch(&mut self, coord: IVec3) {
         let url = match &self.server_url {
-            Some(u) => format!("{u}/chunk/{}/{}/{}", coord.x, coord.y, coord.z),
+            Some(u) => format!("{u}/chunks/{},{},{}", coord.x, coord.y, coord.z),
             None => return,
         };
 
