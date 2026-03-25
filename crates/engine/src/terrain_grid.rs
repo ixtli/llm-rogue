@@ -94,6 +94,31 @@ impl TerrainGrid {
         self.columns.iter().map(Vec::len).sum()
     }
 
+    /// Deserializes a grid from the byte format produced by [`to_bytes`](Self::to_bytes).
+    ///
+    /// Format: for each of 32*32 columns in row-major (z-major) order:
+    /// `[count: u8, (y, terrain_id, headroom) x count]`
+    #[must_use]
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        let mut columns = Vec::with_capacity(CHUNK_SIZE * CHUNK_SIZE);
+        let mut offset = 0;
+        for _ in 0..CHUNK_SIZE * CHUNK_SIZE {
+            let count = bytes[offset] as usize;
+            offset += 1;
+            let mut surfaces = Vec::with_capacity(count);
+            for _ in 0..count {
+                surfaces.push(TileSurface {
+                    y: bytes[offset],
+                    terrain_id: bytes[offset + 1],
+                    headroom: bytes[offset + 2],
+                });
+                offset += 3;
+            }
+            columns.push(surfaces);
+        }
+        Self { columns }
+    }
+
     /// Serializes the grid for `postMessage` transfer.
     ///
     /// Format: for each of 32*32 columns in row-major (z-major) order:
@@ -274,6 +299,29 @@ mod tests {
             offset += 1;
         }
         assert_eq!(offset, bytes.len());
+    }
+
+    #[test]
+    fn from_bytes_round_trips_with_to_bytes() {
+        let mut chunk = air_chunk();
+        // Ground at y=0, bridge at y=5 in column (0,0)
+        set_voxel(&mut chunk, 0, 0, 0, MAT_GRASS);
+        set_voxel(&mut chunk, 0, 5, 0, MAT_STONE);
+
+        let original = TerrainGrid::from_chunk(&chunk);
+        let bytes = original.to_bytes();
+        let restored = TerrainGrid::from_bytes(&bytes);
+
+        // Check column (0,0) surfaces match
+        let orig_surfaces = original.surfaces_at(0, 0);
+        let rest_surfaces = restored.surfaces_at(0, 0);
+        assert_eq!(orig_surfaces.len(), rest_surfaces.len());
+        for (a, b) in orig_surfaces.iter().zip(rest_surfaces.iter()) {
+            assert_eq!(a, b);
+        }
+
+        // Check an empty column matches too
+        assert!(restored.surfaces_at(1, 0).is_empty());
     }
 
     #[test]

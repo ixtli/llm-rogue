@@ -19,6 +19,15 @@ pub struct MapConfig {
 }
 
 impl MapConfig {
+    /// Creates a `MapConfig` with the given seed and default features/camera.
+    #[must_use]
+    pub fn with_seed(seed: u32) -> Self {
+        Self {
+            seed,
+            ..Self::default()
+        }
+    }
+
     /// Generate a chunk at the given coordinate by running terrain generation
     /// followed by each feature in order.
     #[must_use]
@@ -349,6 +358,13 @@ mod tests {
             MAT_STONE,
             "wall voxel at world (8,25,8) should be MAT_STONE"
         );
+    }
+
+    #[test]
+    fn map_config_with_seed_uses_given_seed() {
+        let config = MapConfig::with_seed(99);
+        assert_eq!(config.seed, 99);
+        assert_eq!(config.features.len(), MapConfig::default().features.len());
     }
 
     #[test]
