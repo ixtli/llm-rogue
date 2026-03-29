@@ -1,4 +1,6 @@
 #[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
+pub mod billboard_pass;
+#[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
 pub mod blit_pass;
 pub mod chunk_atlas;
 pub mod gpu;
@@ -404,7 +406,7 @@ impl Renderer {
         self.particle_system.advance(dt);
         let vertices = self.particle_system.build_vertices();
         self.particle_pass
-            .update_particles(&self.gpu.queue, &vertices);
+            .update_instances(&self.gpu.queue, &vertices);
         self.particle_pass
             .encode(&mut encoder, &view, self.blit_pass.depth_stencil_view());
 
@@ -679,7 +681,7 @@ impl Renderer {
     /// boundary where typed arrays arrive as raw float slices.
     pub fn update_sprites_from_flat(&mut self, data: &[f32]) {
         let sprites: &[sprite_pass::SpriteInstance] = bytemuck::cast_slice(data);
-        self.sprite_pass.update_sprites(&self.gpu.queue, sprites);
+        self.sprite_pass.update_instances(&self.gpu.queue, sprites);
     }
 
     /// Resizes the renderer to new pixel dimensions.
