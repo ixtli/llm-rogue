@@ -1,3 +1,4 @@
+import type { Vec3 } from "../vec";
 import type { CombatResult } from "./combat";
 import type { HealthEvent } from "./entity";
 import {
@@ -41,7 +42,7 @@ export function buildCombatParticles(
   playerId: number,
   combatEvents: CombatResult[],
   deaths: number[],
-  getPosition: (id: number) => { x: number; y: number; z: number } | undefined,
+  getPosition: (id: number) => Vec3 | undefined,
   atlas?: AtlasInfo,
   cameraYaw = 0,
 ): ParticleBurst[] {
@@ -102,7 +103,7 @@ const NON_COMBAT_DAMAGE_COLOR: [number, number, number, number] = [1.0, 0.3, 0.2
 export function buildHealthNumberParticles(
   healthEvents: HealthEvent[],
   combatEvents: CombatResult[],
-  getPosition: (id: number) => { x: number; y: number; z: number } | undefined,
+  getPosition: (id: number) => Vec3 | undefined,
   atlas: AtlasInfo,
   cameraYaw = 0,
 ): ParticleBurst[] {

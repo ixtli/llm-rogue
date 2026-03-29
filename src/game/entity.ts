@@ -1,3 +1,4 @@
+import type { Vec3 } from "../vec";
 import { Inventory } from "./inventory";
 
 export type Direction = "n" | "s" | "e" | "w";
@@ -6,16 +7,10 @@ export type EntityType = "player" | "npc" | "item";
 export type EquipmentSlot = "weapon" | "armor" | "helmet" | "ring";
 export type Equipment = Record<EquipmentSlot, ItemDef | null>;
 
-export interface Position {
-  x: number;
-  y: number;
-  z: number;
-}
-
 export interface Entity {
   id: number;
   type: EntityType;
-  position: Position;
+  position: Vec3;
   facing: Direction;
 }
 
@@ -102,7 +97,7 @@ export function drainHealthEvents(actors: Actor[]): HealthEvent[] {
 
 let nextId = 1;
 
-export function createPlayer(position: Position): Actor {
+export function createPlayer(position: Vec3): Actor {
   return {
     id: nextId++,
     type: "player",
@@ -128,7 +123,7 @@ export interface NpcStats {
 }
 
 export function createNpc(
-  position: Position,
+  position: Vec3,
   hostility: Hostility,
   stats: NpcStats | number = {},
   name = "NPC",
@@ -154,7 +149,7 @@ export function createNpc(
   };
 }
 
-export function createItemEntity(position: Position, item: ItemDef): ItemEntity {
+export function createItemEntity(position: Vec3, item: ItemDef): ItemEntity {
   return {
     id: nextId++,
     type: "item",

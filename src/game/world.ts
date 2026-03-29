@@ -1,12 +1,32 @@
 import type { Actor, Entity, ItemEntity } from "./entity";
 import { computeFov } from "./fov";
 import type { ChunkTerrainGrid, TileSurface } from "./terrain";
-import { getTerrainDef } from "./terrain";
+import { isWalkableSurface } from "./terrain";
 
 const CHUNK_SIZE = 32;
 
 function chunkKey(cx: number, cy: number, cz: number): string {
   return `${cx},${cy},${cz}`;
+}
+
+interface ChunkLocal {
+  cx: number;
+  cy: number;
+  cz: number;
+  lx: number;
+  ly: number;
+  lz: number;
+}
+
+function worldToLocal(worldX: number, worldY: number, worldZ: number): ChunkLocal {
+  return {
+    cx: Math.floor(worldX / CHUNK_SIZE),
+    cy: Math.floor(worldY / CHUNK_SIZE),
+    cz: Math.floor(worldZ / CHUNK_SIZE),
+    lx: ((worldX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+    ly: ((worldY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+    lz: ((worldZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+  };
 }
 
 export class GameWorld {
@@ -22,6 +42,10 @@ export class GameWorld {
   }
   getEntity(id: number): Entity | undefined {
     return this.entities.get(id);
+  }
+
+  allEntities(): Entity[] {
+    return [...this.entities.values()];
   }
 
   actors(): Actor[] {
@@ -49,25 +73,15 @@ export class GameWorld {
   }
 
   isWalkable(worldX: number, worldY: number, worldZ: number): boolean {
-    const cx = Math.floor(worldX / CHUNK_SIZE);
-    const cy = Math.floor(worldY / CHUNK_SIZE);
-    const cz = Math.floor(worldZ / CHUNK_SIZE);
-    const lx = ((worldX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-    const lz = ((worldZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-    const ly = ((worldY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const { cx, cy, cz, lx, ly, lz } = worldToLocal(worldX, worldY, worldZ);
     const grid = this.terrainGrids.get(chunkKey(cx, cy, cz));
     if (!grid) return false;
     const surfaces = grid.columns[lz * CHUNK_SIZE + lx];
-    return surfaces.some((s) => s.y === ly && (getTerrainDef(s.terrainId)?.walkable ?? false));
+    return surfaces.some((s) => s.y === ly && isWalkableSurface(s));
   }
 
   surfaceAtWorld(worldX: number, worldY: number, worldZ: number): TileSurface | undefined {
-    const cx = Math.floor(worldX / CHUNK_SIZE);
-    const cy = Math.floor(worldY / CHUNK_SIZE);
-    const cz = Math.floor(worldZ / CHUNK_SIZE);
-    const lx = ((worldX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-    const lz = ((worldZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-    const ly = ((worldY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const { cx, cy, cz, lx, ly, lz } = worldToLocal(worldX, worldY, worldZ);
     const grid = this.terrainGrids.get(chunkKey(cx, cy, cz));
     if (!grid) return undefined;
     return grid.columns[lz * CHUNK_SIZE + lx].find((s) => s.y === ly);
@@ -89,11 +103,7 @@ export class GameWorld {
     stepHeight: number,
     jumpHeight: number,
   ): { y: number; isJump: boolean } | undefined {
-    const cx = Math.floor(toX / CHUNK_SIZE);
-    const cy = Math.floor(fromY / CHUNK_SIZE);
-    const cz = Math.floor(toZ / CHUNK_SIZE);
-    const lx = ((toX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-    const lz = ((toZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const { cx, cy, cz, lx, lz } = worldToLocal(toX, fromY, toZ);
     const localFromY = ((fromY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const yOffset = cy * CHUNK_SIZE;
     const grid = this.terrainGrids.get(chunkKey(cx, cy, cz));
@@ -104,7 +114,7 @@ export class GameWorld {
     let bestDist = Infinity;
 
     for (const s of surfaces) {
-      if (!(getTerrainDef(s.terrainId)?.walkable ?? false)) continue;
+      if (!isWalkableSurface(s)) continue;
       const dy = Math.abs(s.y - localFromY);
       if (dy > jumpHeight) continue;
       if (dy < bestDist) {
@@ -116,10 +126,7 @@ export class GameWorld {
   }
 
   findTopSurface(worldX: number, worldZ: number): number | undefined {
-    const cx = Math.floor(worldX / CHUNK_SIZE);
-    const cz = Math.floor(worldZ / CHUNK_SIZE);
-    const lx = ((worldX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-    const lz = ((worldZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const { cx, cz, lx, lz } = worldToLocal(worldX, 0, worldZ);
     // Search loaded chunks from highest cy downward
     let best: number | undefined;
     for (const [key, grid] of this.terrainGrids) {
@@ -127,7 +134,7 @@ export class GameWorld {
       if (gcx !== cx || gcz !== cz) continue;
       const surfaces = grid.columns[lz * CHUNK_SIZE + lx];
       for (const s of surfaces) {
-        if (!(getTerrainDef(s.terrainId)?.walkable ?? false)) continue;
+        if (!isWalkableSurface(s)) continue;
         const worldY = s.y + grid.cy * CHUNK_SIZE;
         if (best === undefined || worldY > best) {
           best = worldY;

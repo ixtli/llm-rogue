@@ -97,3 +97,7 @@ export const TERRAIN_TABLE: Map<number, TerrainDef> = new Map([
 export function getTerrainDef(terrainId: number): TerrainDef | undefined {
   return TERRAIN_TABLE.get(terrainId);
 }
+
+export function isWalkableSurface(s: TileSurface): boolean {
+  return getTerrainDef(s.terrainId)?.walkable ?? false;
+}
