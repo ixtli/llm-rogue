@@ -27,7 +27,7 @@ import init, {
   update_sprites,
   update_visibility_mask,
 } from "../../crates/engine/pkg/engine";
-import type { GameToRenderMessage } from "../messages";
+import type { GameToRenderMessage, RenderToGameMessage } from "../messages";
 import {
   STAT_ACTIVE_EMITTERS,
   STAT_ALIVE_PARTICLES,
@@ -58,6 +58,14 @@ import {
   STAT_WASM_MEMORY_BYTES,
 } from "../stats-layout";
 
+function post(msg: RenderToGameMessage, transfers?: Transferable[]): void {
+  if (transfers) {
+    (self as unknown as Worker).postMessage(msg, transfers);
+  } else {
+    (self as unknown as Worker).postMessage(msg);
+  }
+}
+
 let atlasMetadata: {
   cols: number;
   rows: number;
@@ -78,11 +86,11 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
       await init_renderer(canvas, width, height);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      (self as unknown as Worker).postMessage({ type: "error", message });
+      post({ type: "error", message });
       return;
     }
 
-    (self as unknown as Worker).postMessage({ type: "ready" });
+    post({ type: "ready" });
 
     const VIEW_DIST = 3;
     const emittedTerrainChunks = new Set<string>();
@@ -91,10 +99,10 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     function loop() {
       render_frame(performance.now() / 1000.0);
       if (take_animation_completed()) {
-        (self as unknown as Worker).postMessage({ type: "animation_complete" });
+        post({ type: "animation_complete" });
       }
       const s = collect_frame_stats();
-      (self as unknown as Worker).postMessage({
+      post({
         type: "stats",
         frame_time_ms: s[STAT_FRAME_TIME_MS],
         loaded_chunks: s[STAT_LOADED_CHUNKS],
@@ -143,16 +151,7 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
               if (!emittedTerrainChunks.has(key) && is_chunk_loaded_at(cx, cy, cz)) {
                 const data = get_terrain_grid(cx, cy, cz);
                 if (data) {
-                  (self as unknown as Worker).postMessage(
-                    {
-                      type: "chunk_terrain",
-                      cx,
-                      cy,
-                      cz,
-                      data: data.buffer,
-                    },
-                    [data.buffer],
-                  );
+                  post({ type: "chunk_terrain", cx, cy, cz, data: data.buffer }, [data.buffer]);
                   emittedTerrainChunks.add(key);
                 }
               }
@@ -182,7 +181,7 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
     preload_view(msg.x, msg.y, msg.z);
   } else if (msg.type === "query_camera_position") {
     const s = collect_frame_stats();
-    (self as unknown as Worker).postMessage({
+    post({
       type: "camera_position",
       id: msg.id,
       x: s[STAT_CAMERA_X],
@@ -192,13 +191,13 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
       pitch: s[STAT_CAMERA_PITCH],
     });
   } else if (msg.type === "query_chunk_loaded") {
-    (self as unknown as Worker).postMessage({
+    post({
       type: "chunk_loaded",
       id: msg.id,
       loaded: is_chunk_loaded_at(msg.cx, msg.cy, msg.cz),
     });
   } else if (msg.type === "is_solid") {
-    (self as unknown as Worker).postMessage({
+    post({
       type: "is_solid_result",
       id: msg.id,
       solid: is_solid(msg.x, msg.y, msg.z),

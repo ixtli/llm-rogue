@@ -1,11 +1,11 @@
+import { statusColor } from "./ui-colors";
+
 /**
  * Return a CSS color string based on FPS health.
  * Green (>50), yellow (30-50), red (<30).
  */
 export function fpsColor(fps: number): string {
-  if (fps > 50) return "#4ade80";
-  if (fps >= 30) return "#facc15";
-  return "#f87171";
+  return statusColor(fps, 50, 30);
 }
 
 /**

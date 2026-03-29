@@ -1,4 +1,5 @@
 import type { Component } from "solid-js";
+import { COLOR_DANGER, COLOR_GOOD, COLOR_WARN } from "./ui-colors";
 
 export interface PlayerHUDData {
   health: number;
@@ -8,9 +9,9 @@ export interface PlayerHUDData {
 }
 
 function hpColor(ratio: number): string {
-  if (ratio > 0.5) return "#4ade80";
-  if (ratio > 0.25) return "#facc15";
-  return "#f87171";
+  if (ratio > 0.5) return COLOR_GOOD;
+  if (ratio > 0.25) return COLOR_WARN;
+  return COLOR_DANGER;
 }
 
 const PlayerHUD: Component<{ data: PlayerHUDData }> = (props) => {
