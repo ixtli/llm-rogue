@@ -184,12 +184,7 @@ impl SpritePass {
     }
 
     fn create_sampler(device: &wgpu::Device) -> wgpu::Sampler {
-        device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Sprite Sampler"),
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        })
+        super::pipeline_helpers::create_nearest_sampler(device, "Sprite Sampler")
     }
 
     fn create_placeholder_texture(
@@ -289,11 +284,11 @@ impl SpritePass {
         shader: &wgpu::ShaderModule,
         surface_format: wgpu::TextureFormat,
     ) -> wgpu::RenderPipeline {
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Sprite PL"),
-            bind_group_layouts: &[bind_group_layout],
-            ..Default::default()
-        });
+        let layout = super::pipeline_helpers::single_bgl_pipeline_layout(
+            device,
+            "Sprite PL",
+            bind_group_layout,
+        );
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Sprite Pipeline"),

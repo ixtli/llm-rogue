@@ -189,20 +189,14 @@ impl RaymarchPass {
     }
 
     fn create_depth_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
-        device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Depth Output"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R32Float,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        })
+        super::pipeline_helpers::create_2d_texture(
+            device,
+            "Depth Output",
+            width,
+            height,
+            wgpu::TextureFormat::R32Float,
+            wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+        )
     }
 
     /// Creates an empty visibility buffer with a zero-sized grid (no dimming).
@@ -407,11 +401,11 @@ impl RaymarchPass {
         bind_group_layout: &wgpu::BindGroupLayout,
         shader: &wgpu::ShaderModule,
     ) -> wgpu::ComputePipeline {
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Raymarch PL"),
-            bind_group_layouts: &[bind_group_layout],
-            ..Default::default()
-        });
+        let layout = super::pipeline_helpers::single_bgl_pipeline_layout(
+            device,
+            "Raymarch PL",
+            bind_group_layout,
+        );
 
         device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Raymarch Pipeline"),
