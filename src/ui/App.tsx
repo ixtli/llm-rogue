@@ -20,6 +20,24 @@ import ToolPalette, { activeTool } from "./ToolPalette";
 
 const COMPAT_BROWSERS = "Chrome 113+, Edge 113+, Opera 99+, or Samsung Internet 27+";
 
+function sendSpriteAtlas(target: Worker, registry: GlyphRegistry, cellSize: number): void {
+  const atlas = rasterizeAtlas(registry.entries(), cellSize);
+  const tints = registry.packTints(atlas.cols, atlas.rows);
+  target.postMessage(
+    {
+      type: "sprite_atlas",
+      data: atlas.data,
+      width: atlas.width,
+      height: atlas.height,
+      cols: atlas.cols,
+      rows: atlas.rows,
+      tints,
+      halfWidths: atlas.halfWidths,
+    } satisfies UIToGameMessage,
+    [atlas.data],
+  );
+}
+
 let handleAtlasChanged: ((registry: GlyphRegistry, cellSize: number) => void) | undefined;
 
 interface AppProps {
@@ -81,21 +99,7 @@ const App: Component<AppProps> = (props) => {
         // Send default sprite atlas once font is loaded
         fontReady.then(() => {
           const defaultRegistry = new GlyphRegistry();
-          const atlas = rasterizeAtlas(defaultRegistry.entries(), defaultRegistry.cellSize);
-          const tints = defaultRegistry.packTints(atlas.cols, atlas.rows);
-          worker.postMessage(
-            {
-              type: "sprite_atlas",
-              data: atlas.data,
-              width: atlas.width,
-              height: atlas.height,
-              cols: atlas.cols,
-              rows: atlas.rows,
-              tints,
-              halfWidths: atlas.halfWidths,
-            } satisfies UIToGameMessage,
-            [atlas.data],
-          );
+          sendSpriteAtlas(worker, defaultRegistry, defaultRegistry.cellSize);
         });
       } else if (e.data.type === "error") {
         setError(`Engine failed to initialize: ${e.data.message}`);
@@ -127,21 +131,7 @@ const App: Component<AppProps> = (props) => {
     };
 
     handleAtlasChanged = (registry: GlyphRegistry, cellSize: number) => {
-      const atlas = rasterizeAtlas(registry.entries(), cellSize);
-      const tints = registry.packTints(atlas.cols, atlas.rows);
-      worker.postMessage(
-        {
-          type: "sprite_atlas",
-          data: atlas.data,
-          width: atlas.width,
-          height: atlas.height,
-          cols: atlas.cols,
-          rows: atlas.rows,
-          tints,
-          halfWidths: atlas.halfWidths,
-        } satisfies UIToGameMessage,
-        [atlas.data],
-      );
+      sendSpriteAtlas(worker, registry, cellSize);
     };
 
     // Render at 1x CSS pixels. The ray-march shader (shadows + AO) is too

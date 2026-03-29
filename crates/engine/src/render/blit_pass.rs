@@ -116,12 +116,7 @@ impl BlitPass {
     }
 
     fn create_sampler(device: &wgpu::Device) -> wgpu::Sampler {
-        device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Blit Sampler"),
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        })
+        super::pipeline_helpers::create_nearest_sampler(device, "Blit Sampler")
     }
 
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
@@ -194,11 +189,11 @@ impl BlitPass {
         shader: &wgpu::ShaderModule,
         surface_format: wgpu::TextureFormat,
     ) -> wgpu::RenderPipeline {
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Blit PL"),
-            bind_group_layouts: &[bind_group_layout],
-            ..Default::default()
-        });
+        let layout = super::pipeline_helpers::single_bgl_pipeline_layout(
+            device,
+            "Blit PL",
+            bind_group_layout,
+        );
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Blit Pipeline"),
@@ -241,19 +236,13 @@ impl BlitPass {
         width: u32,
         height: u32,
     ) -> wgpu::Texture {
-        device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Blit Depth-Stencil"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        })
+        super::pipeline_helpers::create_2d_texture(
+            device,
+            "Blit Depth-Stencil",
+            width,
+            height,
+            wgpu::TextureFormat::Depth32Float,
+            wgpu::TextureUsages::RENDER_ATTACHMENT,
+        )
     }
 }

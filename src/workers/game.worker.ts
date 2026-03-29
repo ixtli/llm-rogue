@@ -12,7 +12,7 @@ import {
 } from "../game/entity";
 import { pickNearest } from "../game/entity-hit-test";
 import { equip, totalAttack, totalDefense, unequip } from "../game/equipment";
-import type { Vec3 as CamVec3, OrbitArc } from "../game/follow-camera";
+import type { OrbitArc } from "../game/follow-camera";
 import { buildFlybyWaypoints, FollowCamera } from "../game/follow-camera";
 import { healthTier } from "../game/health-tier";
 import { LightManager } from "../game/light-manager";
@@ -30,6 +30,7 @@ import type {
   UIToGameMessage,
 } from "../messages";
 import { StatsAggregator } from "../stats";
+import type { Vec3 } from "../vec";
 
 // --- Key-to-intent mapping ---
 
@@ -39,6 +40,17 @@ const KEY_TO_INTENT: Record<string, number> = {
   r: CameraIntent.TiltUp,
   f: CameraIntent.TiltDown,
   shift: CameraIntent.Sprint,
+};
+
+const WASD_TO_INTENT: Record<string, number | undefined> = {
+  w: CameraIntent.TrackForward,
+  arrowup: CameraIntent.TrackForward,
+  s: CameraIntent.TrackBackward,
+  arrowdown: CameraIntent.TrackBackward,
+  a: CameraIntent.TruckLeft,
+  arrowleft: CameraIntent.TruckLeft,
+  d: CameraIntent.TruckRight,
+  arrowright: CameraIntent.TruckRight,
 };
 
 // --- Screen-relative direction mapping for WASD/arrow keys ---
@@ -99,6 +111,14 @@ const SPRITE_CENTER_Y_OFFSET = 1.5; // pixels
 
 const FACING_MAP: Record<string, number> = { s: 0, e: 1, n: 2, w: 3 };
 
+function entitySpriteOrigin(pos: { x: number; y: number; z: number }): {
+  x: number;
+  y: number;
+  z: number;
+} {
+  return { x: pos.x + 0.5, y: pos.y + 1, z: pos.z + 0.5 };
+}
+
 function sendToRender(msg: GameToRenderMessage) {
   const transfers: Transferable[] = [];
   if (msg.type === "init") transfers.push(msg.canvas);
@@ -157,12 +177,13 @@ function sendSpriteUpdate(): void {
     facing: number;
   }[] = [];
 
-  for (const entity of [...world.actors(), ...world.items()] as Entity[]) {
+  for (const entity of world.allEntities()) {
+    const origin = entitySpriteOrigin(entity.position);
     sprites.push({
       id: entity.id,
-      x: entity.position.x + 0.5,
-      y: entity.position.y + 1,
-      z: entity.position.z + 0.5,
+      x: origin.x,
+      y: origin.y,
+      z: origin.z,
       spriteId: entitySpriteId(entity),
       facing: FACING_MAP[entity.facing] ?? 0,
     });
@@ -186,7 +207,7 @@ const FOV_RADIUS = 10;
 
 function sendVisibilityMask(): void {
   if (!turnLoop) return;
-  const player = world.getEntity(turnLoop.turnOrder()[0]);
+  const player = turnLoop.getPlayer();
   if (!player) return;
   const { x: px, z: pz } = player.position;
   const gridSize = FOV_RADIUS * 2 + 1;
@@ -215,9 +236,7 @@ function sendVisibilityMask(): void {
 }
 
 function sendGameState(): void {
-  const player = turnLoop
-    ? (world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined)
-    : undefined;
+  const player = turnLoop?.getPlayer();
   if (!player) return;
 
   const entities: {
@@ -231,7 +250,7 @@ function sendGameState(): void {
     hostility: "friendly" | "neutral" | "hostile";
     healthTier: string;
   }[] = [];
-  for (const entity of [...world.actors(), ...world.items()] as Entity[]) {
+  for (const entity of world.allEntities()) {
     const isActor = entity.type === "player" || entity.type === "npc";
     const actor = isActor ? (entity as Actor) : undefined;
     const itemEntity = entity.type === "item" ? (entity as ItemEntity) : undefined;
@@ -319,7 +338,7 @@ function cancelOrbitAnimation(): void {
   }
 }
 
-function startOrbitAnimation(playerPos: CamVec3, arc: OrbitArc, duration: number): void {
+function startOrbitAnimation(playerPos: Vec3, arc: OrbitArc, duration: number): void {
   cancelOrbitAnimation();
   const startTime = performance.now();
 
@@ -502,7 +521,7 @@ function initializeGame(): void {
   lightManager.addPoint({ x: 5, y: torchY, z: 8 }, 12, { r: 0, g: 0, b: 1 });
   lightManager.flush(sendToRender);
 
-  const playerEntity = world.getEntity(turnLoop?.turnOrder()[0]);
+  const playerEntity = turnLoop?.getPlayer();
   if (playerEntity) sendFollowCamera(playerEntity.position, false);
 
   sendVisibilityMask();
@@ -518,21 +537,17 @@ function handlePlayerAction(action: PlayerAction): void {
   const posMap = new Map<number, { x: number; y: number; z: number }>();
   for (const a of world.actors()) {
     nameMap.set(a.id, a.name);
-    posMap.set(a.id, {
-      x: a.position.x + 0.5,
-      y: a.position.y + 1,
-      z: a.position.z + 0.5,
-    });
+    posMap.set(a.id, entitySpriteOrigin(a.position));
   }
   const result = turnLoop.submitAction(action);
   if (result.resolved) {
     turnNumber++;
     const getName = (id: number) => nameMap.get(id) ?? "unknown";
-    runStats.recordTurn(turnLoop.turnOrder()[0], result, getName);
+    runStats.recordTurn(turnLoop.getPlayerId(), result, getName);
     sendSpriteUpdate();
     sendGameState();
     const logEntries = formatCombatLog(
-      turnLoop.turnOrder()[0],
+      turnLoop.getPlayerId(),
       result.combatEvents,
       result.deaths,
       result.pickups,
@@ -543,7 +558,7 @@ function handlePlayerAction(action: PlayerAction): void {
     }
     const getPos = (id: number) => posMap.get(id);
     const bursts = buildCombatParticles(
-      turnLoop.turnOrder()[0],
+      turnLoop.getPlayerId(),
       result.combatEvents,
       result.deaths,
       getPos,
@@ -561,7 +576,7 @@ function handlePlayerAction(action: PlayerAction): void {
     }
     flushHealthParticles([...world.actors()], result.combatEvents, getPos);
     sendVisibilityMask();
-    const player = world.getEntity(turnLoop.turnOrder()[0]);
+    const player = turnLoop.getPlayer();
     if (player) sendFollowCamera(player.position, true);
     if (result.playerDead) {
       playerDead = true;
@@ -587,7 +602,7 @@ function handleMouseMove(screenX: number, screenY: number): void {
   };
 
   const projected = [];
-  for (const entity of [...world.actors(), ...world.items()] as Entity[]) {
+  for (const entity of world.allEntities()) {
     const result = projectToScreen(
       entity.position.x + VOXEL_CENTER_OFFSET,
       entity.position.y + SPRITE_CENTER_Y_OFFSET,
@@ -702,7 +717,7 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
       } else {
         // Cinematic ended, return to follow
         if (turnLoop) {
-          const player = world.getEntity(turnLoop.turnOrder()[0]);
+          const player = turnLoop.getPlayer();
           if (player) sendFollowCamera(player.position, true);
         }
         sendToUI({ type: "camera_mode", mode: followCamera.mode });
@@ -753,11 +768,11 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     // K = debug kill (deal 9999 damage to player)
     if (key === "k") {
       if (!turnLoop || playerDead) return;
-      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      const player = turnLoop.getPlayer();
       if (!player) return;
       alterHealth(player, -9999);
       const pos = player.position;
-      flushHealthParticles([player], [], () => ({ x: pos.x + 0.5, y: pos.y + 1, z: pos.z + 0.5 }));
+      flushHealthParticles([player], [], () => entitySpriteOrigin(pos));
       handlePlayerAction({ type: "wait" });
       return;
     }
@@ -767,7 +782,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       followCamera.toggleProjection();
       sendProjection();
       if (followCamera.mode === "follow" && turnLoop) {
-        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        const player = turnLoop.getPlayer();
         if (player) sendFollowCamera(player.position, false);
       }
       return;
@@ -778,7 +793,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       const delta = key === "-" ? 1 : -1;
       followCamera.adjustZoom(delta);
       if (followCamera.mode === "follow" && turnLoop) {
-        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        const player = turnLoop.getPlayer();
         if (player) sendFollowCamera(player.position, false);
       }
       if (followCamera.projectionMode === "ortho") {
@@ -795,7 +810,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       if (followCamera.mode !== prevMode) {
         sendToUI({ type: "camera_mode", mode: followCamera.mode });
         if (followCamera.mode === "follow" && turnLoop) {
-          const player = world.getEntity(turnLoop.turnOrder()[0]);
+          const player = turnLoop.getPlayer();
           if (player) sendFollowCamera(player.position, true);
         }
       }
@@ -817,14 +832,14 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       if (key === "q" || key === "e") {
         const arc = followCamera.orbit(key === "q" ? -1 : 1);
         if (turnLoop) {
-          const player = world.getEntity(turnLoop.turnOrder()[0]);
+          const player = turnLoop.getPlayer();
           if (player) startOrbitAnimation(player.position, arc, 0.4);
         }
         return;
       }
       if (key === "c" && turnLoop) {
         cancelOrbitAnimation();
-        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        const player = turnLoop.getPlayer();
         if (!player) return;
         const waypoints = buildFlybyWaypoints(player.position);
         const [start, ...rest] = waypoints;
@@ -858,17 +873,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
       }
     } else {
       // Free-look mode: WASD = camera intents, Q/E/R/F = camera intents
-      const wasdToIntent: Record<string, number | undefined> = {
-        w: CameraIntent.TrackForward,
-        arrowup: CameraIntent.TrackForward,
-        s: CameraIntent.TrackBackward,
-        arrowdown: CameraIntent.TrackBackward,
-        a: CameraIntent.TruckLeft,
-        arrowleft: CameraIntent.TruckLeft,
-        d: CameraIntent.TruckRight,
-        arrowright: CameraIntent.TruckRight,
-      };
-      const camIntent = wasdToIntent[key];
+      const camIntent = WASD_TO_INTENT[key];
       if (camIntent !== undefined) {
         sendToRender({ type: "begin_intent", intent: camIntent });
         return;
@@ -880,17 +885,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     }
   } else if (msg.type === "key_up") {
     if (followCamera.mode === "free_look") {
-      const wasdToIntent: Record<string, number | undefined> = {
-        w: CameraIntent.TrackForward,
-        arrowup: CameraIntent.TrackForward,
-        s: CameraIntent.TrackBackward,
-        arrowdown: CameraIntent.TrackBackward,
-        a: CameraIntent.TruckLeft,
-        arrowleft: CameraIntent.TruckLeft,
-        d: CameraIntent.TruckRight,
-        arrowright: CameraIntent.TruckRight,
-      };
-      const intent = wasdToIntent[msg.key] ?? KEY_TO_INTENT[msg.key];
+      const intent = WASD_TO_INTENT[msg.key] ?? KEY_TO_INTENT[msg.key];
       if (intent !== undefined) {
         sendToRender({ type: "end_intent", intent });
       }
@@ -904,7 +899,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     // Free actions (don't consume a turn)
     if (msg.action === "equip") {
       if (!turnLoop) return;
-      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      const player = turnLoop.getPlayer();
       if (!player) return;
       equip(player, msg.inventoryIndex);
       sendGameState();
@@ -912,7 +907,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     }
     if (msg.action === "unequip") {
       if (!turnLoop) return;
-      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      const player = turnLoop.getPlayer();
       if (!player) return;
       unequip(player, msg.slot);
       sendGameState();
@@ -920,7 +915,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     }
     if (msg.action === "use_item") {
       if (!turnLoop) return;
-      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      const player = turnLoop.getPlayer();
       if (!player) return;
       const stack = player.inventory.slots[msg.inventoryIndex];
       if (!stack) return;
@@ -933,13 +928,13 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
         entries: [{ text: `You use a ${itemName}.`, color: "#22d3ee" }],
       });
       const pos = player.position;
-      flushHealthParticles([player], [], () => ({ x: pos.x + 0.5, y: pos.y + 1, z: pos.z + 0.5 }));
+      flushHealthParticles([player], [], () => entitySpriteOrigin(pos));
       sendGameState();
       return;
     }
     if (msg.action === "drop") {
       if (!turnLoop) return;
-      const player = world.getEntity(turnLoop.turnOrder()[0]) as Actor | undefined;
+      const player = turnLoop.getPlayer();
       if (!player) return;
       const removed = player.inventory.removeAt(msg.inventoryIndex, 1);
       if (!removed) return;
@@ -1002,7 +997,7 @@ self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
     if (followCamera.mode === "follow") {
       followCamera.adjustZoom(msg.dy * 0.001);
       if (turnLoop) {
-        const player = world.getEntity(turnLoop.turnOrder()[0]);
+        const player = turnLoop.getPlayer();
         if (player) sendFollowCamera(player.position, false);
       }
       if (followCamera.projectionMode === "ortho") {

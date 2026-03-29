@@ -1,6 +1,7 @@
+import type { Vec3 } from "../vec";
 import type { CombatResult } from "./combat";
 import { resolveCombat } from "./combat";
-import { type Actor, alterHealth, type ItemEntity, type Position } from "./entity";
+import { type Actor, alterHealth, type ItemEntity } from "./entity";
 import { getTerrainDef } from "./terrain";
 import type { GameWorld } from "./world";
 
@@ -15,8 +16,8 @@ export type PlayerAction =
 export interface NpcAction {
   actorId: number;
   action: string;
-  from?: Position;
-  to?: Position;
+  from?: Vec3;
+  to?: Vec3;
 }
 
 export interface TurnResult {
@@ -49,6 +50,14 @@ export class TurnLoop {
   constructor(world: GameWorld, playerId: number) {
     this.world = world;
     this.playerId = playerId;
+  }
+
+  getPlayer(): Actor | undefined {
+    return this.world.getEntity(this.playerId) as Actor | undefined;
+  }
+
+  getPlayerId(): number {
+    return this.playerId;
   }
 
   turnOrder(): number[] {

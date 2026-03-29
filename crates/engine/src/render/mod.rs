@@ -1,9 +1,12 @@
 #[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
+pub mod billboard_pass;
+#[cfg(any(feature = "wasm", not(target_arch = "wasm32")))]
 pub mod blit_pass;
 pub mod chunk_atlas;
 pub mod gpu;
 pub mod light_buffer;
 pub mod particle_pass;
+pub mod pipeline_helpers;
 pub mod raymarch_pass;
 pub mod sprite_pass;
 
@@ -403,7 +406,7 @@ impl Renderer {
         self.particle_system.advance(dt);
         let vertices = self.particle_system.build_vertices();
         self.particle_pass
-            .update_particles(&self.gpu.queue, &vertices);
+            .update_instances(&self.gpu.queue, &vertices);
         self.particle_pass
             .encode(&mut encoder, &view, self.blit_pass.depth_stencil_view());
 
@@ -678,7 +681,7 @@ impl Renderer {
     /// boundary where typed arrays arrive as raw float slices.
     pub fn update_sprites_from_flat(&mut self, data: &[f32]) {
         let sprites: &[sprite_pass::SpriteInstance] = bytemuck::cast_slice(data);
-        self.sprite_pass.update_sprites(&self.gpu.queue, sprites);
+        self.sprite_pass.update_instances(&self.gpu.queue, sprites);
     }
 
     /// Resizes the renderer to new pixel dimensions.
@@ -704,26 +707,7 @@ impl Renderer {
         self.render_width = rw;
         self.render_height = rh;
 
-        let storage_texture = create_storage_texture(&self.gpu.device, rw, rh);
-        let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        self.raymarch_pass.rebuild_for_resize(
-            &self.gpu.device,
-            &storage_view,
-            self.chunk_manager.atlas(),
-            rw,
-            rh,
-            self.light_buffer.buffer(),
-        );
-        self.blit_pass.rebuild_for_resize(
-            &self.gpu.device,
-            &storage_view,
-            self.raymarch_pass.depth_view(),
-            width,
-            height,
-        );
-
-        self._storage_texture = storage_texture;
+        self.rebuild_render_targets(rw, rh);
     }
 
     /// Sets the render scale mode. If `auto` is true, `scale` is ignored and
@@ -743,6 +727,12 @@ impl Renderer {
         self.render_width = rw;
         self.render_height = rh;
 
+        self.rebuild_render_targets(rw, rh);
+    }
+
+    /// Rebuilds the storage texture, raymarch pass, and blit pass for a new
+    /// render resolution. Used by both `resize()` and `set_render_scale()`.
+    fn rebuild_render_targets(&mut self, rw: u32, rh: u32) {
         let storage_texture = create_storage_texture(&self.gpu.device, rw, rh);
         let storage_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 

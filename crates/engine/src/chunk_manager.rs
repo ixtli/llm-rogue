@@ -5,7 +5,11 @@ use glam::{IVec3, UVec3, Vec3};
 use crate::collision::CollisionMap;
 use crate::render::chunk_atlas::{ChunkAtlas, world_to_slot};
 use crate::terrain_grid::TerrainGrid;
-use crate::voxel::{CHUNK_SIZE, Chunk, pack_voxel};
+#[cfg(test)]
+use crate::voxel::CHUNK_SIZE;
+use crate::voxel::{
+    Chunk, pack_voxel, pos_to_chunk_coord, world_ivec_to_chunk, world_pos_to_chunk,
+};
 
 /// Per-chunk data retained after GPU upload: atlas slot + collision bitfield + terrain grid.
 struct LoadedChunk {
@@ -220,25 +224,13 @@ impl ChunkManager {
     /// Check if the voxel at `world_pos` is solid. Returns `false` for
     /// unloaded chunks or air.
     #[must_use]
-    #[allow(clippy::cast_possible_wrap)]
     pub fn is_solid(&self, world_pos: Vec3) -> bool {
-        let chunk_size = CHUNK_SIZE as i32;
-        let vx = world_pos.x.floor() as i32;
-        let vy = world_pos.y.floor() as i32;
-        let vz = world_pos.z.floor() as i32;
-        let chunk_coord = IVec3::new(
-            vx.div_euclid(chunk_size),
-            vy.div_euclid(chunk_size),
-            vz.div_euclid(chunk_size),
-        );
-        let local_x = vx.rem_euclid(chunk_size);
-        let local_y = vy.rem_euclid(chunk_size);
-        let local_z = vz.rem_euclid(chunk_size);
+        let (chunk_coord, local) = world_pos_to_chunk(world_pos);
         match self.loaded.get(&chunk_coord) {
             Some(loaded) => loaded
                 .collision
                 .as_ref()
-                .is_some_and(|c| c.is_solid(local_x, local_y, local_z)),
+                .is_some_and(|c| c.is_solid(local.x, local.y, local.z)),
             None => false,
         }
     }
@@ -255,20 +247,12 @@ impl ChunkManager {
     /// Updates the chunk's voxel data, rebuilds collision and terrain maps,
     /// and re-uploads the chunk to the GPU atlas. No-op if the chunk at
     /// `world_pos` is not loaded.
-    #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
     pub fn mutate_voxel(&mut self, queue: &wgpu::Queue, world_pos: IVec3, material_id: u8) {
-        let chunk_size = CHUNK_SIZE as i32;
-        let chunk_coord = IVec3::new(
-            world_pos.x.div_euclid(chunk_size),
-            world_pos.y.div_euclid(chunk_size),
-            world_pos.z.div_euclid(chunk_size),
-        );
-        let local_x = world_pos.x.rem_euclid(chunk_size) as usize;
-        let local_y = world_pos.y.rem_euclid(chunk_size) as usize;
-        let local_z = world_pos.z.rem_euclid(chunk_size) as usize;
+        let (chunk_coord, (lx, ly, lz)) = world_ivec_to_chunk(world_pos);
         if let Some(loaded) = self.loaded.get_mut(&chunk_coord) {
-            let idx = local_z * CHUNK_SIZE * CHUNK_SIZE + local_y * CHUNK_SIZE + local_x;
-            loaded.chunk.voxels[idx] = pack_voxel(material_id, 0, 0, 0);
+            loaded
+                .chunk
+                .set_voxel(lx, ly, lz, pack_voxel(material_id, 0, 0, 0));
             loaded.collision = Some(CollisionMap::from_voxels(&loaded.chunk.voxels));
             loaded.terrain = Some(TerrainGrid::from_chunk(&loaded.chunk));
             self.atlas
@@ -280,14 +264,9 @@ impl ChunkManager {
     /// given `view_distance` (in chunks). Returns a box of (2*vd+1)^3 chunks
     /// centered on the camera's chunk.
     #[must_use]
-    #[allow(clippy::cast_precision_loss, clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_possible_wrap)]
     pub fn compute_visible_set(camera_pos: Vec3, view_distance: u32) -> Vec<IVec3> {
-        let chunk_size = crate::voxel::CHUNK_SIZE as f32;
-        let cam_chunk = IVec3::new(
-            (camera_pos.x / chunk_size).floor() as i32,
-            (camera_pos.y / chunk_size).floor() as i32,
-            (camera_pos.z / chunk_size).floor() as i32,
-        );
+        let cam_chunk = pos_to_chunk_coord(camera_pos);
         let range = view_distance as i32;
         let mut set = Vec::new();
         for z in (cam_chunk.z - range)..=(cam_chunk.z + range) {
@@ -339,7 +318,6 @@ impl ChunkManager {
     }
 
     /// Like `tick_budgeted` but also includes trajectory prediction chunks.
-    #[allow(clippy::cast_precision_loss)]
     pub fn tick_budgeted_with_prediction(
         &mut self,
         queue: &wgpu::Queue,
@@ -351,12 +329,7 @@ impl ChunkManager {
         let visible_set: HashSet<IVec3> = visible.iter().copied().collect();
         self.visible.clone_from(&visible_set);
 
-        let chunk_size = CHUNK_SIZE as f32;
-        let cam_chunk = IVec3::new(
-            (camera_pos.x / chunk_size).floor() as i32,
-            (camera_pos.y / chunk_size).floor() as i32,
-            (camera_pos.z / chunk_size).floor() as i32,
-        );
+        let cam_chunk = pos_to_chunk_coord(camera_pos);
 
         // Current-view chunks: sorted by distance (highest priority).
         let mut to_load: Vec<IVec3> = self

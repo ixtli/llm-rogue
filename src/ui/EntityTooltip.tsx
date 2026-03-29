@@ -1,4 +1,5 @@
 import type { Component } from "solid-js";
+import { COLOR_DANGER, COLOR_GOOD, COLOR_WARN } from "./ui-colors";
 
 export interface TooltipData {
   name: string;
@@ -9,9 +10,9 @@ export interface TooltipData {
 }
 
 const HOSTILITY_COLORS: Record<string, string> = {
-  friendly: "#4ade80",
-  neutral: "#facc15",
-  hostile: "#f87171",
+  friendly: COLOR_GOOD,
+  neutral: COLOR_WARN,
+  hostile: COLOR_DANGER,
 };
 
 const EntityTooltip: Component<{ data: TooltipData }> = (props) => {

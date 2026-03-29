@@ -25,6 +25,7 @@ Living index of project phases. Detailed plans are in `archive/`.
 | Render optimization | Render scale factor + max resolution cap (Tier 1), shader feature toggles with 5 presets (Tier 2) | `archive/2026-03-13-render-scale-*.md`, `archive/2026-03-16-shader-feature-toggles-*.md` |
 | Screen-relative WASD | Camera-orbit-aware movement: WASD directions rotate with camera facing | PR #33 |
 | Phase 8 (death) | Permadeath with stats recap: player death detection, RunStats tracking, GameOverScreen overlay, 2.5s death delay, soft reset ("New Game"), debug kill (K key) | `archive/2026-03-17-phase8-death-game-over-*.md` |
+| Dedup (Tiers 1-2) | Codebase deduplication: BillboardPass<V> generic (-256 lines), voxel_index/Chunk accessors, with_renderer! macro, pipeline_helpers.rs, coord helpers, Vec3 unification, TurnLoop.getPlayer(), ui-colors.ts, worker post helpers | `archive/2026-03-29-dedup-audit.md`, `archive/2026-03-29-dedup-impl.md` |
 
 ## Not yet planned
 

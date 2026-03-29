@@ -1,10 +1,5 @@
 import type { GameToRenderMessage } from "../messages";
-
-export interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
+import type { Vec3 } from "../vec";
 
 export interface Color3 {
   r: number;

@@ -1,8 +1,8 @@
 use glam::{IVec3, Vec3};
 
 use crate::voxel::{
-    CHUNK_SIZE, Chunk, MAT_AIR, MAT_DIRT, MAT_GRASS, MAT_STONE, TEST_GRID_SEED, material_id,
-    pack_voxel,
+    CHUNK_SIZE, Chunk, MAT_AIR, MAT_STONE, TEST_GRID_SEED, material_id, pack_voxel,
+    terrain_material, voxel_index,
 };
 
 /// A composable post-processing transform applied to a chunk after terrain generation.
@@ -58,15 +58,12 @@ const BLEND_RADIUS: f64 = 64.0;
 /// midpoint of the Perlin height range (noise=0 → height=24).
 const FLATTEN_HEIGHT: i32 = 24;
 
-/// Number of dirt layers below the grass surface.
-const FLATTEN_DIRT_DEPTH: i32 = 3;
-
 impl FlattenNearOrigin {
     /// Find the highest non-air voxel y index in the given column.
     fn find_surface_height(chunk: &Chunk, x: usize, z: usize) -> Option<usize> {
-        (0..CHUNK_SIZE).rev().find(|&y| {
-            material_id(chunk.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]) != MAT_AIR
-        })
+        (0..CHUNK_SIZE)
+            .rev()
+            .find(|&y| material_id(chunk.voxel_at(x, y, z)) != MAT_AIR)
     }
 
     /// Rewrite a column so that the surface is at `target_y` (local y within
@@ -75,17 +72,11 @@ impl FlattenNearOrigin {
     fn rewrite_column(chunk: &mut Chunk, x: usize, z: usize, target_world_y: i32, y_offset: i32) {
         for y in 0..CHUNK_SIZE {
             let world_y = y_offset + y as i32;
-            let idx = z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x;
+            let idx = voxel_index(x, y, z);
             if world_y > target_world_y {
                 chunk.voxels[idx] = pack_voxel(MAT_AIR, 0, 0, 0);
             } else {
-                let mat = if world_y == target_world_y {
-                    MAT_GRASS
-                } else if world_y + FLATTEN_DIRT_DEPTH >= target_world_y {
-                    MAT_DIRT
-                } else {
-                    MAT_STONE
-                };
+                let mat = terrain_material(world_y, target_world_y);
                 chunk.voxels[idx] = pack_voxel(mat, 0, 0, 0);
             }
         }
@@ -206,8 +197,7 @@ impl MapFeature for PlaceWalls {
                         let lx = (wx - chunk_min.x) as usize;
                         let ly = (wy - chunk_min.y) as usize;
                         let lz = (wz - chunk_min.z) as usize;
-                        let idx = lz * CHUNK_SIZE * CHUNK_SIZE + ly * CHUNK_SIZE + lx;
-                        chunk.voxels[idx] = pack_voxel(MAT_STONE, 0, 0, 0);
+                        chunk.set_voxel(lx, ly, lz, pack_voxel(MAT_STONE, 0, 0, 0));
                     }
                 }
             }
@@ -218,7 +208,7 @@ impl MapFeature for PlaceWalls {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{CHUNK_SIZE, material_id};
+    use crate::voxel::{CHUNK_SIZE, material_id, voxel_index};
 
     const FLAT_HEIGHT: i32 = 24;
 
@@ -268,10 +258,7 @@ mod tests {
             for x in 0..CHUNK_SIZE {
                 let surface_y = (0..CHUNK_SIZE)
                     .rev()
-                    .find(|&y| {
-                        material_id(chunk.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x])
-                            != 0
-                    })
+                    .find(|&y| material_id(chunk.voxels[voxel_index(x, y, z)]) != 0)
                     .expect("column should have solid voxels");
                 assert_eq!(
                     surface_y, FLAT_HEIGHT as usize,
@@ -309,13 +296,12 @@ mod tests {
         let mut any_differs_from_flat = false;
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
-                let raw_h = (0..CHUNK_SIZE).rev().find(|&y| {
-                    material_id(raw.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]) != 0
-                });
-                let blended_h = (0..CHUNK_SIZE).rev().find(|&y| {
-                    material_id(blended.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x])
-                        != 0
-                });
+                let raw_h = (0..CHUNK_SIZE)
+                    .rev()
+                    .find(|&y| material_id(raw.voxels[voxel_index(x, y, z)]) != 0);
+                let blended_h = (0..CHUNK_SIZE)
+                    .rev()
+                    .find(|&y| material_id(blended.voxels[voxel_index(x, y, z)]) != 0);
                 if raw_h != blended_h {
                     any_differs_from_raw = true;
                 }
@@ -343,7 +329,7 @@ mod tests {
         // Chunk (0,0,0) contains world (8,25,8) — the start of the L-wall vertical arm
         let chunk = config.generate_chunk(IVec3::ZERO);
         let (x, y, z) = (8_usize, 25_usize, 8_usize);
-        let idx = z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x;
+        let idx = voxel_index(x, y, z);
         assert_eq!(
             material_id(chunk.voxels[idx]),
             MAT_STONE,

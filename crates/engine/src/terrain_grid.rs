@@ -45,7 +45,7 @@ impl TerrainGrid {
                 let mut surfaces = Vec::new();
 
                 for y in 0..CHUNK_SIZE {
-                    let voxel = chunk.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x];
+                    let voxel = chunk.voxel_at(x, y, z);
                     let mat = material_id(voxel);
 
                     if mat == 0 {
@@ -63,8 +63,7 @@ impl TerrainGrid {
                     }
 
                     // Surface where solid has air above
-                    let above =
-                        chunk.voxels[z * CHUNK_SIZE * CHUNK_SIZE + (y + 1) * CHUNK_SIZE + x];
+                    let above = chunk.voxel_at(x, y + 1, z);
                     if material_id(above) == 0 {
                         let headroom = count_headroom(chunk, x, y + 1, z);
                         surfaces.push(TileSurface {
@@ -120,9 +119,7 @@ impl TerrainGrid {
 /// Counts consecutive air voxels starting at `(x, start_y, z)` upward.
 fn count_headroom(chunk: &Chunk, x: usize, start_y: usize, z: usize) -> usize {
     (start_y..CHUNK_SIZE)
-        .take_while(|&y| {
-            material_id(chunk.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]) == 0
-        })
+        .take_while(|&y| material_id(chunk.voxel_at(x, y, z)) == 0)
         .count()
 }
 
@@ -141,8 +138,7 @@ mod tests {
 
     /// Helper: sets a single voxel in a chunk.
     fn set_voxel(chunk: &mut Chunk, x: usize, y: usize, z: usize, material: u8) {
-        chunk.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] =
-            pack_voxel(material, 0, 0, 0);
+        chunk.set_voxel(x, y, z, pack_voxel(material, 0, 0, 0));
     }
 
     #[test]
