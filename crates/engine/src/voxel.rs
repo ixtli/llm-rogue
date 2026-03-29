@@ -1,4 +1,4 @@
-use glam::IVec3;
+use glam::{IVec3, Vec3};
 use noise::{NoiseFn, Perlin};
 
 pub const CHUNK_SIZE: usize = 32;
@@ -8,7 +8,75 @@ pub const MAT_GRASS: u8 = 1;
 pub const MAT_DIRT: u8 = 2;
 pub const MAT_STONE: u8 = 3;
 
-const DIRT_DEPTH: usize = 3;
+pub const DIRT_DEPTH: usize = 3;
+
+#[inline]
+#[must_use]
+pub const fn voxel_index(x: usize, y: usize, z: usize) -> usize {
+    z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x
+}
+
+/// Returns the terrain material for a voxel at world y relative to a surface.
+///
+/// Grass at the surface, dirt within `DIRT_DEPTH` below, stone deeper.
+#[inline]
+#[must_use]
+#[allow(clippy::cast_possible_wrap)]
+pub fn terrain_material(y: i32, surface_y: i32) -> u8 {
+    if y == surface_y {
+        MAT_GRASS
+    } else if y + DIRT_DEPTH as i32 >= surface_y {
+        MAT_DIRT
+    } else {
+        MAT_STONE
+    }
+}
+
+/// Decompose a world-space position into chunk coordinate and local voxel coordinate.
+/// Returns `(chunk_coord, local_coord)` where local is an `IVec3` in `[0, CHUNK_SIZE)`.
+#[must_use]
+#[allow(clippy::cast_possible_wrap)]
+pub fn world_pos_to_chunk(pos: Vec3) -> (IVec3, IVec3) {
+    let s = CHUNK_SIZE as i32;
+    let vx = pos.x.floor() as i32;
+    let vy = pos.y.floor() as i32;
+    let vz = pos.z.floor() as i32;
+    (
+        IVec3::new(vx.div_euclid(s), vy.div_euclid(s), vz.div_euclid(s)),
+        IVec3::new(vx.rem_euclid(s), vy.rem_euclid(s), vz.rem_euclid(s)),
+    )
+}
+
+/// Decompose a world-space integer position into chunk coordinate and local `(x, y, z)`.
+#[must_use]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub fn world_ivec_to_chunk(pos: IVec3) -> (IVec3, (usize, usize, usize)) {
+    let s = CHUNK_SIZE as i32;
+    (
+        IVec3::new(
+            pos.x.div_euclid(s),
+            pos.y.div_euclid(s),
+            pos.z.div_euclid(s),
+        ),
+        (
+            pos.x.rem_euclid(s) as usize,
+            pos.y.rem_euclid(s) as usize,
+            pos.z.rem_euclid(s) as usize,
+        ),
+    )
+}
+
+/// Convert a world-space position to the chunk coordinate it falls in.
+#[must_use]
+#[allow(clippy::cast_possible_wrap, clippy::cast_precision_loss)]
+pub fn pos_to_chunk_coord(pos: Vec3) -> IVec3 {
+    let s = CHUNK_SIZE as f32;
+    IVec3::new(
+        (pos.x / s).floor() as i32,
+        (pos.y / s).floor() as i32,
+        (pos.z / s).floor() as i32,
+    )
+}
 
 /// Grid extent along the X axis (in chunks) for the test grid.
 pub const TEST_GRID_X: i32 = 4;
@@ -56,6 +124,19 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    /// Read the voxel at `(x, y, z)` within this chunk.
+    #[inline]
+    #[must_use]
+    pub fn voxel_at(&self, x: usize, y: usize, z: usize) -> u32 {
+        self.voxels[voxel_index(x, y, z)]
+    }
+
+    /// Write `value` to the voxel at `(x, y, z)` within this chunk.
+    #[inline]
+    pub fn set_voxel(&mut self, x: usize, y: usize, z: usize, value: u32) {
+        self.voxels[voxel_index(x, y, z)] = value;
+    }
+
     /// Returns `true` if every voxel in the chunk is air (`material_id` == 0).
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -71,7 +152,7 @@ impl Chunk {
         for z in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
-                    let v = self.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x];
+                    let v = self.voxel_at(x, y, z);
                     if material_id(v) != 0 {
                         let bit = (x / 8) + (y / 8) * 4 + (z / 8) * 16;
                         mask |= 1u64 << bit;
@@ -83,7 +164,11 @@ impl Chunk {
     }
 
     #[must_use]
-    #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap
+    )]
     pub fn new_terrain(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         let mut voxels = vec![0u32; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
@@ -100,15 +185,8 @@ impl Chunk {
                 let height = height.min(CHUNK_SIZE - 1);
 
                 for y in 0..=height {
-                    let mat = if y == height {
-                        MAT_GRASS
-                    } else if y + DIRT_DEPTH >= height {
-                        MAT_DIRT
-                    } else {
-                        MAT_STONE
-                    };
-                    voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] =
-                        pack_voxel(mat, 0, 0, 0);
+                    let mat = terrain_material(y as i32, height as i32);
+                    voxels[voxel_index(x, y, z)] = pack_voxel(mat, 0, 0, 0);
                 }
             }
         }
@@ -149,15 +227,8 @@ impl Chunk {
                     if world_y > world_height {
                         break;
                     }
-                    let mat = if world_y == world_height {
-                        MAT_GRASS
-                    } else if world_y + DIRT_DEPTH as i32 >= world_height {
-                        MAT_DIRT
-                    } else {
-                        MAT_STONE
-                    };
-                    voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] =
-                        pack_voxel(mat, 0, 0, 0);
+                    let mat = terrain_material(world_y, world_height);
+                    voxels[voxel_index(x, y, z)] = pack_voxel(mat, 0, 0, 0);
                 }
             }
         }
@@ -231,7 +302,7 @@ mod tests {
             for z in 0..CHUNK_SIZE {
                 let mut found_surface = false;
                 for y in (0..CHUNK_SIZE).rev() {
-                    let v = chunk.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x];
+                    let v = chunk.voxel_at(x, y, z);
                     let mat = material_id(v);
                     if mat != 0 && !found_surface {
                         assert_eq!(mat, 1, "top solid voxel should be grass at ({x},{y},{z})");
@@ -280,14 +351,12 @@ mod tests {
         // while allowing normal noise variation.
         let max_allowed_diff = CHUNK_SIZE / 4;
         for z in 0..CHUNK_SIZE {
-            let left_height = (0..CHUNK_SIZE).rev().find(|&y| {
-                material_id(
-                    left.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + (CHUNK_SIZE - 1)],
-                ) != MAT_AIR
-            });
-            let right_height = (0..CHUNK_SIZE).rev().find(|&y| {
-                material_id(right.voxels[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE]) != MAT_AIR
-            });
+            let left_height = (0..CHUNK_SIZE)
+                .rev()
+                .find(|&y| material_id(left.voxel_at(CHUNK_SIZE - 1, y, z)) != MAT_AIR);
+            let right_height = (0..CHUNK_SIZE)
+                .rev()
+                .find(|&y| material_id(right.voxel_at(0, y, z)) != MAT_AIR);
             match (left_height, right_height) {
                 (Some(l), Some(r)) => assert!(
                     l.abs_diff(r) <= max_allowed_diff,
@@ -379,5 +448,56 @@ mod tests {
             .collect();
         let coords: Vec<IVec3> = grid.iter().map(|(c, _)| *c).collect();
         assert_eq!(coords, expected);
+    }
+
+    #[test]
+    fn voxel_index_matches_manual_formula() {
+        assert_eq!(voxel_index(0, 0, 0), 0);
+        assert_eq!(voxel_index(1, 0, 0), 1);
+        assert_eq!(voxel_index(0, 1, 0), CHUNK_SIZE);
+        assert_eq!(voxel_index(0, 0, 1), CHUNK_SIZE * CHUNK_SIZE);
+        assert_eq!(
+            voxel_index(31, 31, 31),
+            31 * CHUNK_SIZE * CHUNK_SIZE + 31 * CHUNK_SIZE + 31
+        );
+    }
+
+    #[test]
+    fn chunk_voxel_at_roundtrips() {
+        let mut chunk = Chunk {
+            voxels: vec![0u32; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE],
+        };
+        chunk.set_voxel(5, 10, 15, pack_voxel(MAT_GRASS, 0, 0, 0));
+        assert_eq!(material_id(chunk.voxel_at(5, 10, 15)), MAT_GRASS);
+    }
+
+    #[test]
+    fn terrain_material_layers() {
+        assert_eq!(terrain_material(10, 10), MAT_GRASS);
+        assert_eq!(terrain_material(9, 10), MAT_DIRT);
+        assert_eq!(terrain_material(7, 10), MAT_DIRT);
+        assert_eq!(terrain_material(6, 10), MAT_STONE);
+    }
+
+    #[test]
+    fn world_pos_to_chunk_positive() {
+        let (chunk, local) = world_pos_to_chunk(Vec3::new(33.5, 2.0, 65.0));
+        assert_eq!(chunk, IVec3::new(1, 0, 2));
+        assert_eq!(local, IVec3::new(1, 2, 1));
+    }
+
+    #[test]
+    fn world_pos_to_chunk_negative() {
+        let (chunk, local) = world_pos_to_chunk(Vec3::new(-1.0, 0.0, -1.0));
+        assert_eq!(chunk, IVec3::new(-1, 0, -1));
+        assert_eq!(local, IVec3::new(31, 0, 31));
+    }
+
+    #[test]
+    fn pos_to_chunk_coord_matches() {
+        assert_eq!(
+            pos_to_chunk_coord(Vec3::new(33.5, -1.0, 64.0)),
+            IVec3::new(1, -1, 2)
+        );
     }
 }

@@ -125,6 +125,13 @@ impl CameraAnimation {
     }
 }
 
+/// Compute yaw and pitch from a direction vector.
+fn dir_to_yaw_pitch(dir: Vec3) -> (f32, f32) {
+    let yaw = (-dir.x).atan2(-dir.z);
+    let pitch = dir.y.atan2((dir.x * dir.x + dir.z * dir.z).sqrt());
+    (yaw, pitch)
+}
+
 /// Camera state: position plus yaw/pitch Euler angles.
 #[derive(Clone)]
 pub struct Camera {
@@ -146,8 +153,7 @@ impl Default for Camera {
         //   yaw = atan2(-24, -24) ≈ -2.356 (3π/4)
         //   pitch = atan2(-31, sqrt(24²+24²)) ≈ -0.697
         let dir = DEFAULT_LOOK_TARGET - DEFAULT_POSITION;
-        let yaw = (-dir.x).atan2(-dir.z);
-        let pitch = dir.y.atan2((dir.x * dir.x + dir.z * dir.z).sqrt());
+        let (yaw, pitch) = dir_to_yaw_pitch(dir);
         Self {
             position: DEFAULT_POSITION,
             yaw,
@@ -238,8 +244,7 @@ impl Camera {
     /// forward vector points from the current position toward `target`.
     pub fn look_at(&mut self, target: Vec3) {
         let dir = target - self.position;
-        self.yaw = (-dir.x).atan2(-dir.z);
-        self.pitch = dir.y.atan2((dir.x * dir.x + dir.z * dir.z).sqrt());
+        (self.yaw, self.pitch) = dir_to_yaw_pitch(dir);
         self.clamp_pitch();
     }
 

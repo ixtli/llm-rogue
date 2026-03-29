@@ -23,6 +23,26 @@ thread_local! {
     static RENDERER: RefCell<Option<render::Renderer>> = const { RefCell::new(None) };
 }
 
+/// Dispatch a mutable operation to the renderer if it exists.
+#[cfg(feature = "wasm")]
+macro_rules! with_renderer {
+    (|$r:ident| $body:expr) => {
+        RENDERER.with(|r| {
+            if let Some($r) = r.borrow_mut().as_mut() {
+                $body
+            }
+        })
+    };
+}
+
+/// Query the renderer immutably, returning a bool (false if renderer is None).
+#[cfg(feature = "wasm")]
+macro_rules! query_renderer {
+    (|$r:ident| $body:expr) => {
+        RENDERER.with(|r| r.borrow().as_ref().is_some_and(|$r| $body))
+    };
+}
+
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(start)]
 fn main() {
@@ -51,62 +71,38 @@ pub async fn init_renderer(
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn render_frame(time: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.render(time);
-        }
-    });
+    with_renderer!(|renderer| renderer.render(time));
 }
 
 /// Orient the camera to look at the given world-space voxel coordinate.
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn look_at(x: f32, y: f32, z: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.look_at(x, y, z);
-        }
-    });
+    with_renderer!(|renderer| renderer.look_at(x, y, z));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn begin_intent(intent: CameraIntent) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.begin_intent(intent);
-        }
-    });
+    with_renderer!(|renderer| renderer.begin_intent(intent));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn end_intent(intent: CameraIntent) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.end_intent(intent);
-        }
-    });
+    with_renderer!(|renderer| renderer.end_intent(intent));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn set_camera(x: f32, y: f32, z: f32, yaw: f32, pitch: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.set_camera(x, y, z, yaw, pitch);
-        }
-    });
+    with_renderer!(|renderer| renderer.set_camera(x, y, z, yaw, pitch));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn set_projection(mode: u32, ortho_size: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.set_projection(mode, ortho_size);
-        }
-    });
+    with_renderer!(|renderer| renderer.set_projection(mode, ortho_size));
 }
 
 #[cfg(feature = "wasm")]
@@ -120,82 +116,52 @@ pub fn animate_camera(
     duration: f32,
     easing: EasingKind,
 ) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.animate_camera(to_x, to_y, to_z, to_yaw, to_pitch, duration, easing);
-        }
-    });
+    with_renderer!(
+        |renderer| renderer.animate_camera(to_x, to_y, to_z, to_yaw, to_pitch, duration, easing)
+    );
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn preload_view(x: f32, y: f32, z: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.preload_view(x, y, z);
-        }
-    });
+    with_renderer!(|renderer| renderer.preload_view(x, y, z));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn set_look_delta(dyaw: f32, dpitch: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.pointer_move(dyaw, dpitch);
-        }
-    });
+    with_renderer!(|renderer| renderer.pointer_move(dyaw, dpitch));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn set_dolly(amount: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.scroll(amount);
-        }
-    });
+    with_renderer!(|renderer| renderer.scroll(amount));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn resize_renderer(width: u32, height: u32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.resize(width, height);
-        }
-    });
+    with_renderer!(|renderer| renderer.resize(width, height));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn set_render_scale(auto_mode: bool, scale: f32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.set_render_scale(auto_mode, scale);
-        }
-    });
+    with_renderer!(|renderer| renderer.set_render_scale(auto_mode, scale));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn set_shader_preset(index: u32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.set_shader_preset(index);
-        }
-    });
+    with_renderer!(|renderer| renderer.set_shader_preset(index));
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 #[must_use]
 pub fn is_animating() -> bool {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .is_some_and(render::Renderer::is_animating)
-    })
+    query_renderer!(|renderer| renderer.is_animating())
 }
 
 #[cfg(feature = "wasm")]
@@ -213,11 +179,7 @@ pub fn take_animation_completed() -> bool {
 #[wasm_bindgen]
 #[must_use]
 pub fn is_chunk_loaded_at(cx: i32, cy: i32, cz: i32) -> bool {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .is_some_and(|renderer| renderer.is_chunk_loaded(cx, cy, cz))
-    })
+    query_renderer!(|renderer| renderer.is_chunk_loaded(cx, cy, cz))
 }
 
 /// Whether the voxel at the given world-space position is solid.
@@ -226,11 +188,7 @@ pub fn is_chunk_loaded_at(cx: i32, cy: i32, cz: i32) -> bool {
 #[wasm_bindgen]
 #[must_use]
 pub fn is_solid(x: f32, y: f32, z: f32) -> bool {
-    RENDERER.with(|r| {
-        r.borrow()
-            .as_ref()
-            .is_some_and(|renderer| renderer.is_solid(x, y, z))
-    })
+    query_renderer!(|renderer| renderer.is_solid(x, y, z))
 }
 
 /// Returns the serialized terrain grid for the chunk at the given coordinate,
@@ -254,11 +212,7 @@ pub fn get_terrain_grid(cx: i32, cy: i32, cz: i32) -> Option<Vec<u8>> {
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn update_visibility_mask(origin_x: i32, origin_z: i32, grid_size: u32, data: &[u8]) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.update_visibility_mask(origin_x, origin_z, grid_size, data);
-        }
-    });
+    with_renderer!(|renderer| renderer.update_visibility_mask(origin_x, origin_z, grid_size, data));
 }
 
 /// Mutate voxels in loaded chunks from a flat `i32` slice.
@@ -266,11 +220,7 @@ pub fn update_visibility_mask(origin_x: i32, origin_z: i32, grid_size: u32, data
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn mutate_voxels(data: &[i32]) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.mutate_voxels(data);
-        }
-    });
+    with_renderer!(|renderer| renderer.mutate_voxels(data));
 }
 
 /// Updates the dynamic light list from a flat f32 slice.
@@ -278,22 +228,14 @@ pub fn mutate_voxels(data: &[i32]) {
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn update_lights(data: &[f32]) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.update_lights(data);
-        }
-    });
+    with_renderer!(|renderer| renderer.update_lights(data));
 }
 
 /// Replaces the sprite atlas texture with new RGBA pixel data.
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn update_sprite_atlas(data: &[u8], width: u32, height: u32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.update_sprite_atlas(data, width, height);
-        }
-    });
+    with_renderer!(|renderer| renderer.update_sprite_atlas(data, width, height));
 }
 
 /// Updates the sprite instance buffer from a flat array of f32.
@@ -301,11 +243,7 @@ pub fn update_sprite_atlas(data: &[u8], width: u32, height: u32) {
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn update_sprites(data: &[f32]) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.update_sprites_from_flat(data);
-        }
-    });
+    with_renderer!(|renderer| renderer.update_sprites_from_flat(data));
 }
 
 /// Spawn a burst of particles at the given world position.
@@ -314,11 +252,7 @@ pub fn update_sprites(data: &[f32]) {
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn spawn_burst(x: f32, y: f32, z: f32, data: &[f32]) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.spawn_burst(x, y, z, data);
-        }
-    });
+    with_renderer!(|renderer| renderer.spawn_burst(x, y, z, data));
 }
 
 /// Create a persistent particle emitter.
@@ -327,22 +261,14 @@ pub fn spawn_burst(x: f32, y: f32, z: f32, data: &[f32]) {
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn create_emitter(id: u32, x: f32, y: f32, z: f32, rate: f32, duration: f32, template: &[f32]) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.create_emitter(id, x, y, z, rate, duration, template);
-        }
-    });
+    with_renderer!(|renderer| renderer.create_emitter(id, x, y, z, rate, duration, template));
 }
 
 /// Destroy a particle emitter by ID.
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn destroy_emitter(id: u32) {
-    RENDERER.with(|r| {
-        if let Some(renderer) = r.borrow_mut().as_mut() {
-            renderer.destroy_emitter(id);
-        }
-    });
+    with_renderer!(|renderer| renderer.destroy_emitter(id));
 }
 
 #[cfg(feature = "wasm")]
