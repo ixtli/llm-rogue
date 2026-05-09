@@ -9,7 +9,6 @@ import init, {
   init_renderer,
   is_chunk_loaded_at,
   is_solid,
-  look_at,
   mutate_voxels,
   preload_view,
   render_frame,
@@ -58,13 +57,17 @@ import {
   STAT_WASM_MEMORY_BYTES,
 } from "../stats-layout";
 
+declare const self: DedicatedWorkerGlobalScope;
+
 function post(msg: RenderToGameMessage, transfers?: Transferable[]): void {
   if (transfers) {
-    (self as unknown as Worker).postMessage(msg, transfers);
+    self.postMessage(msg, transfers);
   } else {
-    (self as unknown as Worker).postMessage(msg);
+    self.postMessage(msg);
   }
 }
+
+type SpriteUpdateMsg = Extract<GameToRenderMessage, { type: "sprite_update" }>;
 
 let atlasMetadata: {
   cols: number;
@@ -74,7 +77,52 @@ let atlasMetadata: {
   tints: Uint32Array;
   halfWidths: boolean[];
 } | null = null;
-let lastSpriteUpdate: GameToRenderMessage | null = null;
+let lastSpriteUpdate: SpriteUpdateMsg | null = null;
+
+function applySpriteUpdate(msg: SpriteUpdateMsg): void {
+  lastSpriteUpdate = msg;
+  const floats = new Float32Array(msg.sprites.length * 12);
+  const dataView = new DataView(floats.buffer);
+  for (let i = 0; i < msg.sprites.length; i++) {
+    const s = msg.sprites[i];
+    const o = i * 12;
+    floats[o + 0] = s.x;
+    floats[o + 1] = s.y;
+    floats[o + 2] = s.z;
+    dataView.setUint32((o + 3) * 4, s.spriteId, true);
+    floats[o + 4] = 1.0; // width
+    floats[o + 5] = 1.0; // height
+
+    if (atlasMetadata) {
+      const col = s.spriteId % atlasMetadata.cols;
+      const row = Math.floor(s.spriteId / atlasMetadata.cols);
+      const cellW = 1 / atlasMetadata.cols;
+      const cellH = 1 / atlasMetadata.rows;
+      // Inset UVs by half a texel to prevent bilinear filtering
+      // from bleeding black pixels from adjacent empty atlas cells.
+      const halfTexelU = 0.5 / atlasMetadata.width;
+      const halfTexelV = 0.5 / atlasMetadata.height;
+      floats[o + 6] = col * cellW + halfTexelU;
+      floats[o + 7] = row * cellH + halfTexelV;
+      floats[o + 8] = cellW - 2 * halfTexelU;
+      floats[o + 9] = cellH - 2 * halfTexelV;
+    } else {
+      floats[o + 6] = 0.0;
+      floats[o + 7] = 0.0;
+      floats[o + 8] = 1.0;
+      floats[o + 9] = 1.0;
+    }
+
+    // flags: bit 0 = horizontal flip (west-facing)
+    const hflip = s.facing === 3 ? 1 : 0;
+    dataView.setUint32((o + 10) * 4, hflip, true);
+
+    // tint: per-slot default from atlas metadata, or opaque white
+    const tint = atlasMetadata?.tints[s.spriteId] ?? 0xffffffff;
+    dataView.setUint32((o + 11) * 4, tint, true);
+  }
+  update_sprites(floats);
+}
 
 self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   const msg = e.data;
@@ -163,8 +211,6 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
       setTimeout(loop, 16);
     }
     loop();
-  } else if (msg.type === "look_at") {
-    look_at(msg.x, msg.y, msg.z);
   } else if (msg.type === "begin_intent") {
     begin_intent(msg.intent);
   } else if (msg.type === "end_intent") {
@@ -207,48 +253,7 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   } else if (msg.type === "visibility_mask") {
     update_visibility_mask(msg.originX, msg.originZ, msg.gridSize, new Uint8Array(msg.data));
   } else if (msg.type === "sprite_update") {
-    lastSpriteUpdate = msg;
-    const floats = new Float32Array(msg.sprites.length * 12);
-    const dataView = new DataView(floats.buffer);
-    for (let i = 0; i < msg.sprites.length; i++) {
-      const s = msg.sprites[i];
-      const o = i * 12;
-      floats[o + 0] = s.x;
-      floats[o + 1] = s.y;
-      floats[o + 2] = s.z;
-      dataView.setUint32((o + 3) * 4, s.spriteId, true);
-      floats[o + 4] = 1.0; // width
-      floats[o + 5] = 1.0; // height
-
-      if (atlasMetadata) {
-        const col = s.spriteId % atlasMetadata.cols;
-        const row = Math.floor(s.spriteId / atlasMetadata.cols);
-        const cellW = 1 / atlasMetadata.cols;
-        const cellH = 1 / atlasMetadata.rows;
-        // Inset UVs by half a texel to prevent bilinear filtering
-        // from bleeding black pixels from adjacent empty atlas cells.
-        const halfTexelU = 0.5 / atlasMetadata.width;
-        const halfTexelV = 0.5 / atlasMetadata.height;
-        floats[o + 6] = col * cellW + halfTexelU;
-        floats[o + 7] = row * cellH + halfTexelV;
-        floats[o + 8] = cellW - 2 * halfTexelU;
-        floats[o + 9] = cellH - 2 * halfTexelV;
-      } else {
-        floats[o + 6] = 0.0;
-        floats[o + 7] = 0.0;
-        floats[o + 8] = 1.0;
-        floats[o + 9] = 1.0;
-      }
-
-      // flags: bit 0 = horizontal flip (west-facing)
-      const hflip = s.facing === 3 ? 1 : 0;
-      dataView.setUint32((o + 10) * 4, hflip, true);
-
-      // tint: per-slot default from atlas metadata, or opaque white
-      const tint = atlasMetadata?.tints[s.spriteId] ?? 0xffffffff;
-      dataView.setUint32((o + 11) * 4, tint, true);
-    }
-    update_sprites(floats);
+    applySpriteUpdate(msg);
   } else if (msg.type === "light_update") {
     update_lights(msg.data);
   } else if (msg.type === "sprite_atlas") {
@@ -262,8 +267,8 @@ self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
       halfWidths: msg.halfWidths,
     };
     // Re-pack sprites with correct UVs/tints now that atlas metadata is available
-    if (lastSpriteUpdate && lastSpriteUpdate.type === "sprite_update") {
-      self.onmessage?.(new MessageEvent("message", { data: lastSpriteUpdate }));
+    if (lastSpriteUpdate) {
+      applySpriteUpdate(lastSpriteUpdate);
     }
   } else if (msg.type === "set_projection") {
     set_projection(msg.mode, msg.orthoSize);

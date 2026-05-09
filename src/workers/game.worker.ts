@@ -32,6 +32,8 @@ import type {
 import { StatsAggregator } from "../stats";
 import type { Vec3 } from "../vec";
 
+declare const self: DedicatedWorkerGlobalScope;
+
 // --- Key-to-intent mapping ---
 
 const KEY_TO_INTENT: Record<string, number> = {
@@ -130,7 +132,7 @@ function sendToRender(msg: GameToRenderMessage) {
 }
 
 function sendToUI(msg: GameToUIMessage) {
-  (self as unknown as Worker).postMessage(msg);
+  self.postMessage(msg);
 }
 
 /** Drain pending health events from all actors and emit floating number particles. */
