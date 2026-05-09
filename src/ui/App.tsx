@@ -74,6 +74,7 @@ const App: Component<AppProps> = (props) => {
   const [showGameOver, setShowGameOver] = createSignal(false);
 
   let gameWorker: Worker | undefined;
+  let gameOverTimer: ReturnType<typeof setTimeout> | undefined;
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;
@@ -126,7 +127,9 @@ const App: Component<AppProps> = (props) => {
         }
       } else if (e.data.type === "player_dead") {
         setGameOverStats(e.data.stats);
-        setTimeout(() => setShowGameOver(true), 2500);
+        // Track the timer so a quick restart cannot leak a delayed pop-up.
+        if (gameOverTimer !== undefined) clearTimeout(gameOverTimer);
+        gameOverTimer = setTimeout(() => setShowGameOver(true), 2500);
       }
     };
 
@@ -267,6 +270,7 @@ const App: Component<AppProps> = (props) => {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("resize", onResize);
       clearTimeout(resizeTimer);
+      if (gameOverTimer !== undefined) clearTimeout(gameOverTimer);
       dprMediaQuery?.removeEventListener("change", onDprChange);
       canvasRef?.removeEventListener("mousemove", onMouseMove);
       cleanupInput();
@@ -274,6 +278,10 @@ const App: Component<AppProps> = (props) => {
   });
 
   const handleRestart = () => {
+    if (gameOverTimer !== undefined) {
+      clearTimeout(gameOverTimer);
+      gameOverTimer = undefined;
+    }
     setShowGameOver(false);
     setGameOverStats(null);
     setCombatLogEntries([]);
@@ -322,22 +330,20 @@ const App: Component<AppProps> = (props) => {
             support is experimental and must be enabled in settings. Firefox Nightly has partial
             support behind a flag.
           </p>
-          {(() => {
-            const getBrowserGuide = props.getBrowserGuide ?? defaultGetBrowserGuide;
-            const guide = getBrowserGuide();
-            return guide ? (
+          <Show when={(props.getBrowserGuide ?? defaultGetBrowserGuide)()}>
+            {(guide) => (
               <p style={{ "margin-top": "1rem" }}>
                 <a
-                  href={guide.url}
+                  href={guide().url}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ color: "#60a5fa", "text-decoration": "underline" }}
                 >
-                  Enable WebGPU in {guide.name} →
+                  Enable WebGPU in {guide().name} →
                 </a>
               </p>
-            ) : null;
-          })()}
+            )}
+          </Show>
         </div>
       }
     >

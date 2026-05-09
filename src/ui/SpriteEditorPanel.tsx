@@ -1,4 +1,4 @@
-import { type Component, createSignal, For } from "solid-js";
+import { type Component, createSignal, For, onMount } from "solid-js";
 import { type GlyphEntry, GlyphRegistry } from "./glyph-registry";
 
 interface SpriteEditorPanelProps {
@@ -6,19 +6,26 @@ interface SpriteEditorPanelProps {
 }
 
 const SpriteEditorPanel: Component<SpriteEditorPanelProps> = (props) => {
-  const registry = new GlyphRegistry();
-  const [entries, setEntries] = createSignal<GlyphEntry[]>([...registry.entries()]);
-  const [cellSize, setCellSize] = createSignal(registry.cellSize);
+  // Read localStorage in onMount to keep render synchronous and side-effect-free.
+  let registry: GlyphRegistry | null = null;
+  const [entries, setEntries] = createSignal<GlyphEntry[]>([]);
+  const [cellSize, setCellSize] = createSignal(32);
+
+  onMount(() => {
+    registry = new GlyphRegistry();
+    setEntries([...registry.entries()]);
+    setCellSize(registry.cellSize);
+    props.onAtlasChanged(registry, registry.cellSize);
+  });
 
   const refresh = () => {
+    if (!registry) return;
     setEntries([...registry.entries()]);
     props.onAtlasChanged(registry, cellSize());
   };
 
-  // Trigger initial atlas build
-  props.onAtlasChanged(registry, cellSize());
-
   const updateEntry = (spriteId: number, field: keyof GlyphEntry, value: string) => {
+    if (!registry) return;
     const existing = registry.get(spriteId);
     if (!existing) return;
     const updated = { ...existing, [field]: value || (field === "tint" ? null : "") };
@@ -28,16 +35,19 @@ const SpriteEditorPanel: Component<SpriteEditorPanelProps> = (props) => {
   };
 
   const addEntry = () => {
+    if (!registry) return;
     registry.add({ char: "?", label: "New", tint: null });
     refresh();
   };
 
   const removeEntry = (spriteId: number) => {
+    if (!registry) return;
     registry.remove(spriteId);
     refresh();
   };
 
   const toggleCellSize = () => {
+    if (!registry) return;
     const newSize = cellSize() === 32 ? 64 : 32;
     registry.cellSize = newSize;
     setCellSize(newSize);
