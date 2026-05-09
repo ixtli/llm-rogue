@@ -110,12 +110,12 @@ impl MapFeature for FlattenNearOrigin {
                     continue; // leave Perlin intact
                 }
 
-                // Find current Perlin surface height (world y)
-                let perlin_local = Self::find_surface_height(chunk, x, z);
-                let perlin_world_y = match perlin_local {
-                    Some(ly) => y_offset + ly as i32,
-                    None => continue, // all-air column, nothing to flatten
+                // Find current Perlin surface height (world y).
+                // All-air column: nothing to flatten.
+                let Some(perlin_local) = Self::find_surface_height(chunk, x, z) else {
+                    continue;
                 };
+                let perlin_world_y = y_offset + perlin_local as i32;
 
                 // Blend target height
                 let target_world_y = (f64::from(FLATTEN_HEIGHT) * flatness
