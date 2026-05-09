@@ -1,3 +1,4 @@
+import { PROJECTION_MODE, type ProjectionMode } from "../messages";
 import type { Vec3 } from "../vec";
 
 export type { Vec3 };
@@ -155,13 +156,13 @@ export class FollowCamera {
     return this.computeAtAngle(playerPos, this.orbitAngle);
   }
 
-  getProjectionParams(screenHeight: number): { mode: number; orthoSize: number } {
+  getProjectionParams(screenHeight: number): { mode: ProjectionMode; orthoSize: number } {
     if (this.projectionMode === "perspective") {
-      return { mode: 0, orthoSize: 0 };
+      return { mode: PROJECTION_MODE.Perspective, orthoSize: 0 };
     }
     const targetPx = ORTHO_ZOOM_LEVELS[this.orthoZoomIndex];
     const orthoSize = screenHeight / (2 * targetPx);
-    return { mode: 1, orthoSize };
+    return { mode: PROJECTION_MODE.Ortho, orthoSize };
   }
 
   snapPosition(pos: Vec3): Vec3 {

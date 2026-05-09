@@ -44,6 +44,16 @@ export class GameWorld {
     return this.entities.get(id);
   }
 
+  getActor(id: number): Actor | undefined {
+    const e = this.entities.get(id);
+    return e && (e.type === "player" || e.type === "npc") ? (e as Actor) : undefined;
+  }
+
+  getItem(id: number): ItemEntity | undefined {
+    const e = this.entities.get(id);
+    return e && e.type === "item" ? (e as ItemEntity) : undefined;
+  }
+
   allEntities(): Entity[] {
     return [...this.entities.values()];
   }

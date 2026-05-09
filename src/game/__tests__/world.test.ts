@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { _resetIdCounter, createNpc, createPlayer } from "../entity";
+import type { Actor, ItemEntity } from "../entity";
+import { _resetIdCounter, createItemEntity, createNpc, createPlayer } from "../entity";
 import type { ChunkTerrainGrid, TileSurface } from "../terrain";
 import { GameWorld } from "../world";
 
@@ -47,6 +48,47 @@ describe("GameWorld", () => {
     world.addEntity(p);
     world.addEntity(n);
     expect(world.entitiesAt(5, 0, 3)).toHaveLength(2);
+  });
+
+  it("getActor returns the entity when it is an actor", () => {
+    const world = new GameWorld();
+    const actor = createPlayer({ x: 0, y: 0, z: 0 });
+    world.addEntity(actor);
+    const got: Actor | undefined = world.getActor(actor.id);
+    expect(got).toBe(actor);
+  });
+
+  it("getActor returns undefined when the entity is an item", () => {
+    const world = new GameWorld();
+    const item = createItemEntity(
+      { x: 0, y: 0, z: 0 },
+      { id: "potion", name: "Health Potion", type: "consumable", stackable: true, maxStack: 10 },
+    );
+    world.addEntity(item);
+    expect(world.getActor(item.id)).toBeUndefined();
+  });
+
+  it("getActor returns undefined for missing id", () => {
+    const world = new GameWorld();
+    expect(world.getActor(999)).toBeUndefined();
+  });
+
+  it("getItem returns the entity when it is an item", () => {
+    const world = new GameWorld();
+    const item = createItemEntity(
+      { x: 0, y: 0, z: 0 },
+      { id: "potion", name: "Health Potion", type: "consumable", stackable: true, maxStack: 10 },
+    );
+    world.addEntity(item);
+    const got: ItemEntity | undefined = world.getItem(item.id);
+    expect(got).toBe(item);
+  });
+
+  it("getItem returns undefined when the entity is an actor", () => {
+    const world = new GameWorld();
+    const actor = createPlayer({ x: 0, y: 0, z: 0 });
+    world.addEntity(actor);
+    expect(world.getItem(actor.id)).toBeUndefined();
   });
 
   it("loads and queries terrain", () => {

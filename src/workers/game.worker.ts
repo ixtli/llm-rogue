@@ -2,7 +2,7 @@
 import { CameraIntent } from "../../crates/engine/pkg/engine";
 import { formatCombatLog } from "../game/combat-log";
 import { buildCombatParticles, buildHealthNumberParticles } from "../game/combat-particles";
-import type { Actor, Entity, ItemEntity } from "../game/entity";
+import type { Actor, Entity, EquipmentSlot, ItemEntity } from "../game/entity";
 import {
   alterHealth,
   createItemEntity,
@@ -23,14 +23,27 @@ import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
 import { TurnLoop } from "../game/turn-loop";
 import { GameWorld } from "../game/world";
-import type {
-  GameToRenderMessage,
-  GameToUIMessage,
-  RenderToGameMessage,
-  UIToGameMessage,
+import {
+  type GameStateEntity,
+  type GameStateEquippedItem,
+  type GameToRenderMessage,
+  type GameToUIMessage,
+  PROJECTION_MODE,
+  type RenderToGameMessage,
+  type SpriteEntry,
+  type UIToGameMessage,
 } from "../messages";
 import { StatsAggregator } from "../stats";
 import type { Vec3 } from "../vec";
+
+// Worker self-typing. The standard `DedicatedWorkerGlobalScope` lib type is not
+// included by default in this project's tsconfig (lib defaults to DOM only),
+// so we declare a minimal local shape that matches what we use.
+interface DedicatedWorkerSelf {
+  postMessage(msg: unknown, transfer?: Transferable[]): void;
+  onmessage: ((e: MessageEvent) => unknown) | null;
+}
+declare const self: DedicatedWorkerSelf;
 
 // --- Key-to-intent mapping ---
 
@@ -119,18 +132,29 @@ function entitySpriteOrigin(pos: { x: number; y: number; z: number }): {
   return { x: pos.x + 0.5, y: pos.y + 1, z: pos.z + 0.5 };
 }
 
+function transfersFor(msg: GameToRenderMessage): Transferable[] {
+  switch (msg.type) {
+    case "init":
+      return [msg.canvas];
+    case "visibility_mask":
+      return [msg.data];
+    case "light_update":
+      return [msg.data.buffer];
+    case "sprite_atlas":
+      return [msg.data];
+    case "spawn_burst":
+      return [msg.particles.buffer];
+    default:
+      return [];
+  }
+}
+
 function sendToRender(msg: GameToRenderMessage) {
-  const transfers: Transferable[] = [];
-  if (msg.type === "init") transfers.push(msg.canvas);
-  if (msg.type === "visibility_mask") transfers.push(msg.data);
-  if (msg.type === "light_update") transfers.push(msg.data.buffer);
-  if (msg.type === "sprite_atlas") transfers.push(msg.data);
-  if (msg.type === "spawn_burst") transfers.push(msg.particles.buffer);
-  renderWorker?.postMessage(msg, transfers);
+  renderWorker?.postMessage(msg, transfersFor(msg));
 }
 
 function sendToUI(msg: GameToUIMessage) {
-  (self as unknown as Worker).postMessage(msg);
+  self.postMessage(msg);
 }
 
 /** Drain pending health events from all actors and emit floating number particles. */
@@ -168,14 +192,7 @@ function sendRenderScale(): void {
 }
 
 function sendSpriteUpdate(): void {
-  const sprites: {
-    id: number;
-    x: number;
-    y: number;
-    z: number;
-    spriteId: number;
-    facing: number;
-  }[] = [];
+  const sprites: SpriteEntry[] = [];
 
   for (const entity of world.allEntities()) {
     const origin = entitySpriteOrigin(entity.position);
@@ -239,17 +256,7 @@ function sendGameState(): void {
   const player = turnLoop?.getPlayer();
   if (!player) return;
 
-  const entities: {
-    id: number;
-    x: number;
-    y: number;
-    z: number;
-    type: string;
-    spriteId: number;
-    name: string;
-    hostility: "friendly" | "neutral" | "hostile";
-    healthTier: string;
-  }[] = [];
+  const entities: GameStateEntity[] = [];
   for (const entity of world.allEntities()) {
     const isActor = entity.type === "player" || entity.type === "npc";
     const actor = isActor ? (entity as Actor) : undefined;
@@ -286,7 +293,7 @@ function sendGameState(): void {
     )
     .filter((s): s is NonNullable<typeof s> => s !== null);
 
-  const serializeSlot = (slot: "weapon" | "armor" | "helmet" | "ring") => {
+  const serializeSlot = (slot: EquipmentSlot): GameStateEquippedItem | null => {
     const item = player.equipment[slot];
     if (!item) return null;
     return {
@@ -597,7 +604,8 @@ function handleMouseMove(screenX: number, screenY: number): void {
     fov: DEFAULT_FOV,
     width: screenWidth,
     height: screenHeight,
-    projectionMode: followCamera.projectionMode === "ortho" ? 1 : 0,
+    projectionMode:
+      followCamera.projectionMode === "ortho" ? PROJECTION_MODE.Ortho : PROJECTION_MODE.Perspective,
     orthoSize: followCamera.getProjectionParams(screenHeight).orthoSize,
   };
 
@@ -629,7 +637,7 @@ function handleMouseMove(screenX: number, screenY: number): void {
       const SPRITE_HALF = 0.5; // half of 1×1 world-unit sprite
       let halfW: number;
       let halfH: number;
-      if (cam.projectionMode === 1) {
+      if (cam.projectionMode === PROJECTION_MODE.Ortho) {
         halfW = (SPRITE_HALF / (cam.orthoSize * aspect)) * (cam.width / 2);
         halfH = (SPRITE_HALF / cam.orthoSize) * (cam.height / 2);
       } else {
@@ -731,291 +739,322 @@ function onRenderMessage(e: MessageEvent<RenderToGameMessage>) {
 self.onmessage = (e: MessageEvent<UIToGameMessage>) => {
   const msg = e.data;
 
-  if (msg.type === "init") {
-    renderWorker = new Worker(new URL("./render.worker.ts", import.meta.url), {
-      type: "module",
-    });
-    renderWorker.onmessage = onRenderMessage;
-    sendToRender({
-      type: "init",
-      canvas: msg.canvas,
-      width: msg.width,
-      height: msg.height,
-    });
-    screenWidth = msg.width;
-    screenHeight = msg.height;
-    if (digestTimer) clearInterval(digestTimer);
-    digestTimer = setInterval(() => {
-      sendToUI({ type: "diagnostics", ...statsAggregator.digest() });
-    }, 250);
-  } else if (msg.type === "key_down") {
-    const key = msg.key;
-
-    // F4 cycles render scale presets
-    if (key === "f4") {
-      currentScaleIndex = (currentScaleIndex + 1) % SCALE_PRESETS.length;
-      sendRenderScale();
-      return;
+  switch (msg.type) {
+    case "init": {
+      renderWorker = new Worker(new URL("./render.worker.ts", import.meta.url), {
+        type: "module",
+      });
+      renderWorker.onmessage = onRenderMessage;
+      sendToRender({
+        type: "init",
+        canvas: msg.canvas,
+        width: msg.width,
+        height: msg.height,
+      });
+      screenWidth = msg.width;
+      screenHeight = msg.height;
+      if (digestTimer) clearInterval(digestTimer);
+      digestTimer = setInterval(() => {
+        sendToUI({ type: "diagnostics", ...statsAggregator.digest() });
+      }, 250);
+      break;
     }
+    case "key_down": {
+      const key = msg.key;
 
-    // F5 cycles shader presets
-    if (key === "f5") {
-      currentPresetIndex = (currentPresetIndex + 1) % SHADER_PRESET_COUNT;
-      sendToRender({ type: "set_shader_preset", index: currentPresetIndex });
-      return;
-    }
+      // F4 cycles render scale presets
+      if (key === "f4") {
+        currentScaleIndex = (currentScaleIndex + 1) % SCALE_PRESETS.length;
+        sendRenderScale();
+        return;
+      }
 
-    // K = debug kill (deal 9999 damage to player)
-    if (key === "k") {
-      if (!turnLoop || playerDead) return;
-      const player = turnLoop.getPlayer();
-      if (!player) return;
-      alterHealth(player, -9999);
-      const pos = player.position;
-      flushHealthParticles([player], [], () => entitySpriteOrigin(pos));
-      handlePlayerAction({ type: "wait" });
-      return;
-    }
+      // F5 cycles shader presets
+      if (key === "f5") {
+        currentPresetIndex = (currentPresetIndex + 1) % SHADER_PRESET_COUNT;
+        sendToRender({ type: "set_shader_preset", index: currentPresetIndex });
+        return;
+      }
 
-    // F3 toggles ortho/perspective projection
-    if (key === "f3") {
-      followCamera.toggleProjection();
-      sendProjection();
-      if (followCamera.mode === "follow" && turnLoop) {
+      // K = debug kill (deal 9999 damage to player)
+      if (key === "k") {
+        if (!turnLoop || playerDead) return;
         const player = turnLoop.getPlayer();
-        if (player) sendFollowCamera(player.position, false);
-      }
-      return;
-    }
-
-    // +/- zoom (same as scroll)
-    if (key === "=" || key === "+" || key === "-") {
-      const delta = key === "-" ? 1 : -1;
-      followCamera.adjustZoom(delta);
-      if (followCamera.mode === "follow" && turnLoop) {
-        const player = turnLoop.getPlayer();
-        if (player) sendFollowCamera(player.position, false);
-      }
-      if (followCamera.projectionMode === "ortho") {
-        sendProjection();
-      }
-      return;
-    }
-
-    // Tab toggles camera mode (no-op during cinematic)
-    if (key === "tab") {
-      const prevMode = followCamera.mode;
-      cancelOrbitAnimation();
-      followCamera.toggleMode();
-      if (followCamera.mode !== prevMode) {
-        sendToUI({ type: "camera_mode", mode: followCamera.mode });
-        if (followCamera.mode === "follow" && turnLoop) {
-          const player = turnLoop.getPlayer();
-          if (player) sendFollowCamera(player.position, true);
-        }
-      }
-      return;
-    }
-
-    if (followCamera.mode === "follow") {
-      // Follow mode: WASD = player movement (screen-relative), Q/E = orbit
-      if (key === " ") {
+        if (!player) return;
+        alterHealth(player, -9999);
+        const pos = player.position;
+        flushHealthParticles([player], [], () => entitySpriteOrigin(pos));
         handlePlayerAction({ type: "wait" });
         return;
       }
-      const screenDir = SCREEN_DIRECTIONS[key];
-      if (screenDir) {
-        const { dx, dz } = followCamera.screenToWorld(screenDir.sx, screenDir.sz);
-        handlePlayerAction({ type: "move", dx, dz });
-        return;
-      }
-      if (key === "q" || key === "e") {
-        const arc = followCamera.orbit(key === "q" ? -1 : 1);
-        if (turnLoop) {
+
+      // F3 toggles ortho/perspective projection
+      if (key === "f3") {
+        followCamera.toggleProjection();
+        sendProjection();
+        if (followCamera.mode === "follow" && turnLoop) {
           const player = turnLoop.getPlayer();
-          if (player) startOrbitAnimation(player.position, arc, 0.4);
+          if (player) sendFollowCamera(player.position, false);
         }
         return;
       }
-      if (key === "c" && turnLoop) {
+
+      // +/- zoom (same as scroll)
+      if (key === "=" || key === "+" || key === "-") {
+        const delta = key === "-" ? 1 : -1;
+        followCamera.adjustZoom(delta);
+        if (followCamera.mode === "follow" && turnLoop) {
+          const player = turnLoop.getPlayer();
+          if (player) sendFollowCamera(player.position, false);
+        }
+        if (followCamera.projectionMode === "ortho") {
+          sendProjection();
+        }
+        return;
+      }
+
+      // Tab toggles camera mode (no-op during cinematic)
+      if (key === "tab") {
+        const prevMode = followCamera.mode;
         cancelOrbitAnimation();
+        followCamera.toggleMode();
+        if (followCamera.mode !== prevMode) {
+          sendToUI({ type: "camera_mode", mode: followCamera.mode });
+          if (followCamera.mode === "follow" && turnLoop) {
+            const player = turnLoop.getPlayer();
+            if (player) sendFollowCamera(player.position, true);
+          }
+        }
+        return;
+      }
+
+      if (followCamera.mode === "follow") {
+        // Follow mode: WASD = player movement (screen-relative), Q/E = orbit
+        if (key === " ") {
+          handlePlayerAction({ type: "wait" });
+          return;
+        }
+        const screenDir = SCREEN_DIRECTIONS[key];
+        if (screenDir) {
+          const { dx, dz } = followCamera.screenToWorld(screenDir.sx, screenDir.sz);
+          handlePlayerAction({ type: "move", dx, dz });
+          return;
+        }
+        if (key === "q" || key === "e") {
+          const arc = followCamera.orbit(key === "q" ? -1 : 1);
+          if (turnLoop) {
+            const player = turnLoop.getPlayer();
+            if (player) startOrbitAnimation(player.position, arc, 0.4);
+          }
+          return;
+        }
+        if (key === "c" && turnLoop) {
+          cancelOrbitAnimation();
+          const player = turnLoop.getPlayer();
+          if (!player) return;
+          const waypoints = buildFlybyWaypoints(player.position);
+          const [start, ...rest] = waypoints;
+          // Teleport to first position
+          lastSentYaw = start.yaw;
+          sendToRender({
+            type: "set_camera",
+            x: start.x,
+            y: start.y,
+            z: start.z,
+            yaw: start.yaw,
+            pitch: start.pitch,
+          });
+          // Queue remaining waypoints and kick off the chain
+          followCamera.startCinematic(rest);
+          sendToUI({ type: "camera_mode", mode: followCamera.mode });
+          const first = followCamera.nextWaypoint();
+          if (first) {
+            sendToRender({
+              type: "animate_camera",
+              x: first.x,
+              y: first.y,
+              z: first.z,
+              yaw: first.yaw,
+              pitch: first.pitch,
+              duration: first.duration,
+              easing: 2, // CubicInOut
+            });
+          }
+          return;
+        }
+      } else {
+        // Free-look mode: WASD = camera intents, Q/E/R/F = camera intents
+        const camIntent = WASD_TO_INTENT[key];
+        if (camIntent !== undefined) {
+          sendToRender({ type: "begin_intent", intent: camIntent });
+          return;
+        }
+        const intent = KEY_TO_INTENT[key];
+        if (intent !== undefined) {
+          sendToRender({ type: "begin_intent", intent });
+        }
+      }
+      break;
+    }
+    case "key_up": {
+      if (followCamera.mode === "free_look") {
+        const intent = WASD_TO_INTENT[msg.key] ?? KEY_TO_INTENT[msg.key];
+        if (intent !== undefined) {
+          sendToRender({ type: "end_intent", intent });
+        }
+      } else {
+        const intent = KEY_TO_INTENT[msg.key];
+        if (intent !== undefined) {
+          sendToRender({ type: "end_intent", intent });
+        }
+      }
+      break;
+    }
+    case "player_action": {
+      // Free actions (don't consume a turn)
+      if (msg.action === "equip") {
+        if (!turnLoop) return;
         const player = turnLoop.getPlayer();
         if (!player) return;
-        const waypoints = buildFlybyWaypoints(player.position);
-        const [start, ...rest] = waypoints;
-        // Teleport to first position
-        lastSentYaw = start.yaw;
-        sendToRender({
-          type: "set_camera",
-          x: start.x,
-          y: start.y,
-          z: start.z,
-          yaw: start.yaw,
-          pitch: start.pitch,
+        equip(player, msg.inventoryIndex);
+        sendGameState();
+        return;
+      }
+      if (msg.action === "unequip") {
+        if (!turnLoop) return;
+        const player = turnLoop.getPlayer();
+        if (!player) return;
+        unequip(player, msg.slot);
+        sendGameState();
+        return;
+      }
+      if (msg.action === "use_item") {
+        if (!turnLoop) return;
+        const player = turnLoop.getPlayer();
+        if (!player) return;
+        const stack = player.inventory.slots[msg.inventoryIndex];
+        if (!stack) return;
+        if (stack.item.type !== "consumable") return;
+        const itemName = stack.item.name;
+        alterHealth(player, 25);
+        player.inventory.removeAt(msg.inventoryIndex, 1);
+        sendToUI({
+          type: "combat_log",
+          entries: [{ text: `You use a ${itemName}.`, color: "#22d3ee" }],
         });
-        // Queue remaining waypoints and kick off the chain
-        followCamera.startCinematic(rest);
-        sendToUI({ type: "camera_mode", mode: followCamera.mode });
-        const first = followCamera.nextWaypoint();
-        if (first) {
-          sendToRender({
-            type: "animate_camera",
-            x: first.x,
-            y: first.y,
-            z: first.z,
-            yaw: first.yaw,
-            pitch: first.pitch,
-            duration: first.duration,
-            easing: 2, // CubicInOut
-          });
-        }
+        const pos = player.position;
+        flushHealthParticles([player], [], () => entitySpriteOrigin(pos));
+        sendGameState();
         return;
       }
-    } else {
-      // Free-look mode: WASD = camera intents, Q/E/R/F = camera intents
-      const camIntent = WASD_TO_INTENT[key];
-      if (camIntent !== undefined) {
-        sendToRender({ type: "begin_intent", intent: camIntent });
+      if (msg.action === "drop") {
+        if (!turnLoop) return;
+        const player = turnLoop.getPlayer();
+        if (!player) return;
+        const removed = player.inventory.removeAt(msg.inventoryIndex, 1);
+        if (!removed) return;
+        const itemEntity = createItemEntity(
+          { x: player.position.x, y: player.position.y, z: player.position.z },
+          removed.item,
+        );
+        world.addEntity(itemEntity);
+        sendToUI({
+          type: "combat_log",
+          entries: [{ text: `You drop a ${removed.item.name}.`, color: "#9ca3af" }],
+        });
+        sendSpriteUpdate();
+        sendGameState();
         return;
       }
-      const intent = KEY_TO_INTENT[key];
-      if (intent !== undefined) {
-        sendToRender({ type: "begin_intent", intent });
+
+      // Turn-consuming actions
+      let action: PlayerAction;
+      switch (msg.action) {
+        case "move_n":
+          action = { type: "move", dx: 0, dz: -1 };
+          break;
+        case "move_s":
+          action = { type: "move", dx: 0, dz: 1 };
+          break;
+        case "move_e":
+          action = { type: "move", dx: 1, dz: 0 };
+          break;
+        case "move_w":
+          action = { type: "move", dx: -1, dz: 0 };
+          break;
+        case "attack":
+          action = { type: "attack", targetId: msg.targetId ?? 0 };
+          break;
+        case "pickup":
+          action = { type: "pickup" };
+          break;
+        case "wait":
+          action = { type: "wait" };
+          break;
       }
+      handlePlayerAction(action);
+      break;
     }
-  } else if (msg.type === "key_up") {
-    if (followCamera.mode === "free_look") {
-      const intent = WASD_TO_INTENT[msg.key] ?? KEY_TO_INTENT[msg.key];
-      if (intent !== undefined) {
-        sendToRender({ type: "end_intent", intent });
-      }
-    } else {
-      const intent = KEY_TO_INTENT[msg.key];
-      if (intent !== undefined) {
-        sendToRender({ type: "end_intent", intent });
-      }
-    }
-  } else if (msg.type === "player_action") {
-    // Free actions (don't consume a turn)
-    if (msg.action === "equip") {
-      if (!turnLoop) return;
-      const player = turnLoop.getPlayer();
-      if (!player) return;
-      equip(player, msg.inventoryIndex);
-      sendGameState();
-      return;
-    }
-    if (msg.action === "unequip") {
-      if (!turnLoop) return;
-      const player = turnLoop.getPlayer();
-      if (!player) return;
-      unequip(player, msg.slot);
-      sendGameState();
-      return;
-    }
-    if (msg.action === "use_item") {
-      if (!turnLoop) return;
-      const player = turnLoop.getPlayer();
-      if (!player) return;
-      const stack = player.inventory.slots[msg.inventoryIndex];
-      if (!stack) return;
-      if (stack.item.type !== "consumable") return;
-      const itemName = stack.item.name;
-      alterHealth(player, 25);
-      player.inventory.removeAt(msg.inventoryIndex, 1);
-      sendToUI({
-        type: "combat_log",
-        entries: [{ text: `You use a ${itemName}.`, color: "#22d3ee" }],
-      });
-      const pos = player.position;
-      flushHealthParticles([player], [], () => entitySpriteOrigin(pos));
-      sendGameState();
-      return;
-    }
-    if (msg.action === "drop") {
-      if (!turnLoop) return;
-      const player = turnLoop.getPlayer();
-      if (!player) return;
-      const removed = player.inventory.removeAt(msg.inventoryIndex, 1);
-      if (!removed) return;
-      const itemEntity = createItemEntity(
-        { x: player.position.x, y: player.position.y, z: player.position.z },
-        removed.item,
-      );
-      world.addEntity(itemEntity);
-      sendToUI({
-        type: "combat_log",
-        entries: [{ text: `You drop a ${removed.item.name}.`, color: "#9ca3af" }],
-      });
+    case "restart": {
+      for (const actor of [...world.actors()]) world.removeEntity(actor.id);
+      for (const item of [...world.items()]) world.removeEntity(item.id);
+      turnLoop = null;
+      turnNumber = 0;
+      gameInitialized = false;
+      playerDead = false;
+      runStats.reset();
+      initializeGame();
       sendSpriteUpdate();
       sendGameState();
-      return;
+      break;
     }
-
-    // Turn-consuming actions
-    let action: PlayerAction;
-    switch (msg.action) {
-      case "move_n":
-        action = { type: "move", dx: 0, dz: -1 };
-        break;
-      case "move_s":
-        action = { type: "move", dx: 0, dz: 1 };
-        break;
-      case "move_e":
-        action = { type: "move", dx: 1, dz: 0 };
-        break;
-      case "move_w":
-        action = { type: "move", dx: -1, dz: 0 };
-        break;
-      case "attack":
-        action = { type: "attack", targetId: msg.targetId ?? 0 };
-        break;
-      case "pickup":
-        action = { type: "pickup" };
-        break;
-      case "wait":
-        action = { type: "wait" };
-        break;
-    }
-    handlePlayerAction(action);
-  } else if (msg.type === "restart") {
-    for (const actor of [...world.actors()]) world.removeEntity(actor.id);
-    for (const item of [...world.items()]) world.removeEntity(item.id);
-    turnLoop = null;
-    turnNumber = 0;
-    gameInitialized = false;
-    playerDead = false;
-    runStats.reset();
-    initializeGame();
-    sendSpriteUpdate();
-    sendGameState();
-  } else if (msg.type === "pointer_move") {
-    if (followCamera.mode === "free_look") {
-      sendToRender({ type: "set_look_delta", dyaw: msg.dx, dpitch: msg.dy });
-    }
-  } else if (msg.type === "scroll") {
-    if (followCamera.mode === "follow") {
-      followCamera.adjustZoom(msg.dy * 0.001);
-      if (turnLoop) {
-        const player = turnLoop.getPlayer();
-        if (player) sendFollowCamera(player.position, false);
+    case "pointer_move": {
+      if (followCamera.mode === "free_look") {
+        sendToRender({ type: "set_look_delta", dyaw: msg.dx, dpitch: msg.dy });
       }
-      if (followCamera.projectionMode === "ortho") {
-        sendProjection();
-      }
-    } else {
-      sendToRender({ type: "set_dolly", amount: msg.dy });
+      break;
     }
-  } else if (msg.type === "pan") {
-    // Pan is currently not mapped to a stage direction.
-  } else if (msg.type === "resize") {
-    screenWidth = msg.width;
-    screenHeight = msg.height;
-    sendToRender({ type: "resize", width: msg.width, height: msg.height });
-  } else if (msg.type === "sprite_atlas") {
-    atlasInfo = { cols: msg.cols, rows: msg.rows, halfWidths: msg.halfWidths };
-    sendToRender(msg);
-  } else if (msg.type === "mouse_move") {
-    handleMouseMove(msg.screenX, msg.screenY);
+    case "scroll": {
+      if (followCamera.mode === "follow") {
+        followCamera.adjustZoom(msg.dy * 0.001);
+        if (turnLoop) {
+          const player = turnLoop.getPlayer();
+          if (player) sendFollowCamera(player.position, false);
+        }
+        if (followCamera.projectionMode === "ortho") {
+          sendProjection();
+        }
+      } else {
+        sendToRender({ type: "set_dolly", amount: msg.dy });
+      }
+      break;
+    }
+    case "pan": {
+      // Pan is currently not mapped to a stage direction.
+      break;
+    }
+    case "resize": {
+      screenWidth = msg.width;
+      screenHeight = msg.height;
+      sendToRender({ type: "resize", width: msg.width, height: msg.height });
+      break;
+    }
+    case "sprite_atlas": {
+      atlasInfo = { cols: msg.cols, rows: msg.rows, halfWidths: msg.halfWidths };
+      sendToRender(msg);
+      break;
+    }
+    case "mouse_move": {
+      handleMouseMove(msg.screenX, msg.screenY);
+      break;
+    }
+    case "toggle_free_look": {
+      // Currently unused; the UI sends `key_down: 'tab'` instead.
+      break;
+    }
+    default: {
+      const _exhaustive: never = msg;
+      return _exhaustive;
+    }
   }
 };

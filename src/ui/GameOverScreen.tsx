@@ -1,4 +1,4 @@
-import type { Component } from "solid-js";
+import { type Component, For } from "solid-js";
 
 interface GameOverStats {
   turns: number;
@@ -75,12 +75,14 @@ const GameOverScreen: Component<GameOverScreenProps> = (props) => {
             "margin-bottom": "20px",
           }}
         >
-          {STAT_ROWS.map((row) => (
-            <>
-              <span style={{ color: "#888" }}>{row.label}</span>
-              <span style={{ color: "#fff", "text-align": "right" }}>{props.stats[row.key]}</span>
-            </>
-          ))}
+          <For each={STAT_ROWS}>
+            {(row) => (
+              <>
+                <span style={{ color: "#888" }}>{row.label}</span>
+                <span style={{ color: "#fff", "text-align": "right" }}>{props.stats[row.key]}</span>
+              </>
+            )}
+          </For>
         </div>
         <button
           type="button"

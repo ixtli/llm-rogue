@@ -1,3 +1,5 @@
+import { PROJECTION_MODE, type ProjectionMode } from "../messages";
+
 export interface CameraParams {
   x: number;
   y: number;
@@ -7,7 +9,7 @@ export interface CameraParams {
   fov: number;
   width: number;
   height: number;
-  projectionMode: number;
+  projectionMode: ProjectionMode;
   orthoSize: number;
 }
 
@@ -60,7 +62,7 @@ export function projectToScreen(
   let clipX: number;
   let clipY: number;
 
-  if (cam.projectionMode === 1) {
+  if (cam.projectionMode === PROJECTION_MODE.Ortho) {
     clipX = x / (cam.orthoSize * aspect);
     clipY = y / cam.orthoSize;
   } else {

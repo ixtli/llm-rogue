@@ -9,7 +9,6 @@ import init, {
   init_renderer,
   is_chunk_loaded_at,
   is_solid,
-  look_at,
   mutate_voxels,
   preload_view,
   render_frame,
@@ -58,13 +57,24 @@ import {
   STAT_WASM_MEMORY_BYTES,
 } from "../stats-layout";
 
+// Worker self-typing. The standard `DedicatedWorkerGlobalScope` lib type is not
+// included by default in this project's tsconfig (lib defaults to DOM only),
+// so we declare a minimal local shape that matches what we use.
+interface DedicatedWorkerSelf {
+  postMessage(msg: unknown, transfer?: Transferable[]): void;
+  onmessage: ((e: MessageEvent) => unknown) | null;
+}
+declare const self: DedicatedWorkerSelf;
+
 function post(msg: RenderToGameMessage, transfers?: Transferable[]): void {
   if (transfers) {
-    (self as unknown as Worker).postMessage(msg, transfers);
+    self.postMessage(msg, transfers);
   } else {
-    (self as unknown as Worker).postMessage(msg);
+    self.postMessage(msg);
   }
 }
+
+type SpriteUpdateMsg = Extract<GameToRenderMessage, { type: "sprite_update" }>;
 
 let atlasMetadata: {
   cols: number;
@@ -74,218 +84,271 @@ let atlasMetadata: {
   tints: Uint32Array;
   halfWidths: boolean[];
 } | null = null;
-let lastSpriteUpdate: GameToRenderMessage | null = null;
+let lastSpriteUpdate: SpriteUpdateMsg | null = null;
+
+function applySpriteUpdate(msg: SpriteUpdateMsg): void {
+  lastSpriteUpdate = msg;
+  const floats = new Float32Array(msg.sprites.length * 12);
+  const dataView = new DataView(floats.buffer);
+  for (let i = 0; i < msg.sprites.length; i++) {
+    const s = msg.sprites[i];
+    const o = i * 12;
+    floats[o + 0] = s.x;
+    floats[o + 1] = s.y;
+    floats[o + 2] = s.z;
+    dataView.setUint32((o + 3) * 4, s.spriteId, true);
+    floats[o + 4] = 1.0; // width
+    floats[o + 5] = 1.0; // height
+
+    if (atlasMetadata) {
+      const col = s.spriteId % atlasMetadata.cols;
+      const row = Math.floor(s.spriteId / atlasMetadata.cols);
+      const cellW = 1 / atlasMetadata.cols;
+      const cellH = 1 / atlasMetadata.rows;
+      // Inset UVs by half a texel to prevent bilinear filtering
+      // from bleeding black pixels from adjacent empty atlas cells.
+      const halfTexelU = 0.5 / atlasMetadata.width;
+      const halfTexelV = 0.5 / atlasMetadata.height;
+      floats[o + 6] = col * cellW + halfTexelU;
+      floats[o + 7] = row * cellH + halfTexelV;
+      floats[o + 8] = cellW - 2 * halfTexelU;
+      floats[o + 9] = cellH - 2 * halfTexelV;
+    } else {
+      floats[o + 6] = 0.0;
+      floats[o + 7] = 0.0;
+      floats[o + 8] = 1.0;
+      floats[o + 9] = 1.0;
+    }
+
+    // flags: bit 0 = horizontal flip (west-facing)
+    const hflip = s.facing === 3 ? 1 : 0;
+    dataView.setUint32((o + 10) * 4, hflip, true);
+
+    // tint: per-slot default from atlas metadata, or opaque white
+    const tint = atlasMetadata?.tints[s.spriteId] ?? 0xffffffff;
+    dataView.setUint32((o + 11) * 4, tint, true);
+  }
+  update_sprites(floats);
+}
 
 self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   const msg = e.data;
 
-  if (msg.type === "init") {
-    const { canvas, width, height } = msg;
-    try {
-      await init();
-      await init_renderer(canvas, width, height);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      post({ type: "error", message });
-      return;
-    }
-
-    post({ type: "ready" });
-
-    const VIEW_DIST = 3;
-    const emittedTerrainChunks = new Set<string>();
-    let needsTerrainScan = true;
-
-    function loop() {
-      render_frame(performance.now() / 1000.0);
-      if (take_animation_completed()) {
-        post({ type: "animation_complete" });
+  switch (msg.type) {
+    case "init": {
+      const { canvas, width, height } = msg;
+      try {
+        await init();
+        await init_renderer(canvas, width, height);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        post({ type: "error", message });
+        return;
       }
-      const s = collect_frame_stats();
-      post({
-        type: "stats",
-        frame_time_ms: s[STAT_FRAME_TIME_MS],
-        loaded_chunks: s[STAT_LOADED_CHUNKS],
-        atlas_total: s[STAT_ATLAS_TOTAL],
-        atlas_used: s[STAT_ATLAS_USED],
-        camera_x: s[STAT_CAMERA_X],
-        camera_y: s[STAT_CAMERA_Y],
-        camera_z: s[STAT_CAMERA_Z],
-        camera_yaw: s[STAT_CAMERA_YAW],
-        camera_pitch: s[STAT_CAMERA_PITCH],
-        wasm_memory_bytes: s[STAT_WASM_MEMORY_BYTES],
-        pending_chunks: s[STAT_PENDING_CHUNKS],
-        streaming_state: s[STAT_STREAMING_STATE],
-        loaded_this_tick: s[STAT_LOADED_THIS_TICK],
-        unloaded_this_tick: s[STAT_UNLOADED_THIS_TICK],
-        chunk_budget: s[STAT_CHUNK_BUDGET],
-        cached_chunks: s[STAT_CACHED_CHUNKS],
-        camera_chunk_x: s[STAT_CAMERA_CHUNK_X],
-        camera_chunk_y: s[STAT_CAMERA_CHUNK_Y],
-        camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
-        alive_particles: s[STAT_ALIVE_PARTICLES],
-        active_emitters: s[STAT_ACTIVE_EMITTERS],
-        render_width: s[STAT_RENDER_WIDTH],
-        render_height: s[STAT_RENDER_HEIGHT],
-        sprite_count: s[STAT_SPRITE_COUNT],
-        light_count: s[STAT_LIGHT_COUNT],
-        render_scale: s[STAT_RENDER_SCALE],
-        shader_preset: s[STAT_SHADER_PRESET],
-      });
 
-      // Emit terrain grids for newly loaded chunks, or on first frame
-      // (init loads all chunks with unlimited budget, so LOADED_THIS_TICK
-      // may be 0 even though chunks are already loaded).
-      if (s[STAT_LOADED_THIS_TICK] > 0 || needsTerrainScan) {
-        needsTerrainScan = false;
-        const camCX = s[STAT_CAMERA_CHUNK_X];
-        const camCY = s[STAT_CAMERA_CHUNK_Y];
-        const camCZ = s[STAT_CAMERA_CHUNK_Z];
-        for (let dz = -VIEW_DIST; dz <= VIEW_DIST; dz++) {
-          for (let dy = -VIEW_DIST; dy <= VIEW_DIST; dy++) {
-            for (let dx = -VIEW_DIST; dx <= VIEW_DIST; dx++) {
-              const cx = camCX + dx;
-              const cy = camCY + dy;
-              const cz = camCZ + dz;
-              const key = `${cx},${cy},${cz}`;
-              if (!emittedTerrainChunks.has(key) && is_chunk_loaded_at(cx, cy, cz)) {
-                const data = get_terrain_grid(cx, cy, cz);
-                if (data) {
-                  post({ type: "chunk_terrain", cx, cy, cz, data: data.buffer }, [data.buffer]);
-                  emittedTerrainChunks.add(key);
+      post({ type: "ready" });
+
+      const VIEW_DIST = 3;
+      const emittedTerrainChunks = new Set<string>();
+      let needsTerrainScan = true;
+
+      function loop() {
+        render_frame(performance.now() / 1000.0);
+        if (take_animation_completed()) {
+          post({ type: "animation_complete" });
+        }
+        const s = collect_frame_stats();
+        post({
+          type: "stats",
+          frame_time_ms: s[STAT_FRAME_TIME_MS],
+          loaded_chunks: s[STAT_LOADED_CHUNKS],
+          atlas_total: s[STAT_ATLAS_TOTAL],
+          atlas_used: s[STAT_ATLAS_USED],
+          camera_x: s[STAT_CAMERA_X],
+          camera_y: s[STAT_CAMERA_Y],
+          camera_z: s[STAT_CAMERA_Z],
+          camera_yaw: s[STAT_CAMERA_YAW],
+          camera_pitch: s[STAT_CAMERA_PITCH],
+          wasm_memory_bytes: s[STAT_WASM_MEMORY_BYTES],
+          pending_chunks: s[STAT_PENDING_CHUNKS],
+          streaming_state: s[STAT_STREAMING_STATE],
+          loaded_this_tick: s[STAT_LOADED_THIS_TICK],
+          unloaded_this_tick: s[STAT_UNLOADED_THIS_TICK],
+          chunk_budget: s[STAT_CHUNK_BUDGET],
+          cached_chunks: s[STAT_CACHED_CHUNKS],
+          camera_chunk_x: s[STAT_CAMERA_CHUNK_X],
+          camera_chunk_y: s[STAT_CAMERA_CHUNK_Y],
+          camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
+          alive_particles: s[STAT_ALIVE_PARTICLES],
+          active_emitters: s[STAT_ACTIVE_EMITTERS],
+          render_width: s[STAT_RENDER_WIDTH],
+          render_height: s[STAT_RENDER_HEIGHT],
+          sprite_count: s[STAT_SPRITE_COUNT],
+          light_count: s[STAT_LIGHT_COUNT],
+          render_scale: s[STAT_RENDER_SCALE],
+          shader_preset: s[STAT_SHADER_PRESET],
+        });
+
+        // Emit terrain grids for newly loaded chunks, or on first frame
+        // (init loads all chunks with unlimited budget, so LOADED_THIS_TICK
+        // may be 0 even though chunks are already loaded).
+        if (s[STAT_LOADED_THIS_TICK] > 0 || needsTerrainScan) {
+          needsTerrainScan = false;
+          const camCX = s[STAT_CAMERA_CHUNK_X];
+          const camCY = s[STAT_CAMERA_CHUNK_Y];
+          const camCZ = s[STAT_CAMERA_CHUNK_Z];
+          for (let dz = -VIEW_DIST; dz <= VIEW_DIST; dz++) {
+            for (let dy = -VIEW_DIST; dy <= VIEW_DIST; dy++) {
+              for (let dx = -VIEW_DIST; dx <= VIEW_DIST; dx++) {
+                const cx = camCX + dx;
+                const cy = camCY + dy;
+                const cz = camCZ + dz;
+                const key = `${cx},${cy},${cz}`;
+                if (!emittedTerrainChunks.has(key) && is_chunk_loaded_at(cx, cy, cz)) {
+                  const data = get_terrain_grid(cx, cy, cz);
+                  if (data) {
+                    post({ type: "chunk_terrain", cx, cy, cz, data: data.buffer }, [data.buffer]);
+                    emittedTerrainChunks.add(key);
+                  }
                 }
               }
             }
           }
         }
+
+        setTimeout(loop, 16);
       }
-
-      setTimeout(loop, 16);
+      loop();
+      break;
     }
-    loop();
-  } else if (msg.type === "look_at") {
-    look_at(msg.x, msg.y, msg.z);
-  } else if (msg.type === "begin_intent") {
-    begin_intent(msg.intent);
-  } else if (msg.type === "end_intent") {
-    end_intent(msg.intent);
-  } else if (msg.type === "set_look_delta") {
-    set_look_delta(msg.dyaw, msg.dpitch);
-  } else if (msg.type === "set_dolly") {
-    set_dolly(msg.amount);
-  } else if (msg.type === "set_camera") {
-    set_camera(msg.x, msg.y, msg.z, msg.yaw, msg.pitch);
-  } else if (msg.type === "animate_camera") {
-    animate_camera(msg.x, msg.y, msg.z, msg.yaw, msg.pitch, msg.duration, msg.easing);
-  } else if (msg.type === "preload_view") {
-    preload_view(msg.x, msg.y, msg.z);
-  } else if (msg.type === "query_camera_position") {
-    const s = collect_frame_stats();
-    post({
-      type: "camera_position",
-      id: msg.id,
-      x: s[STAT_CAMERA_X],
-      y: s[STAT_CAMERA_Y],
-      z: s[STAT_CAMERA_Z],
-      yaw: s[STAT_CAMERA_YAW],
-      pitch: s[STAT_CAMERA_PITCH],
-    });
-  } else if (msg.type === "query_chunk_loaded") {
-    post({
-      type: "chunk_loaded",
-      id: msg.id,
-      loaded: is_chunk_loaded_at(msg.cx, msg.cy, msg.cz),
-    });
-  } else if (msg.type === "is_solid") {
-    post({
-      type: "is_solid_result",
-      id: msg.id,
-      solid: is_solid(msg.x, msg.y, msg.z),
-    });
-  } else if (msg.type === "resize") {
-    resize_renderer(msg.width, msg.height);
-  } else if (msg.type === "visibility_mask") {
-    update_visibility_mask(msg.originX, msg.originZ, msg.gridSize, new Uint8Array(msg.data));
-  } else if (msg.type === "sprite_update") {
-    lastSpriteUpdate = msg;
-    const floats = new Float32Array(msg.sprites.length * 12);
-    const dataView = new DataView(floats.buffer);
-    for (let i = 0; i < msg.sprites.length; i++) {
-      const s = msg.sprites[i];
-      const o = i * 12;
-      floats[o + 0] = s.x;
-      floats[o + 1] = s.y;
-      floats[o + 2] = s.z;
-      dataView.setUint32((o + 3) * 4, s.spriteId, true);
-      floats[o + 4] = 1.0; // width
-      floats[o + 5] = 1.0; // height
-
-      if (atlasMetadata) {
-        const col = s.spriteId % atlasMetadata.cols;
-        const row = Math.floor(s.spriteId / atlasMetadata.cols);
-        const cellW = 1 / atlasMetadata.cols;
-        const cellH = 1 / atlasMetadata.rows;
-        // Inset UVs by half a texel to prevent bilinear filtering
-        // from bleeding black pixels from adjacent empty atlas cells.
-        const halfTexelU = 0.5 / atlasMetadata.width;
-        const halfTexelV = 0.5 / atlasMetadata.height;
-        floats[o + 6] = col * cellW + halfTexelU;
-        floats[o + 7] = row * cellH + halfTexelV;
-        floats[o + 8] = cellW - 2 * halfTexelU;
-        floats[o + 9] = cellH - 2 * halfTexelV;
-      } else {
-        floats[o + 6] = 0.0;
-        floats[o + 7] = 0.0;
-        floats[o + 8] = 1.0;
-        floats[o + 9] = 1.0;
+    case "begin_intent": {
+      begin_intent(msg.intent);
+      break;
+    }
+    case "end_intent": {
+      end_intent(msg.intent);
+      break;
+    }
+    case "set_look_delta": {
+      set_look_delta(msg.dyaw, msg.dpitch);
+      break;
+    }
+    case "set_dolly": {
+      set_dolly(msg.amount);
+      break;
+    }
+    case "set_camera": {
+      set_camera(msg.x, msg.y, msg.z, msg.yaw, msg.pitch);
+      break;
+    }
+    case "animate_camera": {
+      animate_camera(msg.x, msg.y, msg.z, msg.yaw, msg.pitch, msg.duration, msg.easing);
+      break;
+    }
+    case "preload_view": {
+      preload_view(msg.x, msg.y, msg.z);
+      break;
+    }
+    case "query_camera_position": {
+      const s = collect_frame_stats();
+      post({
+        type: "camera_position",
+        id: msg.id,
+        x: s[STAT_CAMERA_X],
+        y: s[STAT_CAMERA_Y],
+        z: s[STAT_CAMERA_Z],
+        yaw: s[STAT_CAMERA_YAW],
+        pitch: s[STAT_CAMERA_PITCH],
+      });
+      break;
+    }
+    case "query_chunk_loaded": {
+      post({
+        type: "chunk_loaded",
+        id: msg.id,
+        loaded: is_chunk_loaded_at(msg.cx, msg.cy, msg.cz),
+      });
+      break;
+    }
+    case "is_solid": {
+      post({
+        type: "is_solid_result",
+        id: msg.id,
+        solid: is_solid(msg.x, msg.y, msg.z),
+      });
+      break;
+    }
+    case "resize": {
+      resize_renderer(msg.width, msg.height);
+      break;
+    }
+    case "visibility_mask": {
+      update_visibility_mask(msg.originX, msg.originZ, msg.gridSize, new Uint8Array(msg.data));
+      break;
+    }
+    case "sprite_update": {
+      applySpriteUpdate(msg);
+      break;
+    }
+    case "light_update": {
+      update_lights(msg.data);
+      break;
+    }
+    case "sprite_atlas": {
+      update_sprite_atlas(new Uint8Array(msg.data), msg.width, msg.height);
+      atlasMetadata = {
+        cols: msg.cols,
+        rows: msg.rows,
+        width: msg.width,
+        height: msg.height,
+        tints: msg.tints,
+        halfWidths: msg.halfWidths,
+      };
+      // Re-pack sprites with correct UVs/tints now that atlas metadata is available
+      if (lastSpriteUpdate) {
+        applySpriteUpdate(lastSpriteUpdate);
       }
-
-      // flags: bit 0 = horizontal flip (west-facing)
-      const hflip = s.facing === 3 ? 1 : 0;
-      dataView.setUint32((o + 10) * 4, hflip, true);
-
-      // tint: per-slot default from atlas metadata, or opaque white
-      const tint = atlasMetadata?.tints[s.spriteId] ?? 0xffffffff;
-      dataView.setUint32((o + 11) * 4, tint, true);
+      break;
     }
-    update_sprites(floats);
-  } else if (msg.type === "light_update") {
-    update_lights(msg.data);
-  } else if (msg.type === "sprite_atlas") {
-    update_sprite_atlas(new Uint8Array(msg.data), msg.width, msg.height);
-    atlasMetadata = {
-      cols: msg.cols,
-      rows: msg.rows,
-      width: msg.width,
-      height: msg.height,
-      tints: msg.tints,
-      halfWidths: msg.halfWidths,
-    };
-    // Re-pack sprites with correct UVs/tints now that atlas metadata is available
-    if (lastSpriteUpdate && lastSpriteUpdate.type === "sprite_update") {
-      self.onmessage?.(new MessageEvent("message", { data: lastSpriteUpdate }));
+    case "set_projection": {
+      set_projection(msg.mode, msg.orthoSize);
+      break;
     }
-  } else if (msg.type === "set_projection") {
-    set_projection(msg.mode, msg.orthoSize);
-  } else if (msg.type === "spawn_burst") {
-    spawn_burst(msg.x, msg.y, msg.z, msg.particles);
-  } else if (msg.type === "create_emitter") {
-    create_emitter(msg.id, msg.x, msg.y, msg.z, msg.rate, msg.duration, msg.template);
-  } else if (msg.type === "destroy_emitter") {
-    destroy_emitter(msg.id);
-  } else if (msg.type === "set_render_scale") {
-    set_render_scale(msg.auto, msg.scale);
-  } else if (msg.type === "set_shader_preset") {
-    set_shader_preset(msg.index);
-  } else if (msg.type === "voxel_mutate") {
-    const flat = new Int32Array(msg.changes.length * 4);
-    for (let i = 0; i < msg.changes.length; i++) {
-      const c = msg.changes[i];
-      flat[i * 4] = c.x;
-      flat[i * 4 + 1] = c.y;
-      flat[i * 4 + 2] = c.z;
-      flat[i * 4 + 3] = c.materialId;
+    case "spawn_burst": {
+      spawn_burst(msg.x, msg.y, msg.z, msg.particles);
+      break;
     }
-    mutate_voxels(flat);
+    case "create_emitter": {
+      create_emitter(msg.id, msg.x, msg.y, msg.z, msg.rate, msg.duration, msg.template);
+      break;
+    }
+    case "destroy_emitter": {
+      destroy_emitter(msg.id);
+      break;
+    }
+    case "set_render_scale": {
+      set_render_scale(msg.auto, msg.scale);
+      break;
+    }
+    case "set_shader_preset": {
+      set_shader_preset(msg.index);
+      break;
+    }
+    case "voxel_mutate": {
+      const flat = new Int32Array(msg.changes.length * 4);
+      for (let i = 0; i < msg.changes.length; i++) {
+        const c = msg.changes[i];
+        flat[i * 4] = c.x;
+        flat[i * 4 + 1] = c.y;
+        flat[i * 4 + 2] = c.z;
+        flat[i * 4 + 3] = c.materialId;
+      }
+      mutate_voxels(flat);
+      break;
+    }
+    default: {
+      const _exhaustive: never = msg;
+      return _exhaustive;
+    }
   }
 };

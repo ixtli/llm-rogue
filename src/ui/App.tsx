@@ -3,12 +3,12 @@ import { setupInputHandlers } from "../input";
 import type { GameToUIMessage, UIToGameMessage } from "../messages";
 import { EMPTY_DIGEST } from "../stats";
 import { appMode, toggleAppMode } from "./app-mode";
+import { sendSpriteAtlas, setupAppMessaging } from "./app-setup";
 import CombatLog, { type CombatLogEntry } from "./CombatLog";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
 import EntityTooltip, { type TooltipData } from "./EntityTooltip";
 import GameOverScreen from "./GameOverScreen";
-import { loadGlyphFont, rasterizeAtlas } from "./glyph-rasterizer";
-import { GlyphRegistry } from "./glyph-registry";
+import type { GlyphRegistry } from "./glyph-registry";
 import {
   checkWebGPU as defaultCheckGpu,
   getBrowserGuideUrl as defaultGetBrowserGuide,
@@ -20,25 +20,12 @@ import ToolPalette, { activeTool } from "./ToolPalette";
 
 const COMPAT_BROWSERS = "Chrome 113+, Edge 113+, Opera 99+, or Samsung Internet 27+";
 
-function sendSpriteAtlas(target: Worker, registry: GlyphRegistry, cellSize: number): void {
-  const atlas = rasterizeAtlas(registry.entries(), cellSize);
-  const tints = registry.packTints(atlas.cols, atlas.rows);
-  target.postMessage(
-    {
-      type: "sprite_atlas",
-      data: atlas.data,
-      width: atlas.width,
-      height: atlas.height,
-      cols: atlas.cols,
-      rows: atlas.rows,
-      tints,
-      halfWidths: atlas.halfWidths,
-    } satisfies UIToGameMessage,
-    [atlas.data],
-  );
-}
-
-let handleAtlasChanged: ((registry: GlyphRegistry, cellSize: number) => void) | undefined;
+/** Holder for the sprite-editor's atlas-changed callback. Replaces the
+ *  prior module-level mutable `let handleAtlasChanged` so multiple mounts
+ *  / HMR don't fight over a single binding. */
+const [atlasChangedHandler, setAtlasChangedHandler] = createSignal<
+  ((registry: GlyphRegistry, cellSize: number) => void) | undefined
+>(undefined);
 
 interface AppProps {
   checkGpu?: () => string | null;
@@ -74,6 +61,7 @@ const App: Component<AppProps> = (props) => {
   const [showGameOver, setShowGameOver] = createSignal(false);
 
   let gameWorker: Worker | undefined;
+  let gameOverTimer: ReturnType<typeof setTimeout> | undefined;
 
   onMount(() => {
     const checkGpu = props.checkGpu ?? defaultCheckGpu;
@@ -86,53 +74,31 @@ const App: Component<AppProps> = (props) => {
     if (!canvasRef) return;
 
     const offscreen = canvasRef.transferControlToOffscreen();
-    const fontReady = loadGlyphFont();
     const worker = new Worker(new URL("../workers/game.worker.ts", import.meta.url), {
       type: "module",
     });
     gameWorker = worker;
 
-    worker.onmessage = (e: MessageEvent<GameToUIMessage>) => {
-      if (e.data.type === "ready") {
-        setStatus("WASD move | Q/E orbit | scroll zoom | Tab free look | F2 edit");
+    const cleanupMessaging = setupAppMessaging({
+      worker,
+      setStatus,
+      setError,
+      setDiagnostics,
+      setLastGameState,
+      setHoverInfo,
+      setCombatLogEntries,
+      setCameraMode,
+      setGameOverStats,
+      setShowGameOver,
+      getGameOverTimer: () => gameOverTimer,
+      setGameOverTimer: (t) => {
+        gameOverTimer = t;
+      },
+    });
 
-        // Send default sprite atlas once font is loaded
-        fontReady.then(() => {
-          const defaultRegistry = new GlyphRegistry();
-          sendSpriteAtlas(worker, defaultRegistry, defaultRegistry.cellSize);
-        });
-      } else if (e.data.type === "error") {
-        setError(`Engine failed to initialize: ${e.data.message}`);
-      } else if (e.data.type === "diagnostics") {
-        setDiagnostics(e.data);
-      } else if (e.data.type === "game_state") {
-        setLastGameState(e.data);
-      } else if (e.data.type === "entity_hover") {
-        if (e.data.entityId === 0) {
-          setHoverInfo(null);
-        } else {
-          setHoverInfo({
-            entityId: e.data.entityId,
-            screenX: e.data.screenX,
-            screenY: e.data.screenY,
-          });
-        }
-      } else if (e.data.type === "combat_log") {
-        setCombatLogEntries((prev) => [...prev, ...e.data.entries].slice(-32));
-      } else if (e.data.type === "camera_mode") {
-        setCameraMode(e.data.mode);
-        if (e.data.mode === "follow" && document.pointerLockElement) {
-          document.exitPointerLock();
-        }
-      } else if (e.data.type === "player_dead") {
-        setGameOverStats(e.data.stats);
-        setTimeout(() => setShowGameOver(true), 2500);
-      }
-    };
-
-    handleAtlasChanged = (registry: GlyphRegistry, cellSize: number) => {
+    setAtlasChangedHandler(() => (registry: GlyphRegistry, cellSize: number) => {
       sendSpriteAtlas(worker, registry, cellSize);
-    };
+    });
 
     // Render at 1x CSS pixels. The ray-march shader (shadows + AO) is too
     // expensive at native Retina resolution (~5M pixels × 8 rays each).
@@ -267,13 +233,20 @@ const App: Component<AppProps> = (props) => {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("resize", onResize);
       clearTimeout(resizeTimer);
+      if (gameOverTimer !== undefined) clearTimeout(gameOverTimer);
       dprMediaQuery?.removeEventListener("change", onDprChange);
       canvasRef?.removeEventListener("mousemove", onMouseMove);
       cleanupInput();
+      cleanupMessaging();
+      setAtlasChangedHandler(undefined);
     });
   });
 
   const handleRestart = () => {
+    if (gameOverTimer !== undefined) {
+      clearTimeout(gameOverTimer);
+      gameOverTimer = undefined;
+    }
     setShowGameOver(false);
     setGameOverStats(null);
     setCombatLogEntries([]);
@@ -322,22 +295,20 @@ const App: Component<AppProps> = (props) => {
             support is experimental and must be enabled in settings. Firefox Nightly has partial
             support behind a flag.
           </p>
-          {(() => {
-            const getBrowserGuide = props.getBrowserGuide ?? defaultGetBrowserGuide;
-            const guide = getBrowserGuide();
-            return guide ? (
+          <Show when={(props.getBrowserGuide ?? defaultGetBrowserGuide)()}>
+            {(guide) => (
               <p style={{ "margin-top": "1rem" }}>
                 <a
-                  href={guide.url}
+                  href={guide().url}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ color: "#60a5fa", "text-decoration": "underline" }}
                 >
-                  Enable WebGPU in {guide.name} →
+                  Enable WebGPU in {guide().name} →
                 </a>
               </p>
-            ) : null;
-          })()}
+            )}
+          </Show>
         </div>
       }
     >
@@ -364,7 +335,7 @@ const App: Component<AppProps> = (props) => {
         <ToolPalette />
       </Show>
       <Show when={appMode() === "edit" && activeTool() === "sprite-editor"}>
-        <SpriteEditorPanel onAtlasChanged={(reg, size) => handleAtlasChanged?.(reg, size)} />
+        <SpriteEditorPanel onAtlasChanged={(reg, size) => atlasChangedHandler()?.(reg, size)} />
       </Show>
       <DiagnosticsOverlay data={diagnostics()} />
       <Show when={appMode() === "play" && lastGameState()}>

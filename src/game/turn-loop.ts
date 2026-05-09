@@ -53,7 +53,7 @@ export class TurnLoop {
   }
 
   getPlayer(): Actor | undefined {
-    return this.world.getEntity(this.playerId) as Actor | undefined;
+    return this.world.getActor(this.playerId);
   }
 
   getPlayerId(): number {
@@ -90,7 +90,7 @@ export class TurnLoop {
       pickups: [],
     };
     if (!this.isPlayerTurn()) return result;
-    const player = this.world.getEntity(this.playerId) as Actor | undefined;
+    const player = this.world.getActor(this.playerId);
     if (!player) return result;
 
     // Initialize budget on first action of the turn
@@ -106,7 +106,8 @@ export class TurnLoop {
         const nz = player.position.z + action.dz;
         const blocker = this.world
           .entitiesAt(nx, player.position.y, nz)
-          .find((e) => e.type === "npc" && (e as Actor).hostility === "hostile");
+          .filter((e): e is Actor => e.type === "npc")
+          .find((a) => a.hostility === "hostile");
         if (blocker) {
           this.movementBudget = 0;
           this.resolveAction(player, { type: "attack", targetId: blocker.id });
@@ -128,7 +129,7 @@ export class TurnLoop {
 
     const order = this.turnOrder();
     for (let i = 1; i < order.length; i++) {
-      const npc = this.world.getEntity(order[i]) as Actor | undefined;
+      const npc = this.world.getActor(order[i]);
       if (!npc || npc.health <= 0) continue;
       result.npcActions.push(this.resolveNpcTurn(npc));
       this.applyTerrainEffects(npc, result);
@@ -175,7 +176,7 @@ export class TurnLoop {
     // Auto-pickup items at destination
     const items = this.world
       .entitiesAt(nx, landing.y, nz)
-      .filter((e) => e.type === "item") as ItemEntity[];
+      .filter((e): e is ItemEntity => e.type === "item");
     for (const ie of items) {
       if (!actor.inventory.add(ie.item)) break;
       this.pendingPickups.push(ie.item.name);
@@ -190,7 +191,7 @@ export class TurnLoop {
       case "move":
         return false; // handled by resolveMove
       case "attack": {
-        const target = this.world.getEntity(action.targetId) as Actor | undefined;
+        const target = this.world.getActor(action.targetId);
         if (!target) return false;
         if (attackDistance(actor, target) > actor.mobility.reach) return false;
         const event = resolveCombat(actor, target);
@@ -200,9 +201,9 @@ export class TurnLoop {
       case "pickup": {
         const items = this.world
           .entitiesAt(actor.position.x, actor.position.y, actor.position.z)
-          .filter((e) => e.type === "item");
+          .filter((e): e is ItemEntity => e.type === "item");
         if (items.length === 0) return false;
-        const ie = items[0] as ItemEntity;
+        const ie = items[0];
         actor.inventory.add(ie.item);
         this.pendingPickups.push(ie.item.name);
         this.world.removeEntity(ie.id);
@@ -216,11 +217,11 @@ export class TurnLoop {
   private resolveNpcTurn(npc: Actor): NpcAction {
     const from = { ...npc.position };
     if (npc.hostility === "hostile") {
-      const player = this.world.getEntity(this.playerId);
+      const player = this.world.getActor(this.playerId);
       if (player) {
-        const dist = attackDistance(npc, player as Actor);
+        const dist = attackDistance(npc, player);
         if (dist <= npc.mobility.reach) {
-          const event = resolveCombat(npc, player as Actor);
+          const event = resolveCombat(npc, player);
           this.pendingCombatEvents.push(event);
           return { actorId: npc.id, action: "attack", from };
         }

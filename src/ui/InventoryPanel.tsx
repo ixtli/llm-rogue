@@ -1,4 +1,6 @@
 import { type Component, createSignal, For, Show } from "solid-js";
+import type { EquipmentSlot } from "../game/entity";
+import type { GameStateEquippedItem, GameStateInventoryItem } from "../messages";
 
 const TYPE_COLORS: Record<string, string> = {
   weapon: "#f59e0b",
@@ -8,39 +10,13 @@ const TYPE_COLORS: Record<string, string> = {
   misc: "#9ca3af",
 };
 
-const SLOT_LABELS: Array<"weapon" | "armor" | "helmet" | "ring"> = [
-  "weapon",
-  "armor",
-  "helmet",
-  "ring",
-];
-
-interface InventoryItem {
-  slotIndex: number;
-  itemId: string;
-  name: string;
-  type: string;
-  quantity: number;
-  slot?: "weapon" | "armor" | "helmet" | "ring";
-  damage?: number;
-  defense?: number;
-  critBonus?: number;
-  stackable: boolean;
-}
-
-interface EquippedItem {
-  itemId: string;
-  name: string;
-  damage?: number;
-  defense?: number;
-  critBonus?: number;
-}
+const SLOT_LABELS: readonly EquipmentSlot[] = ["weapon", "armor", "helmet", "ring"];
 
 export interface InventoryPanelProps {
-  inventory: InventoryItem[];
-  equipment: Record<"weapon" | "armor" | "helmet" | "ring", EquippedItem | null>;
+  inventory: GameStateInventoryItem[];
+  equipment: Record<EquipmentSlot, GameStateEquippedItem | null>;
   onEquip: (slotIndex: number) => void;
-  onUnequip: (slot: "weapon" | "armor" | "helmet" | "ring") => void;
+  onUnequip: (slot: EquipmentSlot) => void;
   onUse: (slotIndex: number) => void;
   onDrop: (slotIndex: number) => void;
   onClose: () => void;
@@ -55,7 +31,7 @@ function statLine(item: { damage?: number; defense?: number; critBonus?: number 
 }
 
 const InventoryPanel: Component<InventoryPanelProps> = (props) => {
-  const [hoveredItem, setHoveredItem] = createSignal<InventoryItem | null>(null);
+  const [hoveredItem, setHoveredItem] = createSignal<GameStateInventoryItem | null>(null);
 
   const handleBackdropClick = (e: MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -63,7 +39,7 @@ const InventoryPanel: Component<InventoryPanelProps> = (props) => {
     }
   };
 
-  const handleItemClick = (item: InventoryItem, e: MouseEvent) => {
+  const handleItemClick = (item: GameStateInventoryItem, e: MouseEvent) => {
     if (e.shiftKey) {
       props.onDrop(item.slotIndex);
       return;
