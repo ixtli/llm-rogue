@@ -110,7 +110,20 @@ impl ParticleSystem {
 
     /// Advance all particles by `dt` seconds. Culls expired particles.
     pub fn advance(&mut self, dt: f32) {
-        // Advance emitters and spawn new particles
+        let new_particles = self.advance_emitters(dt);
+        for p in new_particles {
+            self.spawn_one(p);
+        }
+        self.emitters.retain(|e| e.active);
+
+        self.advance_particles(dt);
+        self.particles.retain(|p| p.alive);
+    }
+
+    /// Tick every active emitter and accumulate the particles it should spawn
+    /// this frame. Inactive emitters are skipped; emitters whose lifetime
+    /// elapses are deactivated (caller still retains them).
+    fn advance_emitters(&mut self, dt: f32) -> Vec<Particle> {
         let mut new_particles = Vec::new();
         for emitter in &mut self.emitters {
             if !emitter.active {
@@ -128,12 +141,12 @@ impl ParticleSystem {
                 new_particles.push(p);
             }
         }
-        for p in new_particles {
-            self.spawn_one(p);
-        }
-        self.emitters.retain(|e| e.active);
+        new_particles
+    }
 
-        // Advance particles
+    /// Integrate position/age for every alive particle. Particles whose age
+    /// exceeds their lifetime are flagged dead (caller retains by `alive`).
+    fn advance_particles(&mut self, dt: f32) {
         for p in &mut self.particles {
             if !p.alive {
                 continue;
@@ -145,13 +158,14 @@ impl ParticleSystem {
             }
             p.position += p.velocity * dt;
         }
-        self.particles.retain(|p| p.alive);
     }
 
-    /// Number of alive particles.
+    /// Number of alive particles. `advance` retains only alive particles,
+    /// and `spawn_one` only ever inserts alive particles, so the vector
+    /// length is the alive count.
     #[must_use]
     pub fn alive_count(&self) -> usize {
-        self.particles.iter().filter(|p| p.alive).count()
+        self.particles.len()
     }
 
     /// Number of active emitters.
@@ -165,7 +179,6 @@ impl ParticleSystem {
     pub fn build_vertices(&self) -> Vec<ParticleVertex> {
         self.particles
             .iter()
-            .filter(|p| p.alive)
             .map(|p| {
                 let t = p.age / p.lifetime;
                 let is_textured = p.uv_rect[2] > 0.001 || p.uv_rect[3] > 0.001;

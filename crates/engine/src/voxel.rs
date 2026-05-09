@@ -3,10 +3,37 @@ use noise::{NoiseFn, Perlin};
 
 pub const CHUNK_SIZE: usize = 32;
 
-pub const MAT_AIR: u8 = 0;
-pub const MAT_GRASS: u8 = 1;
-pub const MAT_DIRT: u8 = 2;
-pub const MAT_STONE: u8 = 3;
+/// Voxel material kind. Values are stable u8 wire identifiers — do not
+/// renumber without updating the palette and any persisted chunk data.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Material {
+    #[default]
+    Air = 0,
+    Grass = 1,
+    Dirt = 2,
+    Stone = 3,
+}
+
+impl Material {
+    /// Decode a packed `u8` material id, falling back to `Air` for unknown ids.
+    #[must_use]
+    pub const fn from_u8(id: u8) -> Self {
+        match id {
+            1 => Self::Grass,
+            2 => Self::Dirt,
+            3 => Self::Stone,
+            _ => Self::Air,
+        }
+    }
+}
+
+// Keep the constants for byte-pattern interop with WGSL palette lookups,
+// but derive them from the enum so they cannot drift.
+pub const MAT_AIR: u8 = Material::Air as u8;
+pub const MAT_GRASS: u8 = Material::Grass as u8;
+pub const MAT_DIRT: u8 = Material::Dirt as u8;
+pub const MAT_STONE: u8 = Material::Stone as u8;
 
 pub const DIRT_DEPTH: usize = 3;
 
@@ -265,6 +292,32 @@ mod tests {
         assert_eq!(param0(v), 10);
         assert_eq!(param1(v), 20);
         assert_eq!(flags(v), 0x03);
+    }
+
+    #[test]
+    fn material_from_u8_round_trips_known_ids() {
+        for m in [
+            Material::Air,
+            Material::Grass,
+            Material::Dirt,
+            Material::Stone,
+        ] {
+            assert_eq!(Material::from_u8(m as u8), m);
+        }
+    }
+
+    #[test]
+    fn material_from_u8_unknown_returns_air() {
+        assert_eq!(Material::from_u8(255), Material::Air);
+        assert_eq!(Material::from_u8(99), Material::Air);
+    }
+
+    #[test]
+    fn material_constants_match_enum() {
+        assert_eq!(MAT_AIR, Material::Air as u8);
+        assert_eq!(MAT_GRASS, Material::Grass as u8);
+        assert_eq!(MAT_DIRT, Material::Dirt as u8);
+        assert_eq!(MAT_STONE, Material::Stone as u8);
     }
 
     #[test]

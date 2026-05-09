@@ -236,9 +236,8 @@ impl RaymarchPass {
         // buf[12..16] is padding, already zero.
 
         // Pack visibility bytes into u32 words (little-endian byte order).
-        for (i, &vis) in data.iter().enumerate().take(tile_count) {
-            buf[VISIBILITY_HEADER_SIZE + i] = vis;
-        }
+        let n = data.len().min(tile_count);
+        buf[VISIBILITY_HEADER_SIZE..VISIBILITY_HEADER_SIZE + n].copy_from_slice(&data[..n]);
         buf
     }
 

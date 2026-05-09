@@ -1,7 +1,7 @@
 use glam::{IVec3, Vec3};
 
 use crate::voxel::{
-    CHUNK_SIZE, Chunk, MAT_AIR, MAT_STONE, TEST_GRID_SEED, material_id, pack_voxel,
+    CHUNK_SIZE, Chunk, MAT_AIR, MAT_STONE, Material, TEST_GRID_SEED, material_id, pack_voxel,
     terrain_material, voxel_index,
 };
 
@@ -63,7 +63,7 @@ impl FlattenNearOrigin {
     fn find_surface_height(chunk: &Chunk, x: usize, z: usize) -> Option<usize> {
         (0..CHUNK_SIZE)
             .rev()
-            .find(|&y| material_id(chunk.voxel_at(x, y, z)) != MAT_AIR)
+            .find(|&y| Material::from_u8(material_id(chunk.voxel_at(x, y, z))) != Material::Air)
     }
 
     /// Rewrite a column so that the surface is at `target_y` (local y within
@@ -110,12 +110,12 @@ impl MapFeature for FlattenNearOrigin {
                     continue; // leave Perlin intact
                 }
 
-                // Find current Perlin surface height (world y)
-                let perlin_local = Self::find_surface_height(chunk, x, z);
-                let perlin_world_y = match perlin_local {
-                    Some(ly) => y_offset + ly as i32,
-                    None => continue, // all-air column, nothing to flatten
+                // Find current Perlin surface height (world y).
+                // All-air column: nothing to flatten.
+                let Some(perlin_local) = Self::find_surface_height(chunk, x, z) else {
+                    continue;
                 };
+                let perlin_world_y = y_offset + perlin_local as i32;
 
                 // Blend target height
                 let target_world_y = (f64::from(FLATTEN_HEIGHT) * flatness

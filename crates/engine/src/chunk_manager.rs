@@ -226,13 +226,10 @@ impl ChunkManager {
     #[must_use]
     pub fn is_solid(&self, world_pos: Vec3) -> bool {
         let (chunk_coord, local) = world_pos_to_chunk(world_pos);
-        match self.loaded.get(&chunk_coord) {
-            Some(loaded) => loaded
-                .collision
-                .as_ref()
-                .is_some_and(|c| c.is_solid(local.x, local.y, local.z)),
-            None => false,
-        }
+        self.loaded
+            .get(&chunk_coord)
+            .and_then(|lc| lc.collision.as_ref())
+            .is_some_and(|c| c.is_solid(local.x, local.y, local.z))
     }
 
     /// Returns the [`TerrainGrid`] for a loaded chunk, or `None` if the chunk
@@ -266,17 +263,15 @@ impl ChunkManager {
     #[must_use]
     #[allow(clippy::cast_possible_wrap)]
     pub fn compute_visible_set(camera_pos: Vec3, view_distance: u32) -> Vec<IVec3> {
-        let cam_chunk = pos_to_chunk_coord(camera_pos);
-        let range = view_distance as i32;
-        let mut set = Vec::new();
-        for z in (cam_chunk.z - range)..=(cam_chunk.z + range) {
-            for y in (cam_chunk.y - range)..=(cam_chunk.y + range) {
-                for x in (cam_chunk.x - range)..=(cam_chunk.x + range) {
-                    set.push(IVec3::new(x, y, z));
-                }
-            }
-        }
-        set
+        let cam = pos_to_chunk_coord(camera_pos);
+        let r = view_distance as i32;
+        ((cam.z - r)..=(cam.z + r))
+            .flat_map(|z| {
+                ((cam.y - r)..=(cam.y + r)).flat_map(move |y| {
+                    ((cam.x - r)..=(cam.x + r)).map(move |x| IVec3::new(x, y, z))
+                })
+            })
+            .collect()
     }
 
     /// Advance chunk streaming: load visible chunks (stale chunks stay cached).
