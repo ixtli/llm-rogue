@@ -2,7 +2,7 @@
 import { CameraIntent } from "../../crates/engine/pkg/engine";
 import { formatCombatLog } from "../game/combat-log";
 import { buildCombatParticles, buildHealthNumberParticles } from "../game/combat-particles";
-import type { Actor, Entity, ItemEntity } from "../game/entity";
+import type { Actor, Entity, EquipmentSlot, ItemEntity } from "../game/entity";
 import {
   alterHealth,
   createItemEntity,
@@ -23,11 +23,15 @@ import { deserializeTerrainGrid } from "../game/terrain";
 import type { PlayerAction } from "../game/turn-loop";
 import { TurnLoop } from "../game/turn-loop";
 import { GameWorld } from "../game/world";
-import type {
-  GameToRenderMessage,
-  GameToUIMessage,
-  RenderToGameMessage,
-  UIToGameMessage,
+import {
+  type GameStateEntity,
+  type GameStateEquippedItem,
+  type GameToRenderMessage,
+  type GameToUIMessage,
+  PROJECTION_MODE,
+  type RenderToGameMessage,
+  type SpriteEntry,
+  type UIToGameMessage,
 } from "../messages";
 import { StatsAggregator } from "../stats";
 import type { Vec3 } from "../vec";
@@ -188,14 +192,7 @@ function sendRenderScale(): void {
 }
 
 function sendSpriteUpdate(): void {
-  const sprites: {
-    id: number;
-    x: number;
-    y: number;
-    z: number;
-    spriteId: number;
-    facing: number;
-  }[] = [];
+  const sprites: SpriteEntry[] = [];
 
   for (const entity of world.allEntities()) {
     const origin = entitySpriteOrigin(entity.position);
@@ -259,17 +256,7 @@ function sendGameState(): void {
   const player = turnLoop?.getPlayer();
   if (!player) return;
 
-  const entities: {
-    id: number;
-    x: number;
-    y: number;
-    z: number;
-    type: string;
-    spriteId: number;
-    name: string;
-    hostility: "friendly" | "neutral" | "hostile";
-    healthTier: string;
-  }[] = [];
+  const entities: GameStateEntity[] = [];
   for (const entity of world.allEntities()) {
     const isActor = entity.type === "player" || entity.type === "npc";
     const actor = isActor ? (entity as Actor) : undefined;
@@ -306,7 +293,7 @@ function sendGameState(): void {
     )
     .filter((s): s is NonNullable<typeof s> => s !== null);
 
-  const serializeSlot = (slot: "weapon" | "armor" | "helmet" | "ring") => {
+  const serializeSlot = (slot: EquipmentSlot): GameStateEquippedItem | null => {
     const item = player.equipment[slot];
     if (!item) return null;
     return {
@@ -617,7 +604,8 @@ function handleMouseMove(screenX: number, screenY: number): void {
     fov: DEFAULT_FOV,
     width: screenWidth,
     height: screenHeight,
-    projectionMode: followCamera.projectionMode === "ortho" ? 1 : 0,
+    projectionMode:
+      followCamera.projectionMode === "ortho" ? PROJECTION_MODE.Ortho : PROJECTION_MODE.Perspective,
     orthoSize: followCamera.getProjectionParams(screenHeight).orthoSize,
   };
 
@@ -649,7 +637,7 @@ function handleMouseMove(screenX: number, screenY: number): void {
       const SPRITE_HALF = 0.5; // half of 1×1 world-unit sprite
       let halfW: number;
       let halfH: number;
-      if (cam.projectionMode === 1) {
+      if (cam.projectionMode === PROJECTION_MODE.Ortho) {
         halfW = (SPRITE_HALF / (cam.orthoSize * aspect)) * (cam.width / 2);
         halfH = (SPRITE_HALF / cam.orthoSize) * (cam.height / 2);
       } else {

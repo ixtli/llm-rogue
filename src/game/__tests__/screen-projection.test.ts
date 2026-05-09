@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PROJECTION_MODE } from "../../messages";
 import { type CameraParams, projectToScreen } from "../screen-projection";
 
 describe("projectToScreen", () => {
@@ -11,7 +12,7 @@ describe("projectToScreen", () => {
     fov: Math.PI / 2,
     width: 800,
     height: 600,
-    projectionMode: 0,
+    projectionMode: PROJECTION_MODE.Perspective,
     orthoSize: 32,
   };
 
@@ -40,7 +41,7 @@ describe("projectToScreen", () => {
   });
 
   it("handles orthographic projection", () => {
-    const orthoCam = { ...cam, projectionMode: 1 };
+    const orthoCam: CameraParams = { ...cam, projectionMode: PROJECTION_MODE.Ortho };
     const result = projectToScreen(0, 0, -10, orthoCam);
     expect(result).not.toBeNull();
     expect(result?.screenX).toBeCloseTo(400, 0);

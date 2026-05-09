@@ -2,6 +2,63 @@
 // They are exported from Rust via #[wasm_bindgen] and imported from the WASM
 // package: import { CameraIntent, EasingKind } from "../../crates/engine/pkg/engine";
 
+import type { EquipmentSlot } from "./game/entity";
+
+// --- Shared shapes ---
+
+/** Inventory slot entry as serialized to the UI in `game_state`. */
+export interface GameStateInventoryItem {
+  slotIndex: number;
+  itemId: string;
+  name: string;
+  type: string;
+  quantity: number;
+  slot?: EquipmentSlot;
+  damage?: number;
+  defense?: number;
+  critBonus?: number;
+  stackable: boolean;
+}
+
+/** Equipped-item summary as serialized to the UI in `game_state`. */
+export interface GameStateEquippedItem {
+  itemId: string;
+  name: string;
+  damage?: number;
+  defense?: number;
+  critBonus?: number;
+}
+
+/** Entity summary as serialized to the UI in `game_state`. */
+export interface GameStateEntity {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  type: string;
+  spriteId: number;
+  name: string;
+  hostility: "friendly" | "neutral" | "hostile";
+  healthTier: string;
+}
+
+/** Sprite-update entry sent from game worker to render worker. */
+export interface SpriteEntry {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  spriteId: number;
+  facing: number;
+}
+
+/** Projection mode passed across the worker boundary as a numeric tag. */
+export const PROJECTION_MODE = {
+  Perspective: 0,
+  Ortho: 1,
+} as const;
+export type ProjectionMode = (typeof PROJECTION_MODE)[keyof typeof PROJECTION_MODE];
+
 // --- UI → Game Worker ---
 
 export type UIToGameMessage =
@@ -25,7 +82,7 @@ export type UIToGameMessage =
   | {
       type: "player_action";
       action: "unequip";
-      slot: "weapon" | "armor" | "helmet" | "ring";
+      slot: EquipmentSlot;
     }
   | {
       type: "player_action";
@@ -90,14 +147,7 @@ export type GameToRenderMessage =
   | { type: "resize"; width: number; height: number }
   | {
       type: "sprite_update";
-      sprites: {
-        id: number;
-        x: number;
-        y: number;
-        z: number;
-        spriteId: number;
-        facing: number;
-      }[];
+      sprites: SpriteEntry[];
     }
   | {
       type: "visibility_mask";
@@ -121,7 +171,7 @@ export type GameToRenderMessage =
       tints: Uint32Array;
       halfWidths: boolean[];
     }
-  | { type: "set_projection"; mode: number; orthoSize: number }
+  | { type: "set_projection"; mode: ProjectionMode; orthoSize: number }
   | {
       type: "spawn_burst";
       x: number;
@@ -215,39 +265,9 @@ export type GameToUIMessage =
         attack: number;
         defense: number;
       };
-      entities: {
-        id: number;
-        x: number;
-        y: number;
-        z: number;
-        type: string;
-        spriteId: number;
-        name: string;
-        hostility: "friendly" | "neutral" | "hostile";
-        healthTier: string;
-      }[];
-      inventory: {
-        slotIndex: number;
-        itemId: string;
-        name: string;
-        type: string;
-        quantity: number;
-        slot?: "weapon" | "armor" | "helmet" | "ring";
-        damage?: number;
-        defense?: number;
-        critBonus?: number;
-        stackable: boolean;
-      }[];
-      equipment: Record<
-        "weapon" | "armor" | "helmet" | "ring",
-        {
-          itemId: string;
-          name: string;
-          damage?: number;
-          defense?: number;
-          critBonus?: number;
-        } | null
-      >;
+      entities: GameStateEntity[];
+      inventory: GameStateInventoryItem[];
+      equipment: Record<EquipmentSlot, GameStateEquippedItem | null>;
       turnNumber: number;
     }
   | {
