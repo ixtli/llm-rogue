@@ -160,10 +160,12 @@ impl ParticleSystem {
         }
     }
 
-    /// Number of alive particles.
+    /// Number of alive particles. `advance` retains only alive particles,
+    /// and `spawn_one` only ever inserts alive particles, so the vector
+    /// length is the alive count.
     #[must_use]
     pub fn alive_count(&self) -> usize {
-        self.particles.iter().filter(|p| p.alive).count()
+        self.particles.len()
     }
 
     /// Number of active emitters.
@@ -177,7 +179,6 @@ impl ParticleSystem {
     pub fn build_vertices(&self) -> Vec<ParticleVertex> {
         self.particles
             .iter()
-            .filter(|p| p.alive)
             .map(|p| {
                 let t = p.age / p.lifetime;
                 let is_textured = p.uv_rect[2] > 0.001 || p.uv_rect[3] > 0.001;

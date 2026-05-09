@@ -56,7 +56,7 @@ pub struct ChunkAtlas {
     index_buffer: wgpu::Buffer,
     occupancy_buffer: wgpu::Buffer,
     occupancy_masks: Vec<u64>,
-    pub slots: Vec<ChunkSlotGpu>,
+    pub(crate) slots: Vec<ChunkSlotGpu>,
     slots_per_axis: UVec3,
 }
 
