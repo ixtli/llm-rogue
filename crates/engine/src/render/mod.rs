@@ -326,16 +326,50 @@ impl Renderer {
     ///
     /// Panics if the surface texture cannot be acquired.
     pub fn render(&mut self, time: f32) {
+        let dt = self.advance_clock(time);
+        self.step_camera(dt);
+        self.refresh_chunks();
+        self.upload_camera_uniform();
+
+        let frame = self
+            .surface
+            .get_current_texture()
+            .expect("Failed to get surface texture");
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Frame"),
+            });
+
+        self.encode_passes(&mut encoder, &view, dt);
+
+        self.gpu.queue.submit(std::iter::once(encoder.finish()));
+        frame.present();
+    }
+
+    /// Update wall-clock and per-frame dt fields; return the dt to use this
+    /// frame (capped to avoid huge camera jumps).
+    fn advance_clock(&mut self, time: f32) -> f32 {
         let wall_dt = if self.last_time > 0.0 {
             time - self.last_time
         } else {
             1.0 / 60.0
         };
-        let dt = wall_dt.min(0.1); // cap dt for camera movement to avoid huge jumps
+        let dt = wall_dt.min(0.1);
         self.last_time = time;
         self.last_dt = dt;
         self.last_wall_dt = wall_dt;
+        dt
+    }
 
+    /// Advance camera animation or apply input-driven movement, gated by
+    /// collision against currently-loaded chunks.
+    fn step_camera(&mut self, dt: f32) {
         // Animation takes priority over manual input.
         if let Some(anim) = &mut self.animation {
             anim.advance(dt);
@@ -356,7 +390,11 @@ impl Renderer {
                 self.camera.position = old_pos;
             }
         }
+    }
 
+    /// Recompute the visible chunk set, run the streaming budget, and load
+    /// any preload chunks. Updates `grid_info` and `tick_stats`.
+    fn refresh_chunks(&mut self) {
         let tick_result = self.chunk_manager.tick_budgeted_with_prediction(
             &self.gpu.queue,
             self.camera.position,
@@ -366,14 +404,16 @@ impl Renderer {
         self.grid_info = tick_result.grid_info;
         self.tick_stats = Some(tick_result.stats);
 
-        // Load chunks around preload position if set.
         if let Some(preload) = self.preload_position {
             let vd = self.chunk_manager.view_distance();
             for coord in ChunkManager::compute_visible_set(preload, vd) {
                 self.chunk_manager.load_chunk(&self.gpu.queue, coord);
             }
         }
+    }
 
+    /// Build the per-frame `CameraUniform` and upload it to the raymarch pass.
+    fn upload_camera_uniform(&mut self) {
         let mut camera_uniform =
             self.camera
                 .to_uniform(self.render_width, self.render_height, &self.grid_info);
@@ -381,37 +421,27 @@ impl Renderer {
         camera_uniform.ortho_size = self.ortho_size;
         self.raymarch_pass
             .update_camera(&self.gpu.queue, &camera_uniform);
+    }
 
-        let frame = self
-            .surface
-            .get_current_texture()
-            .expect("Failed to get surface texture");
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder = self
-            .gpu
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Frame"),
-            });
-
-        self.raymarch_pass.encode(&mut encoder);
-        self.blit_pass.encode(&mut encoder, &view);
+    /// Encode the four render passes (raymarch -> blit -> sprites -> particles)
+    /// and upload particle instance data for this frame.
+    fn encode_passes(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        dt: f32,
+    ) {
+        self.raymarch_pass.encode(encoder);
+        self.blit_pass.encode(encoder, view);
         self.sprite_pass
-            .encode(&mut encoder, &view, self.blit_pass.depth_stencil_view());
+            .encode(encoder, view, self.blit_pass.depth_stencil_view());
 
-        // Advance particles and upload to GPU
         self.particle_system.advance(dt);
         let vertices = self.particle_system.build_vertices();
         self.particle_pass
             .update_instances(&self.gpu.queue, &vertices);
         self.particle_pass
-            .encode(&mut encoder, &view, self.blit_pass.depth_stencil_view());
-
-        self.gpu.queue.submit(std::iter::once(encoder.finish()));
-        frame.present();
+            .encode(encoder, view, self.blit_pass.depth_stencil_view());
     }
 
     /// Handle a pointer move (look) event. dx/dy are pre-scaled radians.
