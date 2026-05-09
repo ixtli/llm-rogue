@@ -57,7 +57,14 @@ import {
   STAT_WASM_MEMORY_BYTES,
 } from "../stats-layout";
 
-declare const self: DedicatedWorkerGlobalScope;
+// Worker self-typing. The standard `DedicatedWorkerGlobalScope` lib type is not
+// included by default in this project's tsconfig (lib defaults to DOM only),
+// so we declare a minimal local shape that matches what we use.
+interface DedicatedWorkerSelf {
+  postMessage(msg: unknown, transfer?: Transferable[]): void;
+  onmessage: ((e: MessageEvent) => unknown) | null;
+}
+declare const self: DedicatedWorkerSelf;
 
 function post(msg: RenderToGameMessage, transfers?: Transferable[]): void {
   if (transfers) {
@@ -127,170 +134,221 @@ function applySpriteUpdate(msg: SpriteUpdateMsg): void {
 self.onmessage = async (e: MessageEvent<GameToRenderMessage>) => {
   const msg = e.data;
 
-  if (msg.type === "init") {
-    const { canvas, width, height } = msg;
-    try {
-      await init();
-      await init_renderer(canvas, width, height);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      post({ type: "error", message });
-      return;
-    }
-
-    post({ type: "ready" });
-
-    const VIEW_DIST = 3;
-    const emittedTerrainChunks = new Set<string>();
-    let needsTerrainScan = true;
-
-    function loop() {
-      render_frame(performance.now() / 1000.0);
-      if (take_animation_completed()) {
-        post({ type: "animation_complete" });
+  switch (msg.type) {
+    case "init": {
+      const { canvas, width, height } = msg;
+      try {
+        await init();
+        await init_renderer(canvas, width, height);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        post({ type: "error", message });
+        return;
       }
-      const s = collect_frame_stats();
-      post({
-        type: "stats",
-        frame_time_ms: s[STAT_FRAME_TIME_MS],
-        loaded_chunks: s[STAT_LOADED_CHUNKS],
-        atlas_total: s[STAT_ATLAS_TOTAL],
-        atlas_used: s[STAT_ATLAS_USED],
-        camera_x: s[STAT_CAMERA_X],
-        camera_y: s[STAT_CAMERA_Y],
-        camera_z: s[STAT_CAMERA_Z],
-        camera_yaw: s[STAT_CAMERA_YAW],
-        camera_pitch: s[STAT_CAMERA_PITCH],
-        wasm_memory_bytes: s[STAT_WASM_MEMORY_BYTES],
-        pending_chunks: s[STAT_PENDING_CHUNKS],
-        streaming_state: s[STAT_STREAMING_STATE],
-        loaded_this_tick: s[STAT_LOADED_THIS_TICK],
-        unloaded_this_tick: s[STAT_UNLOADED_THIS_TICK],
-        chunk_budget: s[STAT_CHUNK_BUDGET],
-        cached_chunks: s[STAT_CACHED_CHUNKS],
-        camera_chunk_x: s[STAT_CAMERA_CHUNK_X],
-        camera_chunk_y: s[STAT_CAMERA_CHUNK_Y],
-        camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
-        alive_particles: s[STAT_ALIVE_PARTICLES],
-        active_emitters: s[STAT_ACTIVE_EMITTERS],
-        render_width: s[STAT_RENDER_WIDTH],
-        render_height: s[STAT_RENDER_HEIGHT],
-        sprite_count: s[STAT_SPRITE_COUNT],
-        light_count: s[STAT_LIGHT_COUNT],
-        render_scale: s[STAT_RENDER_SCALE],
-        shader_preset: s[STAT_SHADER_PRESET],
-      });
 
-      // Emit terrain grids for newly loaded chunks, or on first frame
-      // (init loads all chunks with unlimited budget, so LOADED_THIS_TICK
-      // may be 0 even though chunks are already loaded).
-      if (s[STAT_LOADED_THIS_TICK] > 0 || needsTerrainScan) {
-        needsTerrainScan = false;
-        const camCX = s[STAT_CAMERA_CHUNK_X];
-        const camCY = s[STAT_CAMERA_CHUNK_Y];
-        const camCZ = s[STAT_CAMERA_CHUNK_Z];
-        for (let dz = -VIEW_DIST; dz <= VIEW_DIST; dz++) {
-          for (let dy = -VIEW_DIST; dy <= VIEW_DIST; dy++) {
-            for (let dx = -VIEW_DIST; dx <= VIEW_DIST; dx++) {
-              const cx = camCX + dx;
-              const cy = camCY + dy;
-              const cz = camCZ + dz;
-              const key = `${cx},${cy},${cz}`;
-              if (!emittedTerrainChunks.has(key) && is_chunk_loaded_at(cx, cy, cz)) {
-                const data = get_terrain_grid(cx, cy, cz);
-                if (data) {
-                  post({ type: "chunk_terrain", cx, cy, cz, data: data.buffer }, [data.buffer]);
-                  emittedTerrainChunks.add(key);
+      post({ type: "ready" });
+
+      const VIEW_DIST = 3;
+      const emittedTerrainChunks = new Set<string>();
+      let needsTerrainScan = true;
+
+      function loop() {
+        render_frame(performance.now() / 1000.0);
+        if (take_animation_completed()) {
+          post({ type: "animation_complete" });
+        }
+        const s = collect_frame_stats();
+        post({
+          type: "stats",
+          frame_time_ms: s[STAT_FRAME_TIME_MS],
+          loaded_chunks: s[STAT_LOADED_CHUNKS],
+          atlas_total: s[STAT_ATLAS_TOTAL],
+          atlas_used: s[STAT_ATLAS_USED],
+          camera_x: s[STAT_CAMERA_X],
+          camera_y: s[STAT_CAMERA_Y],
+          camera_z: s[STAT_CAMERA_Z],
+          camera_yaw: s[STAT_CAMERA_YAW],
+          camera_pitch: s[STAT_CAMERA_PITCH],
+          wasm_memory_bytes: s[STAT_WASM_MEMORY_BYTES],
+          pending_chunks: s[STAT_PENDING_CHUNKS],
+          streaming_state: s[STAT_STREAMING_STATE],
+          loaded_this_tick: s[STAT_LOADED_THIS_TICK],
+          unloaded_this_tick: s[STAT_UNLOADED_THIS_TICK],
+          chunk_budget: s[STAT_CHUNK_BUDGET],
+          cached_chunks: s[STAT_CACHED_CHUNKS],
+          camera_chunk_x: s[STAT_CAMERA_CHUNK_X],
+          camera_chunk_y: s[STAT_CAMERA_CHUNK_Y],
+          camera_chunk_z: s[STAT_CAMERA_CHUNK_Z],
+          alive_particles: s[STAT_ALIVE_PARTICLES],
+          active_emitters: s[STAT_ACTIVE_EMITTERS],
+          render_width: s[STAT_RENDER_WIDTH],
+          render_height: s[STAT_RENDER_HEIGHT],
+          sprite_count: s[STAT_SPRITE_COUNT],
+          light_count: s[STAT_LIGHT_COUNT],
+          render_scale: s[STAT_RENDER_SCALE],
+          shader_preset: s[STAT_SHADER_PRESET],
+        });
+
+        // Emit terrain grids for newly loaded chunks, or on first frame
+        // (init loads all chunks with unlimited budget, so LOADED_THIS_TICK
+        // may be 0 even though chunks are already loaded).
+        if (s[STAT_LOADED_THIS_TICK] > 0 || needsTerrainScan) {
+          needsTerrainScan = false;
+          const camCX = s[STAT_CAMERA_CHUNK_X];
+          const camCY = s[STAT_CAMERA_CHUNK_Y];
+          const camCZ = s[STAT_CAMERA_CHUNK_Z];
+          for (let dz = -VIEW_DIST; dz <= VIEW_DIST; dz++) {
+            for (let dy = -VIEW_DIST; dy <= VIEW_DIST; dy++) {
+              for (let dx = -VIEW_DIST; dx <= VIEW_DIST; dx++) {
+                const cx = camCX + dx;
+                const cy = camCY + dy;
+                const cz = camCZ + dz;
+                const key = `${cx},${cy},${cz}`;
+                if (!emittedTerrainChunks.has(key) && is_chunk_loaded_at(cx, cy, cz)) {
+                  const data = get_terrain_grid(cx, cy, cz);
+                  if (data) {
+                    post({ type: "chunk_terrain", cx, cy, cz, data: data.buffer }, [data.buffer]);
+                    emittedTerrainChunks.add(key);
+                  }
                 }
               }
             }
           }
         }
-      }
 
-      setTimeout(loop, 16);
+        setTimeout(loop, 16);
+      }
+      loop();
+      break;
     }
-    loop();
-  } else if (msg.type === "begin_intent") {
-    begin_intent(msg.intent);
-  } else if (msg.type === "end_intent") {
-    end_intent(msg.intent);
-  } else if (msg.type === "set_look_delta") {
-    set_look_delta(msg.dyaw, msg.dpitch);
-  } else if (msg.type === "set_dolly") {
-    set_dolly(msg.amount);
-  } else if (msg.type === "set_camera") {
-    set_camera(msg.x, msg.y, msg.z, msg.yaw, msg.pitch);
-  } else if (msg.type === "animate_camera") {
-    animate_camera(msg.x, msg.y, msg.z, msg.yaw, msg.pitch, msg.duration, msg.easing);
-  } else if (msg.type === "preload_view") {
-    preload_view(msg.x, msg.y, msg.z);
-  } else if (msg.type === "query_camera_position") {
-    const s = collect_frame_stats();
-    post({
-      type: "camera_position",
-      id: msg.id,
-      x: s[STAT_CAMERA_X],
-      y: s[STAT_CAMERA_Y],
-      z: s[STAT_CAMERA_Z],
-      yaw: s[STAT_CAMERA_YAW],
-      pitch: s[STAT_CAMERA_PITCH],
-    });
-  } else if (msg.type === "query_chunk_loaded") {
-    post({
-      type: "chunk_loaded",
-      id: msg.id,
-      loaded: is_chunk_loaded_at(msg.cx, msg.cy, msg.cz),
-    });
-  } else if (msg.type === "is_solid") {
-    post({
-      type: "is_solid_result",
-      id: msg.id,
-      solid: is_solid(msg.x, msg.y, msg.z),
-    });
-  } else if (msg.type === "resize") {
-    resize_renderer(msg.width, msg.height);
-  } else if (msg.type === "visibility_mask") {
-    update_visibility_mask(msg.originX, msg.originZ, msg.gridSize, new Uint8Array(msg.data));
-  } else if (msg.type === "sprite_update") {
-    applySpriteUpdate(msg);
-  } else if (msg.type === "light_update") {
-    update_lights(msg.data);
-  } else if (msg.type === "sprite_atlas") {
-    update_sprite_atlas(new Uint8Array(msg.data), msg.width, msg.height);
-    atlasMetadata = {
-      cols: msg.cols,
-      rows: msg.rows,
-      width: msg.width,
-      height: msg.height,
-      tints: msg.tints,
-      halfWidths: msg.halfWidths,
-    };
-    // Re-pack sprites with correct UVs/tints now that atlas metadata is available
-    if (lastSpriteUpdate) {
-      applySpriteUpdate(lastSpriteUpdate);
+    case "begin_intent": {
+      begin_intent(msg.intent);
+      break;
     }
-  } else if (msg.type === "set_projection") {
-    set_projection(msg.mode, msg.orthoSize);
-  } else if (msg.type === "spawn_burst") {
-    spawn_burst(msg.x, msg.y, msg.z, msg.particles);
-  } else if (msg.type === "create_emitter") {
-    create_emitter(msg.id, msg.x, msg.y, msg.z, msg.rate, msg.duration, msg.template);
-  } else if (msg.type === "destroy_emitter") {
-    destroy_emitter(msg.id);
-  } else if (msg.type === "set_render_scale") {
-    set_render_scale(msg.auto, msg.scale);
-  } else if (msg.type === "set_shader_preset") {
-    set_shader_preset(msg.index);
-  } else if (msg.type === "voxel_mutate") {
-    const flat = new Int32Array(msg.changes.length * 4);
-    for (let i = 0; i < msg.changes.length; i++) {
-      const c = msg.changes[i];
-      flat[i * 4] = c.x;
-      flat[i * 4 + 1] = c.y;
-      flat[i * 4 + 2] = c.z;
-      flat[i * 4 + 3] = c.materialId;
+    case "end_intent": {
+      end_intent(msg.intent);
+      break;
     }
-    mutate_voxels(flat);
+    case "set_look_delta": {
+      set_look_delta(msg.dyaw, msg.dpitch);
+      break;
+    }
+    case "set_dolly": {
+      set_dolly(msg.amount);
+      break;
+    }
+    case "set_camera": {
+      set_camera(msg.x, msg.y, msg.z, msg.yaw, msg.pitch);
+      break;
+    }
+    case "animate_camera": {
+      animate_camera(msg.x, msg.y, msg.z, msg.yaw, msg.pitch, msg.duration, msg.easing);
+      break;
+    }
+    case "preload_view": {
+      preload_view(msg.x, msg.y, msg.z);
+      break;
+    }
+    case "query_camera_position": {
+      const s = collect_frame_stats();
+      post({
+        type: "camera_position",
+        id: msg.id,
+        x: s[STAT_CAMERA_X],
+        y: s[STAT_CAMERA_Y],
+        z: s[STAT_CAMERA_Z],
+        yaw: s[STAT_CAMERA_YAW],
+        pitch: s[STAT_CAMERA_PITCH],
+      });
+      break;
+    }
+    case "query_chunk_loaded": {
+      post({
+        type: "chunk_loaded",
+        id: msg.id,
+        loaded: is_chunk_loaded_at(msg.cx, msg.cy, msg.cz),
+      });
+      break;
+    }
+    case "is_solid": {
+      post({
+        type: "is_solid_result",
+        id: msg.id,
+        solid: is_solid(msg.x, msg.y, msg.z),
+      });
+      break;
+    }
+    case "resize": {
+      resize_renderer(msg.width, msg.height);
+      break;
+    }
+    case "visibility_mask": {
+      update_visibility_mask(msg.originX, msg.originZ, msg.gridSize, new Uint8Array(msg.data));
+      break;
+    }
+    case "sprite_update": {
+      applySpriteUpdate(msg);
+      break;
+    }
+    case "light_update": {
+      update_lights(msg.data);
+      break;
+    }
+    case "sprite_atlas": {
+      update_sprite_atlas(new Uint8Array(msg.data), msg.width, msg.height);
+      atlasMetadata = {
+        cols: msg.cols,
+        rows: msg.rows,
+        width: msg.width,
+        height: msg.height,
+        tints: msg.tints,
+        halfWidths: msg.halfWidths,
+      };
+      // Re-pack sprites with correct UVs/tints now that atlas metadata is available
+      if (lastSpriteUpdate) {
+        applySpriteUpdate(lastSpriteUpdate);
+      }
+      break;
+    }
+    case "set_projection": {
+      set_projection(msg.mode, msg.orthoSize);
+      break;
+    }
+    case "spawn_burst": {
+      spawn_burst(msg.x, msg.y, msg.z, msg.particles);
+      break;
+    }
+    case "create_emitter": {
+      create_emitter(msg.id, msg.x, msg.y, msg.z, msg.rate, msg.duration, msg.template);
+      break;
+    }
+    case "destroy_emitter": {
+      destroy_emitter(msg.id);
+      break;
+    }
+    case "set_render_scale": {
+      set_render_scale(msg.auto, msg.scale);
+      break;
+    }
+    case "set_shader_preset": {
+      set_shader_preset(msg.index);
+      break;
+    }
+    case "voxel_mutate": {
+      const flat = new Int32Array(msg.changes.length * 4);
+      for (let i = 0; i < msg.changes.length; i++) {
+        const c = msg.changes[i];
+        flat[i * 4] = c.x;
+        flat[i * 4 + 1] = c.y;
+        flat[i * 4 + 2] = c.z;
+        flat[i * 4 + 3] = c.materialId;
+      }
+      mutate_voxels(flat);
+      break;
+    }
+    default: {
+      const _exhaustive: never = msg;
+      return _exhaustive;
+    }
   }
 };
